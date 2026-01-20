@@ -1,6 +1,29 @@
 {
-  "current_version": "2.26.1",
+  "current_version": "2.26.2",
   "versions": [
+    {
+      "version": "2.26.2",
+      "version_type": "patch",
+      "date": "2026-01-20",
+      "title": "Blindagem de Autenticação e Persistência",
+      "changes": [
+        {
+          "type": "fix",
+          "title": "Reforço na Persistência do Token",
+          "description": "Implementada blindagem dupla para evitar perda de token em Refresh (F5). O token agora é validado de forma resiliente e recuperado do localStorage em caso de falhas temporárias de rede."
+        },
+        {
+          "type": "improvement",
+          "title": "Timeout de Sessão Configurável",
+          "description": "O tempo de expiração da sessão agora respeita fielmente a configuração do perfil do usuário e limpa os dados de forma segura."
+        },
+        {
+          "type": "fix",
+          "title": "Race Conditions no Login",
+          "description": "Corrigida disputa de requisições durante o processo de entrada, garantindo que o cabeçalho de autorização esteja estável antes do sistema iniciar."
+        }
+      ]
+    },
     {
       "version": "2.26.1",
       "version_type": "patch",

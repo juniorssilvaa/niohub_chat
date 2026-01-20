@@ -56,23 +56,23 @@ axios.defaults.baseURL = forceLocalBackend ? '' : getApiBaseUrl();
 
 // Interceptor global do Axios para adicionar o token do usuário logado
 axios.interceptors.request.use(config => {
-  // Sempre tentar obter o token do localStorage (priorizar auth_token que é o padrão salvo no Login)
+  // Sempre obter o token mais recente do localStorage
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   
-  // Se o token existe, garantir que está no header
   if (token) {
-    // Garantir que config.headers existe
     if (!config.headers) config.headers = {};
     
-    // Usar API do AxiosHeaders se disponível, senão objeto comum
-    if (typeof config.headers.get === 'function') {
-      const authHeader = config.headers.get('Authorization') || config.headers.get('authorization');
-      if (!authHeader || !authHeader.includes(token)) {
+    // Sempre aplicar o token do localStorage para garantir consistência, 
+    // exceto se o request já tiver um header de Authorization específico e diferente
+    // (o que é raro no nosso app)
+    const currentHeader = typeof config.headers.get === 'function' 
+      ? config.headers.get('Authorization') 
+      : (config.headers['Authorization'] || config.headers['authorization']);
+
+    if (!currentHeader || !currentHeader.includes(token)) {
+      if (typeof config.headers.set === 'function') {
         config.headers.set('Authorization', `Token ${token}`);
-      }
-    } else {
-      const authHeader = config.headers['Authorization'] || config.headers['authorization'];
-      if (!authHeader || !authHeader.includes(token)) {
+      } else {
         config.headers['Authorization'] = `Token ${token}`;
       }
     }
@@ -106,26 +106,25 @@ axios.interceptors.response.use(
         return Promise.reject(error);
       }
       
-      // Verificar se o token ainda existe
+      // Verificar se o token ainda existe no localStorage
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       
-      // Se não há token, definitivamente não está autenticado
+      // Se não há token, definitivamente não está autenticado - limpar e redirecionar
       if (!token) {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        const keysToClear = ['auth_token', 'token', 'user', 'selectedConversation', 'unread_messages_by_user', 'internal_chat_unread_count'];
+        keysToClear.forEach(key => localStorage.removeItem(key));
         delete axios.defaults.headers.common['Authorization'];
         window.location.href = '/login';
         return Promise.reject(error);
       }
       
-      // Verificar se é um endpoint crítico de autenticação
+      // Se o token EXISTE, o 401 pode ser um erro temporário ou permissão
+      // SÓ deslogar se for um endpoint de autenticação E o erro for explicitamente de token inválido
       const authEndpoints = ['/api/auth/me/', '/api/auth/login/'];
       const isAuthEndpoint = authEndpoints.some(endpoint => 
         error.config?.url?.includes(endpoint)
       );
       
-      // Se for endpoint de auth e falhou, verificar se o token é realmente inválido
       if (isAuthEndpoint) {
         const errorDetail = error.response?.data?.detail || error.response?.data?.error || '';
         const isTokenError = errorDetail.includes('Token inválido') || 
@@ -133,17 +132,19 @@ axios.interceptors.response.use(
                             errorDetail.includes('não autenticado');
                             
         if (isTokenError) {
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          console.warn('Logout forçado: Servidor rejeitou o token como inválido.');
+          const keysToClear = ['auth_token', 'token', 'user', 'selectedConversation', 'unread_messages_by_user', 'internal_chat_unread_count'];
+          keysToClear.forEach(key => localStorage.removeItem(key));
           delete axios.defaults.headers.common['Authorization'];
           window.location.href = '/login';
           return Promise.reject(error);
         }
       }
       
-      // Para outros endpoints ou erros não confirmados de token, apenas rejeitar
-      // Isso evita logout prematuro por race conditions ou erros temporários
+      // Se o token existe e não é um erro confirmado de validade do token, 
+      // NÃO limpa o localStorage. Deixa o usuário na página atual.
+      // Isso resolve o problema de deslogar no Refresh se o servidor demorar a responder.
+      console.log('401 detectado, mas token mantido no localStorage para resiliência.');
     }
     return Promise.reject(error);
   }
@@ -477,19 +478,24 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
+    // Se já temos o usuário no estado ou se o login está em progresso, não buscar novamente
+    if (user || window.__loginInProgress) {
+      if (authLoading) setAuthLoading(false);
+      return;
+    }
+
+    // Priorizar auth_token que é o padrão salvo no Login
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    if (token && !user) {
-      // Garantir que o token está no header - o interceptor já adiciona, mas vamos garantir
-      const headers = { Authorization: `Token ${token}` };
-      
-      // Fazer requisição com tratamento de erro silencioso para 401
-      axios.get('/api/auth/me/', { headers })
+    
+    if (token) {
+      // Fazer requisição com tratamento de erro silencioso
+      // O interceptor já vai adicionar o token do localStorage
+      axios.get('/api/auth/me/', {
+        // Garantir que não tentamos deslogar se este request específico falhar (race condition)
+        __skip401Logout: true 
+      })
         .then(res => {
-          if (res.status !== 200) throw new Error('Token inválido');
-          return res.data;
-        })
-        .then(userData => {
+          const userData = res.data;
           const userWithToken = { ...userData, token };
           setUser(userWithToken);
           localStorage.setItem('user', JSON.stringify(userWithToken));
@@ -497,35 +503,28 @@ function App() {
           const tipo = userData.role || userData.user_type;
           setUserRole(tipo);
           
-          // Definir provedorId se disponível
           if (userData.provedor_id) {
             setProvedorId(userData.provedor_id);
           }
           
           setAuthLoading(false);
-          
-          // Iniciar timeout da sessão
           startTimeout();
         })
         .catch((error) => {
-          // Silenciar erro 401 se não houver token válido (usuário não logado ainda)
+          // Só deslogar se for erro 401 real de token inválido
           if (error.response && error.response.status === 401) {
             const errorDetail = error.response.data?.detail || error.response.data?.error || '';
             const isInvalidToken = errorDetail.includes('Token inválido') || 
                                   errorDetail.includes('Invalid token') || 
-                                  errorDetail.includes('not provided') ||
                                   errorDetail.includes('não autenticado');
             
             if (isInvalidToken) {
-              // Token REALMENTE inválido ou expirado - limpar e continuar sem erro
+              console.warn('Sessão expirada ou token inválido na inicialização');
               localStorage.removeItem('auth_token');
               localStorage.removeItem('token');
               localStorage.removeItem('user');
               setUser(null);
               setUserRole(null);
-            } else {
-              // Outro erro 401 (ex: falta de permissão, mas o token é válido)
-              // Não limpar o token para permitir que o usuário continue logado
             }
           }
           setAuthLoading(false);
@@ -533,7 +532,7 @@ function App() {
     } else {
       setAuthLoading(false);
     }
-  }, [user]);
+  }, [user, authLoading]); // Adicionado authLoading para garantir que finaliza se necessário
 
   useEffect(() => {
     // Integração WebSocket Evolution
@@ -566,18 +565,17 @@ function App() {
         const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
         if (!token) return;
         
-        // Usar axios com header explícito para evitar qualquer problema com interceptor global
-        // durante o momento crítico logo após o login
+        // Usar uma instância limpa ou garantir headers para este request
         await axios.post('/api/users/ping/', {}, {
           headers: {
             'Authorization': `Token ${token}`
           },
-          // Ignorar o interceptor de resposta para este request específico
-          // (se suportado pelo seu setup de axios, senão apenas ignorar o erro)
+          // Custom flag para o interceptor não deslogar em caso de 401 neste endpoint
           __skip401Logout: true 
         });
       } catch (err) {
-        // Silenciar erros de ping
+        // Silenciar erros de ping para não afetar a experiência do usuário
+        // Se der 401 aqui, o interceptor global NÃO vai deslogar por causa do __skip401Logout
       }
     };
     

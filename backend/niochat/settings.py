@@ -43,7 +43,7 @@ import logging
 # BASE
 # ============================================
 
-VERSION = "2.26.1"
+VERSION = "2.26.2"
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Sempre usar config que prioriza variáveis de ambiente sobre arquivo .env

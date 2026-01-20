@@ -15,19 +15,28 @@ const useSessionTimeout = () => {
     if (!isClient) return 30;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       if (token) {
+        // Usar axios com header explícito e flag para evitar loops de logout
         const response = await axios.get('/api/auth/me/', {
-          headers: { Authorization: `Token ${token}` }
+          headers: { Authorization: `Token ${token}` },
+          __skip401Logout: true
         });
         const userSessionTimeout = response.data.session_timeout || 30;
         sessionTimeoutRef.current = userSessionTimeout;
         return userSessionTimeout;
       }
     } catch (error) {
-      console.error('Erro ao buscar timeout da sessão:', error);
+      // Se falhar na busca, tenta ler do objeto 'user' no localStorage como backup
+      try {
+        const savedUser = JSON.parse(localStorage.getItem('user'));
+        if (savedUser && savedUser.session_timeout) {
+          sessionTimeoutRef.current = savedUser.session_timeout;
+          return savedUser.session_timeout;
+        }
+      } catch (e) {}
     }
-    return 30; // valor padrão
+    return sessionTimeoutRef.current; // mantém o valor atual se falhar
   };
 
   const resetTimeout = () => {
@@ -42,16 +51,20 @@ const useSessionTimeout = () => {
     }
 
     const timeoutMinutes = sessionTimeoutRef.current;
+    
+    // Se o timeout for 0 ou negativo, desativar o timeout automático
+    if (timeoutMinutes <= 0) return;
+
     const timeoutMs = timeoutMinutes * 60 * 1000;
 
     // Definir novo timeout para logout automático
     timeoutRef.current = setTimeout(() => {
-      // Fazer logout automático
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      // Fazer logout automático - Limpar tudo consistentemente
+      const keysToClear = ['auth_token', 'token', 'user', 'selectedConversation', 'unread_messages_by_user', 'internal_chat_unread_count'];
+      keysToClear.forEach(key => localStorage.removeItem(key));
+      
       alert('Sua sessão expirou por inatividade. Você será redirecionado para a página de login.');
       window.location.href = '/login';
-      window.location.reload();
     }, timeoutMs);
 
     // Definir timeout de aviso (30 segundos antes do logout para timeouts maiores que 1 minuto)

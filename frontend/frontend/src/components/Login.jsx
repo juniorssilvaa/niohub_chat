@@ -77,9 +77,14 @@ export default function Login({ onLogin }) {
       // 3️⃣ Define header global corretamente (TokenAuthentication)
       axios.defaults.headers.common['Authorization'] = `Token ${token}`;
 
+      // CRÍTICO: Persistência forçada - mesmo se o navegador fechar ou der crash
+      // Garantir que o token está no localStorage ANTES de qualquer redirecionamento
+      localStorage.setItem('auth_token', token);
+      localStorage.setItem('token', token); // Fallback para compatibilidade
+
       // CRÍTICO: Pequeno delay para garantir que o token está commitado no banco
       // Isso evita race conditions onde o token ainda não está disponível
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // 4️⃣ Busca usuário autenticado com header explícito para garantir
       // Tentar até 3 vezes com retry em caso de race condition
@@ -116,8 +121,10 @@ export default function Login({ onLogin }) {
       // Garantir que os headers do Axios estão definitivos antes de notificar o App
       axios.defaults.headers.common['Authorization'] = `Token ${token}`;
       
-      // Adicionar pequeno delay extra para garantir propagação do estado
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Marcar que o login foi concluído com sucesso antes de chamar onLogin
+      if (typeof window !== 'undefined') {
+        window.__loginInProgress = false;
+      }
       
       onLogin({ ...userData, token });
 
@@ -140,11 +147,16 @@ export default function Login({ onLogin }) {
       console.error('Erro no login:', err);
       setLoading(false);
 
-      // Limpa qualquer token inválido
-      localStorage.removeItem('auth_token');
-      delete axios.defaults.headers.common['Authorization'];
-
-      setError('Usuário ou senha inválidos');
+      // SÓ limpa o token se o erro NÃO for durante a busca de dados do usuário (passo 4)
+      // Se falhou no passo 4, o token PODE ser válido mas o servidor demorou a processar
+      const isAuthError = err.config?.url?.includes('/api/auth/login/');
+      if (isAuthError || err.response?.status === 401) {
+        localStorage.removeItem('auth_token');
+        delete axios.defaults.headers.common['Authorization'];
+        setError('Usuário ou senha inválidos');
+      } else {
+        setError('Erro ao conectar com o servidor. Tente novamente.');
+      }
     } finally {
       // Sempre desmarcar flag de login em progresso
       if (typeof window !== 'undefined') {
