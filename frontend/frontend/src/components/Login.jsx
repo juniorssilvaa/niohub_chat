@@ -9,23 +9,17 @@ import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import { APP_VERSION } from '../config/version';
 import logoImage from '../assets/logo.png';
 import { buildApiPath } from '@/utils/apiBaseUrl';
+import { useAuth } from '../contexts/AuthContext';
 
-// Flag global para controlar login em progresso
-// Isso evita que o interceptor redirecione durante o processo de login
-// A flag é compartilhada via window para acesso pelo interceptor
-if (typeof window !== 'undefined') {
-  window.__loginInProgress = false;
-}
-
-export default function Login({ onLogin }) {
+export default function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [version, setVersion] = useState(APP_VERSION); // Fallback para versão estática
-
-  const navigate = useNavigate();
+  const [version, setVersion] = useState(APP_VERSION);
 
   // Buscar versão da API do changelog
   useEffect(() => {
@@ -50,87 +44,11 @@ export default function Login({ onLogin }) {
     setLoading(true);
     setError('');
 
-    // Marcar login em progresso para evitar redirecionamento prematuro
-    if (typeof window !== 'undefined') {
-      window.__loginInProgress = true;
-    }
-
     try {
-      // ✅ URLs CORRETAS (API REAL)
-      const authUrl = buildApiPath('/api/auth/login/');
-      const meUrl = buildApiPath('/api/auth/me/');
+      // ✅ ÚNICO lugar onde login é chamado - AuthContext cuida de tudo
+      const userData = await login(username, password);
 
-      // 1️⃣ Login
-      const res = await axios.post(authUrl, {
-        username,
-        password,
-      });
-
-      const token = res.data?.token;
-      if (!token) {
-        throw new Error('Token não recebido do servidor');
-      }
-
-      // 2️⃣ Salva token (PADRÃO ÚNICO)
-      localStorage.setItem('auth_token', token);
-
-      // 3️⃣ Define header global corretamente (TokenAuthentication)
-      axios.defaults.headers.common['Authorization'] = `Token ${token}`;
-
-      // CRÍTICO: Persistência forçada - mesmo se o navegador fechar ou der crash
-      // Garantir que o token está no localStorage ANTES de qualquer redirecionamento
-      localStorage.setItem('auth_token', token);
-      localStorage.setItem('token', token); // Fallback para compatibilidade
-
-      // CRÍTICO: Pequeno delay para garantir que o token está commitado no banco
-      // Isso evita race conditions onde o token ainda não está disponível
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // 4️⃣ Busca usuário autenticado com header explícito para garantir
-      // Tentar até 3 vezes com retry em caso de race condition
-      let userRes;
-      let attempts = 0;
-      const maxAttempts = 3;
-      
-      while (attempts < maxAttempts) {
-        try {
-          userRes = await axios.get(meUrl, {
-            headers: {
-              'Authorization': `Token ${token}`
-            }
-          });
-          if (userRes.status === 200) {
-            break; // Sucesso, sair do loop
-          }
-        } catch (err) {
-          attempts++;
-          if (attempts >= maxAttempts) {
-            throw err; // Se todas as tentativas falharam, lançar erro
-          }
-          // Esperar um pouco antes de tentar novamente
-          await new Promise(resolve => setTimeout(resolve, 200 * attempts));
-        }
-      }
-      if (userRes.status !== 200) {
-        throw new Error('Falha ao obter dados do usuário');
-      }
-
-      const userData = userRes.data;
-
-      // 5️⃣ Atualiza estado global
-      // Garantir que os headers do Axios estão definitivos antes de notificar o App
-      axios.defaults.headers.common['Authorization'] = `Token ${token}`;
-      
-      // Marcar que o login foi concluído com sucesso antes de chamar onLogin
-      if (typeof window !== 'undefined') {
-        window.__loginInProgress = false;
-      }
-      
-      onLogin({ ...userData, token });
-
-      setLoading(false);
-
-      // 6️⃣ Redirecionamento correto
+      // Redirecionar baseado no tipo de usuário
       if (userData.user_type === 'superadmin') {
         navigate('/superadmin', { replace: true });
       } else if (userData.provedor_id) {
@@ -142,26 +60,14 @@ export default function Login({ onLogin }) {
       } else {
         navigate('/dashboard', { replace: true });
       }
-
     } catch (err) {
-      console.error('Erro no login:', err);
-      setLoading(false);
-
-      // SÓ limpa o token se o erro NÃO for durante a busca de dados do usuário (passo 4)
-      // Se falhou no passo 4, o token PODE ser válido mas o servidor demorou a processar
-      const isAuthError = err.config?.url?.includes('/api/auth/login/');
-      if (isAuthError || err.response?.status === 401) {
-        localStorage.removeItem('auth_token');
-        delete axios.defaults.headers.common['Authorization'];
+      if (err.response?.status === 401) {
         setError('Usuário ou senha inválidos');
       } else {
-        setError('Erro ao conectar com o servidor. Tente novamente.');
+        setError('Erro ao conectar com o servidor');
       }
     } finally {
-      // Sempre desmarcar flag de login em progresso
-      if (typeof window !== 'undefined') {
-        window.__loginInProgress = false;
-      }
+      setLoading(false);
     }
   };
 

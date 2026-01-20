@@ -22,6 +22,7 @@ urlpatterns = [
     # Rotas específicas ANTES do router para evitar conflitos
     path('auth/login/', csrf_exempt(permission_classes([AllowAny])(views.LoginView.as_view())), name='auth_login'),
     path('auth/logout/', views.LogoutView.as_view(), name='auth_logout'),
+    path('auth/refresh/', views.RefreshTokenView.as_view(), name='auth_refresh'),
     path('auth/me/', views.UserMeView.as_view(), name='auth_me'),
     path('users/ping/', views.UsersPingView.as_view(), name='users_ping'),
     path('users/status/', views.UserViewSet.as_view({'get': 'status'}), name='users_status'),

@@ -3256,6 +3256,27 @@ class LogoutView(APIView):
             return Response({'success': True, 'message': 'Logout realizado com sucesso'}, status=status.HTTP_200_OK)
 
 
+class RefreshTokenView(APIView):
+    """Endpoint para refresh token - retorna token atual ou regenera se necessário"""
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        from rest_framework.authtoken.models import Token
+        
+        user = request.user
+        
+        # Obter ou criar token (se não existir, cria novo)
+        token, created = Token.objects.get_or_create(user=user)
+        
+        # Garantir que o token está atualizado no banco
+        token.refresh_from_db()
+        
+        logger.debug(f"Refresh token: user_id={user.id}, token_key={token.key[:20]}...")
+        
+        return Response({'token': token.key}, status=status.HTTP_200_OK)
+
+
 class UserMeView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
