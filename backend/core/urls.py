@@ -1,0 +1,44 @@
+from django.urls import path, include
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.routers import DefaultRouter
+from rest_framework.permissions import AllowAny
+from rest_framework.decorators import permission_classes
+from . import views
+
+# Router apenas com viewsets existentes em core.views
+router = DefaultRouter()
+router.register(r'users', views.UserViewSet, basename='users')
+router.register(r'canais', views.CanalViewSet, basename='canais')
+router.register(r'audit-logs', views.AuditLogViewSet, basename='audit-logs')
+router.register(r'provedores', views.ProvedorViewSet, basename='provedores')
+router.register(r'companies', views.CompanyViewSet, basename='companies')
+router.register(r'mensagens-sistema', views.MensagemSistemaViewSet, basename='mensagens-sistema')
+router.register(r'integrations/telegram', views.TelegramIntegrationViewSet, basename='telegram-integrations')
+router.register(r'integrations/email', views.EmailIntegrationViewSet, basename='email-integrations')
+router.register(r'integrations/whatsapp', views.WhatsAppIntegrationViewSet, basename='whatsapp-integrations')
+router.register(r'integrations/webchat', views.WebchatIntegrationViewSet, basename='webchat-integrations')
+
+urlpatterns = [
+    # Rotas específicas ANTES do router para evitar conflitos
+    path('auth/login/', csrf_exempt(permission_classes([AllowAny])(views.LoginView.as_view())), name='auth_login'),
+    path('auth/logout/', views.LogoutView.as_view(), name='auth_logout'),
+    path('auth/me/', views.UserMeView.as_view(), name='auth_me'),
+    path('users/ping/', views.UsersPingView.as_view(), name='users_ping'),
+    path('users/status/', views.UserViewSet.as_view({'get': 'status'}), name='users_status'),
+    path('health/', views.health_view, name='health'),
+    path('health', views.health_view, name='health_no_slash'),  # Sem trailing slash também funciona
+    path('changelog/', views.changelog_view, name='changelog'),
+    path('supabase-config/', views.supabase_config_view, name='supabase-config'),
+    path('system-config/', views.SystemConfigView.as_view(), name='system-config'),
+    path('system-config/<int:pk>/', views.SystemConfigView.as_view(), name='system-config-detail'),
+
+    # Router com viewsets (deve vir depois das rotas específicas)
+    path('', include(router.urls)),
+    
+    # Incluir URLs de outros apps
+    path('', include('conversations.urls')),
+    path('', include('integrations.urls')),
+    
+    # Incluir URLs do WhatsApp (UazAPI)
+    path('whatsapp/', include('core.whatsapp_urls')),
+]

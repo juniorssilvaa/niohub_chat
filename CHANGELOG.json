@@ -1,0 +1,228 @@
+{
+  "current_version": "2.26.1",
+  "versions": [
+    {
+      "version": "2.26.1",
+      "version_type": "patch",
+      "date": "2026-01-20",
+      "title": "Correções de Autenticação e WebSocket",
+      "changes": [
+        {
+          "type": "fix",
+          "title": "Persistência de Sessão (F5)",
+          "description": "Corrigido problema que deslogava o usuário ao atualizar a página (F5). Agora o sistema valida o token de forma robusta antes de limpar a sessão."
+        },
+        {
+          "type": "fix",
+          "title": "Estabilidade do WebSocket",
+          "description": "Correção no roteamento do Nginx e detecção de host para conexões WebSocket em produção, garantindo conexão estável com o backend."
+        },
+        {
+          "type": "fix",
+          "title": "Status Online (Ping)",
+          "description": "Atualizado o sistema de ping para refletir corretamente o status online e 'visto por último' dos usuários no painel."
+        },
+        {
+          "type": "feature",
+          "title": "Blindagem de Usuário Admin",
+          "description": "Criado comando de manutenção para garantir que o usuário admin mantenha privilégios de superadmin e acesso a todos os provedores."
+        }
+      ]
+    },
+    {
+      "version": "2.26.0",
+      "version_type": "minor",
+      "date": "2026-01-14",
+      "title": "Sistema de Correção de Texto & Melhorias de Estabilidade",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Sistema de Correção de Texto com IA",
+          "description": "Implantado novo sistema de correção de texto por demanda diretamente no campo de digitação. Utiliza IA para corrigir gramática, ortografia e ajustar o tom das mensagens dos agentes."
+        },
+        {
+          "type": "improvement",
+          "title": "Correções Internas e Estabilidade",
+          "description": "Refatoração do fluxo de autenticação no frontend para maior estabilidade. Corrigidos erros de referência e implementada proteção contra respostas nulas da IA."
+        }
+      ]
+    },
+    {
+      "version": "2.25.0",
+      "version_type": "minor",
+      "date": "2026-01-12",
+      "title": "IA Melhorada & Sistema de Equipes",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Bloqueio Automático de Chamados para Contratos Suspensos",
+          "description": "Sistema com 3 camadas de proteção impede abertura de chamados técnicos para contratos suspensos por falta de pagamento. A IA informa educadamente ao cliente sobre a necessidade de regularização ou desbloqueio em confiança."
+        },
+        {
+          "type": "feature",
+          "title": "Equipe IA Automática",
+          "description": "Todas as conversas agora iniciam automaticamente na equipe 'IA' com status 'snoozed', melhorando a organização do fluxo de atendimento. Conversas só são transferidas para outras equipes quando explicitamente solicitado."
+        },
+        {
+          "type": "feature",
+          "title": "Validação de Status de Contrato",
+          "description": "Sistema verifica automaticamente o status do contrato antes de criar chamados técnicos, impedindo abertura de chamados para contratos inadimplentes."
+        },
+        {
+          "type": "feature",
+          "title": "Exibição de Equipe nos Cards",
+          "description": "Agora é possível visualizar qual equipe está responsável por cada conversação diretamente no card, facilitando a organização dos atendimentos."
+        },
+        {
+          "type": "improvement",
+          "title": "Sistema de Chat Interno Corrigido",
+          "description": "Correções importantes na listagem de usuários do provedor e sincronização de mensagens em tempo real. Usuários agora veem apenas membros do próprio provedor ao criar equipes."
+        },
+        {
+          "type": "improvement",
+          "title": "Prompt da IA Significativamente Melhorado",
+          "description": "Adicionada regra crítica sobre contratos suspensos com instruções detalhadas. Corrigido formato de exibição de contratos com quebras de linha corretas. Melhorada formatação de negrito para WhatsApp (uso correto de asterisco simples). Adicionadas instruções claras sobre quando solicitar CPF/CNPJ do cliente."
+        },
+        {
+          "type": "improvement",
+          "title": "Sistema de Transferência da IA Melhorado",
+          "description": "Conversas transferidas agora mantêm o histórico e contexto correto. Equipe 'IA' é atribuída automaticamente em todas as plataformas de mensagens. Melhor organização e visualização de equipes responsáveis."
+        },
+        {
+          "type": "improvement",
+          "title": "Isolamento de Usuários por Provedor",
+          "description": "Sistema agora garante que cada provedor visualize apenas seus próprios usuários ao gerenciar equipes, aumentando a segurança e organização."
+        },
+        {
+          "type": "improvement",
+          "title": "Formatação Automática de Mensagens WhatsApp",
+          "description": "Sistema agora corrige automaticamente a formatação de texto em negrito nas mensagens do WhatsApp, garantindo que sejam exibidas corretamente."
+        },
+        {
+          "type": "fix",
+          "title": "Correção no Sistema de Respostas da IA",
+          "description": "Corrigido erro que impedia a IA de responder em algumas situações ao exibir dados do contrato do cliente."
+        },
+        {
+          "type": "fix",
+          "title": "Listagem de Usuários Corrigida",
+          "description": "Removidos usuários fictícios da listagem ao criar equipes. Sistema agora exibe apenas usuários reais do provedor."
+        },
+        {
+          "type": "fix",
+          "title": "Formatação de Texto em Negrito no WhatsApp",
+          "description": "Corrigido formatação de texto em negrito nas mensagens do WhatsApp para garantir exibição correta."
+        },
+        {
+          "type": "fix",
+          "title": "Exibição de Equipes nas Conversas",
+          "description": "Corrigido problema que impedia a exibição da equipe responsável no card de cada conversação."
+        }
+      ]
+    },
+    {
+      "version": "2.24.0",
+      "version_type": "minor",
+      "date": "2025-12-21",
+      "title": "Integração Nativa com WhatsApp Business API (WABA)",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Integração Nativa com WhatsApp Business API Oficial",
+          "description": "Implementada integração completa e nativa com a API oficial do WhatsApp Business API (WABA) da Meta. Sistema agora suporta autenticação OAuth, webhooks configuráveis e processamento de eventos em tempo real."
+        },
+        {
+          "type": "feature",
+          "title": "Sistema de Webhooks Modular",
+          "description": "Criado sistema modular de handlers para processar diferentes tipos de eventos da Meta: business_status_update, account_alerts, templates, user_preferences e muito mais. Cada tipo de evento possui handler específico para melhor manutenibilidade."
+        },
+        {
+          "type": "feature",
+          "title": "Autenticação OAuth com Meta",
+          "description": "Implementado fluxo completo de autenticação OAuth com a Meta para conectar contas do WhatsApp Business. Suporte a embedded signup e callback handlers para processar autorizações."
+        },
+        {
+          "type": "improvement",
+          "title": "Processamento de Eventos WABA",
+          "description": "Sistema agora processa automaticamente eventos críticos como atualizações de status do negócio, alertas de conta, atualizações de templates e preferências de usuário, garantindo sincronização em tempo real."
+        },
+        {
+          "type": "improvement",
+          "title": "Validação de Assinatura de Webhooks",
+          "description": "Implementada validação de assinatura HMAC SHA-256 para garantir segurança e integridade dos webhooks recebidos da Meta."
+        },
+        {
+          "type": "improvement",
+          "title": "Gerenciamento de Canais Unificado",
+          "description": "Sistema unificado de gerenciamento de canais, substituindo modelos separados por tipo (WhatsApp, Telegram, Email, etc.) por um modelo único e flexível."
+        }
+      ]
+    },
+    {
+      "version": "2.23.12",
+      "version_type": "patch",
+      "date": "2025-11-28",
+      "title": "Sistema de Bloqueio de Contatos",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Sistema de Bloqueio de Contatos para Atendimento",
+          "description": "Agora é possível bloquear contatos para que a IA não responda suas mensagens. O provedor pode ativar/desativar o bloqueio através de um toggle na lista de contatos."
+        },
+        {
+          "type": "feature",
+          "title": "Interface de Gerenciamento de Bloqueio",
+          "description": "Adicionada coluna 'ATENDER' na lista de contatos com toggle visual (verde = ativo, vermelho = bloqueado) para gerenciar o bloqueio de atendimento."
+        },
+        {
+          "type": "feature",
+          "title": "Filtro de Contatos Bloqueados",
+          "description": "Adicionado filtro para visualizar apenas contatos bloqueados para atendimento, facilitando o gerenciamento."
+        },
+        {
+          "type": "improvement",
+          "title": "Verificação de Bloqueio nos Webhooks",
+          "description": "Sistema verifica automaticamente se o contato está bloqueado antes de chamar a IA, tanto no webhook Evolution quanto no Uazapi."
+        },
+        {
+          "type": "improvement",
+          "title": "Auditoria de Bloqueios",
+          "description": "Todas as alterações de bloqueio são registradas no AuditLog para rastreabilidade."
+        }
+      ]
+    },
+    {
+      "version": "2.23.4",
+      "version_type": "patch",
+      "date": "2025-11-25",
+      "title": "Melhorias no SGP e IA",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Parâmetro conteudolimpo no SGP",
+          "description": "Adicionado parâmetro para remover mensagem padrão 'Chamado via URA' do SGP, permitindo usar formato personalizado 'Chamado aberto via NIOCHAT'"
+        },
+        {
+          "type": "feature",
+          "title": "Verificação Obrigatória de Horário de Funcionamento",
+          "description": "Implementada verificação obrigatória antes de criar chamado técnico, informando ao cliente quando será atendido se estiver fora do horário"
+        },
+        {
+          "type": "improvement",
+          "title": "Mensagens Variadas de Confirmação de Chamado",
+          "description": "Sistema agora gera mensagens variadas incluindo o relato literal do cliente, tornando a comunicação mais natural"
+        },
+        {
+          "type": "improvement",
+          "title": "Saudações Variadas e Naturais",
+          "description": "IA agora varia saudações naturalmente (ex: 'Oii, tudo bem?', 'Boa noite! Como posso ajudar?', 'Olá! Em que posso te ajudar?') ao invés de sempre usar a mesma frase"
+        },
+        {
+          "type": "fix",
+          "title": "Formato da Descrição de Chamados",
+          "description": "Corrigido formato para 'Chamado aberto via NIOCHAT\\nCliente relatou: [relato do cliente]' removendo duplicação de texto"
+        }
+      ]
+    }
+  ]
+}
