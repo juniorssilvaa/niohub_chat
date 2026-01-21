@@ -76,16 +76,37 @@ export default function App() {
   useEffect(() => {
     if (!user?.id) return;
 
+    let timer;
+
     const ping = async () => {
       try {
+        const token = localStorage.getItem('auth_token');
+        console.debug('[APP] Ping iniciado', {
+          userId: user.id,
+          tokenExists: !!token,
+          tokenPrefix: token?.substring(0, 10)
+        });
         await axios.post('/api/users/ping/');
-      } catch {}
+        console.debug('[APP] Ping bem-sucedido', { userId: user.id });
+      } catch (err) {
+        console.error('[APP] Ping falhou', {
+          userId: user.id,
+          status: err.response?.status,
+          error: err.response?.data
+        });
+      }
     };
 
-    const timer = setInterval(ping, 30000);
-    ping();
+    // Delay inicial para garantir que o token está estável após login
+    const initialTimer = setTimeout(() => {
+      ping();
+      timer = setInterval(ping, 30000);
+    }, 1000);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(initialTimer);
+      if (timer) clearInterval(timer);
+    };
   }, [user?.id]);
 
   /* =====================================================

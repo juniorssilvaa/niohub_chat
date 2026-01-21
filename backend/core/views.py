@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
+from core.authentication import LoggedTokenAuthentication
 from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.db import models
@@ -3155,28 +3156,28 @@ class LoginView(APIView):
             logger.warning(f"Falha de login: credenciais inválidas para username={username}")
             return Response({'error': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
         
-        logger.info(f"Login realizado: user_id={user.id}, username={user.username}, full_name='{user.get_full_name()}'")
+        logger.info(f"[LOGIN] Login realizado: user_id={user.id}, username={user.username}, full_name='{user.get_full_name()}'")
         
         # Obter ou criar token
         token, created = Token.objects.get_or_create(user=user)
+        logger.info(f"[LOGIN] Token {'criado' if created else 'existente'}: user_id={user.id}, token_key={token.key[:20]}...")
         
         # CRÍTICO: Garantir que o token está salvo no banco antes de retornar
         # Isso evita race conditions onde o frontend tenta usar o token antes dele estar disponível
         # O Django já faz commit automático após a view, mas vamos garantir que o token está atualizado
         token.refresh_from_db()
-        
-        # Log do token criado para debug
-        logger.debug(f"Token {'criado' if created else 'existente'}: user_id={user.id}, token_key={token.key[:20]}...")
+        logger.debug(f"[LOGIN] Token refresh_from_db concluído: user_id={user.id}, token_key={token.key[:20]}...")
         
         # Verificar se o token realmente existe no banco (validação adicional)
         try:
-            Token.objects.get(key=token.key, user=user)
+            db_token = Token.objects.get(key=token.key, user=user)
+            logger.info(f"[LOGIN] Token confirmado no banco: user_id={user.id}, token_key={token.key[:20]}..., db_user_id={db_token.user.id}")
         except Token.DoesNotExist:
-            logger.error(f"ERRO CRÍTICO: Token criado mas não encontrado no banco! user_id={user.id}")
+            logger.error(f"[LOGIN] ERRO CRÍTICO: Token criado mas não encontrado no banco! user_id={user.id}, token_key={token.key[:20]}...")
             # Recriar token se necessário
             token.delete()
             token = Token.objects.create(user=user)
-            logger.warning(f"Token recriado: user_id={user.id}, token_key={token.key[:20]}...")
+            logger.warning(f"[LOGIN] Token recriado: user_id={user.id}, token_key={token.key[:20]}...")
         
         # Obter provedor_id do usuário
         provedor_id = None
@@ -3258,38 +3259,74 @@ class LogoutView(APIView):
 
 class RefreshTokenView(APIView):
     """Endpoint para refresh token - retorna token atual ou regenera se necessário"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [LoggedTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
         from rest_framework.authtoken.models import Token
         
-        user = request.user
+        # Log do header de autorização recebido
+        auth_header = request.headers.get('Authorization', 'N/A')
+        logger.info(f"[REFRESH] Request recebido - Header: {auth_header[:30]}...")
         
-        # Obter ou criar token (se não existir, cria novo)
-        token, created = Token.objects.get_or_create(user=user)
-        
-        # Garantir que o token está atualizado no banco
-        token.refresh_from_db()
-        
-        logger.debug(f"Refresh token: user_id={user.id}, token_key={token.key[:20]}...")
-        
-        return Response({'token': token.key}, status=status.HTTP_200_OK)
+        try:
+            user = request.user
+            logger.info(f"[REFRESH] Usuário autenticado: user_id={user.id}, username={user.username}")
+            
+            # Obter ou criar token (se não existir, cria novo)
+            token, created = Token.objects.get_or_create(user=user)
+            
+            # Garantir que o token está atualizado no banco
+            token.refresh_from_db()
+            
+            # Verificar se o token existe no banco
+            try:
+                Token.objects.get(key=token.key, user=user)
+                logger.info(f"[REFRESH] Token confirmado no banco: user_id={user.id}, token_key={token.key[:20]}..., created={created}")
+            except Token.DoesNotExist:
+                logger.error(f"[REFRESH] ERRO: Token criado mas não encontrado no banco! user_id={user.id}")
+            
+            return Response({'token': token.key}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"[REFRESH] Erro ao processar refresh: {e}", exc_info=True)
+            logger.warning(f"[REFRESH] Header recebido: {auth_header[:30]}...")
+            return Response({'error': 'Erro ao processar refresh'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserMeView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [LoggedTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
+        # Log do header de autorização recebido
+        auth_header = request.headers.get('Authorization', 'N/A')
+        logger.info(f"[USER_ME] Request recebido - Header: {auth_header[:30]}...")
+        
         try:
             user = request.user
-            # Log detalhado para identificar crosstalk de sessão
-            logger.info(f"UserMeView [REQUEST]: user_id={user.id}, username={user.username}, email={user.email}, full_name='{user.get_full_name()}'")
+            logger.info(f"[USER_ME] Usuário obtido do request: user_id={getattr(user, 'id', 'N/A')}, username={getattr(user, 'username', 'N/A')}, is_authenticated={getattr(user, 'is_authenticated', False)}")
             
             # Verificar se o usuário está autenticado
             if not user or not user.is_authenticated:
+                logger.warning(f"[USER_ME] Usuário NÃO autenticado - user={user}, is_authenticated={getattr(user, 'is_authenticated', False) if user else False}")
+                logger.warning(f"[USER_ME] Header recebido: {auth_header[:30]}...")
+                
+                # Tentar verificar o token diretamente
+                if auth_header.startswith('Token '):
+                    token_key = auth_header.replace('Token ', '').strip()
+                    from rest_framework.authtoken.models import Token
+                    try:
+                        token = Token.objects.select_related('user').get(key=token_key)
+                        logger.warning(f"[USER_ME] Token existe no banco mas user não está autenticado! token_key={token_key[:20]}..., user_id={token.user.id}")
+                    except Token.DoesNotExist:
+                        logger.warning(f"[USER_ME] Token NÃO encontrado no banco: {token_key[:20]}...")
+                    except Exception as e:
+                        logger.error(f"[USER_ME] Erro ao verificar token: {e}", exc_info=True)
+                
                 return Response({'error': 'Usuário não autenticado'}, status=401)
+            
+            # Log detalhado para identificar crosstalk de sessão
+            logger.info(f"[USER_ME] UserMeView [REQUEST]: user_id={user.id}, username={user.username}, email={user.email}, full_name='{user.get_full_name()}'")
             
             # Obter provedor_id do primeiro provedor associado ao usuário
             provedor_id = None

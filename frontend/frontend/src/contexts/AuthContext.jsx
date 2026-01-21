@@ -68,9 +68,21 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const req = axios.interceptors.request.use(config => {
       const token = localStorage.getItem('auth_token');
+      const url = config.url || config.baseURL || 'unknown';
+      
       if (token) {
         config.headers = config.headers || {};
         config.headers.Authorization = `Token ${token}`;
+        console.debug(`[AUTH] Request interceptor: Token encontrado e adicionado para ${url}`, {
+          url,
+          tokenPrefix: token.substring(0, 10),
+          hasHeader: !!config.headers.Authorization
+        });
+      } else {
+        console.warn(`[AUTH] Request interceptor: Token NÃO encontrado no localStorage para ${url}`, {
+          url,
+          localStorageKeys: Object.keys(localStorage)
+        });
       }
       return config;
     });
@@ -83,6 +95,14 @@ export function AuthProvider({ children }) {
       r => r,
       async error => {
         const original = error.config;
+        const url = original.url || 'unknown';
+        const status = error.response?.status;
+        
+        console.debug(`[AUTH] Response interceptor: Erro recebido`, {
+          url,
+          status,
+          hasRetry: !!original._retry
+        });
         
         // Ignorar refresh se:
         // - Não é 401
@@ -93,17 +113,32 @@ export function AuthProvider({ children }) {
                               original.url?.includes('/api/auth/logout/') ||
                               original.url?.includes('/api/auth/refresh/');
         
-        if (error.response?.status !== 401 || original._retry || isAuthEndpoint) {
+        if (status !== 401 || original._retry || isAuthEndpoint) {
+          if (status === 401 && !isAuthEndpoint) {
+            console.warn(`[AUTH] Response interceptor: 401 recebido mas não tentará refresh`, {
+              url,
+              hasRetry: !!original._retry,
+              isAuthEndpoint
+            });
+          }
           return Promise.reject(error);
         }
 
+        console.debug(`[AUTH] Response interceptor: Tentando refresh token para ${url}`);
         original._retry = true;
         
         try {
           const newToken = await refreshToken();
+          console.debug(`[AUTH] Response interceptor: Refresh bem-sucedido, retentando ${url}`, {
+            newTokenPrefix: newToken.substring(0, 10)
+          });
           original.headers.Authorization = `Token ${newToken}`;
           return axios(original);
         } catch (refreshError) {
+          console.error(`[AUTH] Response interceptor: Refresh falhou para ${url}`, {
+            error: refreshError.message,
+            status: refreshError.response?.status
+          });
           // Refresh falhou - deixar o erro propagar naturalmente
           // O AuthContext já cuida do logout se necessário
           return Promise.reject(refreshError);
@@ -114,20 +149,40 @@ export function AuthProvider({ children }) {
   }, [refreshToken]);
 
   const bootstrap = useCallback(async () => {
-    if (booted.current) return;
+    if (booted.current) {
+      console.debug('[AUTH] Bootstrap já executado, ignorando');
+      return;
+    }
     booted.current = true;
+    console.debug('[AUTH] Bootstrap iniciado');
 
     const token = localStorage.getItem('auth_token');
     if (!token) {
+      console.debug('[AUTH] Bootstrap: Nenhum token encontrado no localStorage');
       setLoading(false);
       return;
     }
 
+    console.debug('[AUTH] Bootstrap: Token encontrado', { 
+      tokenPrefix: token.substring(0, 10),
+      tokenLength: token.length 
+    });
+
     try {
+      console.debug('[AUTH] Bootstrap: Validando token via /api/auth/me/');
       const { data } = await axios.get('/api/auth/me/');
+      console.debug('[AUTH] Bootstrap: Token válido, usuário restaurado', {
+        userId: data.id,
+        username: data.username
+      });
       setUser(data);
       localStorage.setItem('user', JSON.stringify(data));
-    } catch {
+    } catch (err) {
+      console.error('[AUTH] Bootstrap: Token inválido', {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        error: err.response?.data
+      });
       // Token inválido, limpar sessão
       await logout();
     } finally {
@@ -136,19 +191,54 @@ export function AuthProvider({ children }) {
   }, [logout]);
 
   const login = useCallback(async (username, password) => {
+    console.debug('[AUTH] Login iniciado', { username });
+    
     const { data } = await axios.post('/api/auth/login/', { username, password });
-    if (!data?.token) throw new Error('Token ausente');
+    if (!data?.token) {
+      console.error('[AUTH] Login falhou: Token ausente na resposta');
+      throw new Error('Token ausente');
+    }
+    
+    console.debug('[AUTH] Token recebido do servidor', { 
+      tokenPrefix: data.token.substring(0, 10),
+      tokenLength: data.token.length 
+    });
     
     // ÚNICO lugar onde token é salvo
     localStorage.setItem('auth_token', data.token);
+    const savedToken = localStorage.getItem('auth_token');
+    console.debug('[AUTH] Token salvo no localStorage', { 
+      saved: savedToken === data.token,
+      savedPrefix: savedToken?.substring(0, 10),
+      originalPrefix: data.token.substring(0, 10)
+    });
     
     // Buscar dados do usuário
     try {
+      console.debug('[AUTH] Buscando dados do usuário via /api/auth/me/');
+      const tokenBeforeRequest = localStorage.getItem('auth_token');
+      console.debug('[AUTH] Token antes da requisição /me:', { 
+        exists: !!tokenBeforeRequest,
+        prefix: tokenBeforeRequest?.substring(0, 10)
+      });
+      
       const { data: userData } = await axios.get('/api/auth/me/');
+      console.debug('[AUTH] Dados do usuário recebidos', { 
+        userId: userData.id,
+        username: userData.username,
+        userType: userData.user_type 
+      });
+      
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
       return userData;
     } catch (err) {
+      console.error('[AUTH] Erro ao buscar /me após login', {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        error: err.response?.data,
+        tokenExists: !!localStorage.getItem('auth_token')
+      });
       // Se falhar ao buscar /me, limpar token e relançar erro
       localStorage.removeItem('auth_token');
       throw err;
