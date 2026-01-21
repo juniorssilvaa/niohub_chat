@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
 import axios from 'axios';
+import { useAuth } from './AuthContext';
 
 export const NotificationContext = createContext();
 
@@ -13,6 +14,8 @@ export const useNotifications = () => {
 };
 
 export const NotificationProvider = ({ children }) => {
+  // ✅ Usar usuário do AuthContext ao invés de buscar novamente
+  const { user: authUser } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -36,9 +39,18 @@ export const NotificationProvider = ({ children }) => {
   const faviconTimerRef = useRef(null);
   const isFaviconBlinkingRef = useRef(false);
 
+  // ✅ Sincronizar usuário do AuthContext com currentUser local
+  // Isso evita chamadas desnecessárias de /me
   useEffect(() => {
-    loadCurrentUser();
-  }, []);
+    if (authUser) {
+      setCurrentUser(authUser);
+      soundEnabledRef.current = !!authUser.sound_notifications_enabled;
+      if (authUser.new_message_sound) newMsgSoundRef.current = authUser.new_message_sound;
+      if (authUser.new_conversation_sound) newConvSoundRef.current = authUser.new_conversation_sound;
+    } else {
+      setCurrentUser(null);
+    }
+  }, [authUser]);
 
   useEffect(() => {
     if (currentUser?.id) {
@@ -68,27 +80,8 @@ export const NotificationProvider = ({ children }) => {
     };
   }, [currentUser?.id]);
 
-  const loadCurrentUser = async () => {
-    try {
-      // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await axios.get('/api/auth/me/', {
-        headers: { Authorization: `Token ${token}` }
-      });
-
-      if (response.status === 200) {
-        const userData = response.data;
-        setCurrentUser(userData);
-        soundEnabledRef.current = !!userData.sound_notifications_enabled;
-        if (userData.new_message_sound) newMsgSoundRef.current = userData.new_message_sound;
-        if (userData.new_conversation_sound) newConvSoundRef.current = userData.new_conversation_sound;
-      }
-    } catch (error) {
-      console.error('Erro ao carregar usuário atual:', error);
-    }
-  };
+  // ✅ REMOVIDO: loadCurrentUser não é mais necessário
+  // O usuário vem do AuthContext, evitando chamadas duplicadas de /me
 
   const loadInternalChatUnreadCount = async () => {
     try {
@@ -435,22 +428,8 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    if (initializingRef.current) {
-      return;
-    }
-    initializingRef.current = true;
-    connectWebSocket();
-    return () => {
-      if (websocketRef.current) {
-        websocketRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      initializingRef.current = false;
-    };
-  }, []);
+  // ✅ REMOVIDO: useEffect que chamava connectWebSocket sem verificar usuário
+  // A conexão agora é feita apenas quando há currentUser (linha 44-69)
 
   useEffect(() => {
     if (currentUser?.id && websocketRef.current?.readyState === WebSocket.OPEN) {

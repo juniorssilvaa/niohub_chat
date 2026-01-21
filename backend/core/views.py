@@ -3158,26 +3158,46 @@ class LoginView(APIView):
         
         logger.info(f"[LOGIN] Login realizado: user_id={user.id}, username={user.username}, full_name='{user.get_full_name()}'")
         
-        # Obter ou criar token
-        token, created = Token.objects.get_or_create(user=user)
-        logger.info(f"[LOGIN] Token {'criado' if created else 'existente'}: user_id={user.id}, token_key={token.key[:20]}...")
-        
-        # CRÍTICO: Garantir que o token está salvo no banco antes de retornar
+        # CRÍTICO: Usar transaction.atomic() para garantir commit imediato
         # Isso evita race conditions onde o frontend tenta usar o token antes dele estar disponível
-        # O Django já faz commit automático após a view, mas vamos garantir que o token está atualizado
-        token.refresh_from_db()
-        logger.debug(f"[LOGIN] Token refresh_from_db concluído: user_id={user.id}, token_key={token.key[:20]}...")
+        from django.db import transaction
         
-        # Verificar se o token realmente existe no banco (validação adicional)
+        with transaction.atomic():
+            # Obter ou criar token dentro da transação
+            token, created = Token.objects.get_or_create(user=user)
+            logger.info(f"[LOGIN] Token {'criado' if created else 'existente'}: user_id={user.id}, token_key={token.key[:20]}...")
+            
+            # Forçar refresh do token do banco para garantir que está sincronizado
+            token.refresh_from_db()
+            logger.debug(f"[LOGIN] Token refresh_from_db concluído: user_id={user.id}, token_key={token.key[:20]}...")
+            
+            # Verificar se o token realmente existe no banco (validação adicional)
+            try:
+                db_token = Token.objects.get(key=token.key, user=user)
+                logger.info(f"[LOGIN] Token confirmado no banco: user_id={user.id}, token_key={token.key[:20]}..., db_user_id={db_token.user.id}")
+            except Token.DoesNotExist:
+                logger.error(f"[LOGIN] ERRO CRÍTICO: Token criado mas não encontrado no banco! user_id={user.id}, token_key={token.key[:20]}...")
+                # Recriar token se necessário
+                if created:
+                    token.delete()
+                token = Token.objects.create(user=user)
+                logger.warning(f"[LOGIN] Token recriado: user_id={user.id}, token_key={token.key[:20]}...")
+            
+            # Commit é automático ao sair do bloco transaction.atomic()
+            # Isso garante que o token está disponível para outras requisições imediatamente
+        
+        # Verificar novamente após o commit para confirmar que está disponível
+        # Usar select_for_update(nowait=True) para garantir que vemos o commit
         try:
-            db_token = Token.objects.get(key=token.key, user=user)
-            logger.info(f"[LOGIN] Token confirmado no banco: user_id={user.id}, token_key={token.key[:20]}..., db_user_id={db_token.user.id}")
+            from django.db import connection
+            connection.ensure_connection()
+            final_token = Token.objects.select_for_update(nowait=True).get(key=token.key, user=user)
+            logger.info(f"[LOGIN] Token confirmado após commit: user_id={user.id}, token_key={final_token.key[:20]}...")
         except Token.DoesNotExist:
-            logger.error(f"[LOGIN] ERRO CRÍTICO: Token criado mas não encontrado no banco! user_id={user.id}, token_key={token.key[:20]}...")
-            # Recriar token se necessário
-            token.delete()
-            token = Token.objects.create(user=user)
-            logger.warning(f"[LOGIN] Token recriado: user_id={user.id}, token_key={token.key[:20]}...")
+            logger.error(f"[LOGIN] ERRO CRÍTICO: Token não encontrado após commit! user_id={user.id}")
+        except Exception as e:
+            # select_for_update pode falhar em algumas situações, mas não é crítico
+            logger.debug(f"[LOGIN] Não foi possível fazer select_for_update: {e}")
         
         # Obter provedor_id do usuário
         provedor_id = None

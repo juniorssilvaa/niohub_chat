@@ -65,45 +65,40 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // Request interceptor (somente adicionar token - SEM DECISÕES)
+  // Request interceptor (PASSIVO - apenas adiciona token se existir, SEM warnings/logs)
   useEffect(() => {
     const req = axios.interceptors.request.use(config => {
       const token = localStorage.getItem('auth_token');
-      const url = config.url || config.baseURL || 'unknown';
       
+      // Se há token, adicionar ao header. Se não há, deixar passar sem token (passivo)
       if (token) {
         config.headers = config.headers || {};
         config.headers.Authorization = `Token ${token}`;
-        console.debug(`[AUTH] Request interceptor: Token encontrado e adicionado para ${url}`, {
-          url,
-          tokenPrefix: token.substring(0, 10),
-          hasHeader: !!config.headers.Authorization
-        });
-      } else {
-        console.warn(`[AUTH] Request interceptor: Token NÃO encontrado no localStorage para ${url}`, {
-          url,
-          localStorageKeys: Object.keys(localStorage)
-        });
       }
+      // Se não há token, não fazer nada - deixar a request seguir sem Authorization
+      // O backend responderá 401 se necessário, e isso é comportamento esperado
+      
       return config;
     });
     return () => axios.interceptors.request.eject(req);
   }, []);
 
-  // Response interceptor (refresh token - SEM LIMPAR SESSÃO)
+  // Response interceptor (PASSIVO - só tenta refresh se houver token e for 401)
   useEffect(() => {
     const res = axios.interceptors.response.use(
       r => r,
       async error => {
         const original = error.config;
-        const url = original.url || 'unknown';
         const status = error.response?.status;
         
-        console.debug(`[AUTH] Response interceptor: Erro recebido`, {
-          url,
-          status,
-          hasRetry: !!original._retry
-        });
+        // PRIMEIRO: Verificar se há token antes de tentar qualquer ação
+        const token = localStorage.getItem('auth_token');
+        
+        // Se não há token, não fazer nada - deixar o erro propagar naturalmente
+        // Isso evita tentativas de refresh quando não há sessão válida
+        if (!token) {
+          return Promise.reject(error);
+        }
         
         // Ignorar refresh se:
         // - Não é 401
@@ -115,31 +110,17 @@ export function AuthProvider({ children }) {
                               original.url?.includes('/api/auth/refresh/');
         
         if (status !== 401 || original._retry || isAuthEndpoint) {
-          if (status === 401 && !isAuthEndpoint) {
-            console.warn(`[AUTH] Response interceptor: 401 recebido mas não tentará refresh`, {
-              url,
-              hasRetry: !!original._retry,
-              isAuthEndpoint
-            });
-          }
           return Promise.reject(error);
         }
 
-        console.debug(`[AUTH] Response interceptor: Tentando refresh token para ${url}`);
+        // Só chega aqui se: há token, é 401, não é endpoint de auth, e não tentou refresh ainda
         original._retry = true;
         
         try {
           const newToken = await refreshToken();
-          console.debug(`[AUTH] Response interceptor: Refresh bem-sucedido, retentando ${url}`, {
-            newTokenPrefix: newToken.substring(0, 10)
-          });
           original.headers.Authorization = `Token ${newToken}`;
           return axios(original);
         } catch (refreshError) {
-          console.error(`[AUTH] Response interceptor: Refresh falhou para ${url}`, {
-            error: refreshError.message,
-            status: refreshError.response?.status
-          });
           // Refresh falhou - deixar o erro propagar naturalmente
           // O AuthContext já cuida do logout se necessário
           return Promise.reject(refreshError);
@@ -157,9 +138,18 @@ export function AuthProvider({ children }) {
     booted.current = true;
     console.debug('[AUTH] Bootstrap iniciado');
 
+    // PRIMEIRO: Verificar se há token ANTES de fazer qualquer chamada
     const token = localStorage.getItem('auth_token');
     if (!token) {
-      console.debug('[AUTH] Bootstrap: Nenhum token encontrado no localStorage');
+      console.debug('[AUTH] Bootstrap: Nenhum token encontrado no localStorage - app não autenticado');
+      setLoading(false);
+      return;
+    }
+    
+    // Validar que o token não está vazio ou apenas espaços
+    if (!token.trim()) {
+      console.debug('[AUTH] Bootstrap: Token vazio encontrado - limpando');
+      localStorage.removeItem('auth_token');
       setLoading(false);
       return;
     }
