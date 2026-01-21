@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('token'); // Limpar fallback se existir
     localStorage.removeItem('user');
+    booted.current = false; // Resetar flag de bootstrap
     setUser(null);
   }, []);
 
@@ -168,27 +169,63 @@ export function AuthProvider({ children }) {
       tokenLength: token.length 
     });
 
-    try {
-      console.debug('[AUTH] Bootstrap: Validando token via /api/auth/me/');
-      const { data } = await axios.get('/api/auth/me/');
-      console.debug('[AUTH] Bootstrap: Token válido, usuário restaurado', {
-        userId: data.id,
-        username: data.username
-      });
-      setUser(data);
-      localStorage.setItem('user', JSON.stringify(data));
-    } catch (err) {
-      console.error('[AUTH] Bootstrap: Token inválido', {
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        error: err.response?.data
-      });
-      // Token inválido, limpar sessão
-      await logout();
-    } finally {
-      setLoading(false);
+    // Tentar validar o token com retry para lidar com race conditions
+    let retries = 0;
+    const maxRetries = 2;
+    
+    while (retries <= maxRetries) {
+      try {
+        console.debug(`[AUTH] Bootstrap: Validando token via /api/auth/me/ (tentativa ${retries + 1})`);
+        const { data } = await axios.get('/api/auth/me/');
+        console.debug('[AUTH] Bootstrap: Token válido, usuário restaurado', {
+          userId: data.id,
+          username: data.username
+        });
+        setUser(data);
+        localStorage.setItem('user', JSON.stringify(data));
+        setLoading(false);
+        return; // Sucesso, sair do loop
+      } catch (err) {
+        const status = err.response?.status;
+        console.warn(`[AUTH] Bootstrap: Falha na tentativa ${retries + 1}`, {
+          status,
+          statusText: err.response?.statusText,
+          error: err.response?.data
+        });
+        
+        // Se for 401, tentar refresh token antes de desistir
+        if (status === 401 && retries < maxRetries) {
+          console.debug('[AUTH] Bootstrap: 401 recebido, tentando refresh token');
+          try {
+            // Tentar refresh token
+            await refreshToken();
+            // Aguardar um pouco antes de retentar (para evitar race conditions)
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+            continue; // Retentar /api/auth/me/ com o novo token
+          } catch (refreshErr) {
+            console.error('[AUTH] Bootstrap: Refresh token falhou', {
+              status: refreshErr.response?.status,
+              error: refreshErr.response?.data
+            });
+            // Refresh falhou, limpar sessão
+            await logout();
+            setLoading(false);
+            return;
+          }
+        } else {
+          // Não é 401 ou excedeu retries, limpar sessão
+          console.error('[AUTH] Bootstrap: Token inválido após todas as tentativas', {
+            status,
+            retries
+          });
+          await logout();
+          setLoading(false);
+          return;
+        }
+      }
     }
-  }, [logout]);
+  }, [logout, refreshToken]);
 
   const login = useCallback(async (username, password) => {
     console.debug('[AUTH] Login iniciado', { username });
