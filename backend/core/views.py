@@ -1070,6 +1070,12 @@ def evolution_webhook(request):
             
             resposta_ia = ia_result.get('resposta') if ia_result.get('success') else None
             
+            # 🚨 SEGURANÇA CRÍTICA: Remover qualquer código antes de enviar ao cliente
+            if resposta_ia:
+                from core.ai_response_formatter import AIResponseFormatter
+                formatter = AIResponseFormatter()
+                resposta_ia = formatter.remover_exposicao_funcoes(resposta_ia)
+            
             # 🚨 CORREÇÃO: WhatsApp usa *texto* (UM asterisco), não **texto** (dois asteriscos)
             # Limpar formatação incorreta se for WhatsApp
             if resposta_ia and inbox.channel_type == 'whatsapp':
@@ -2958,6 +2964,12 @@ def webhook_evolution_uazapi(request):
                         logger.error(f"[UAZAPI] Pacote google-genai não instalado - {erro_ia}. Execute: pip install google-genai")
                 else:
                     logger.warning(f"[UAZAPI] ia_result não definido para conversa {conversation.id}")
+        
+        # 🚨 SEGURANÇA CRÍTICA: Remover qualquer código antes de enviar ao cliente
+        if resposta_ia:
+            from core.ai_response_formatter import AIResponseFormatter
+            formatter = AIResponseFormatter()
+            resposta_ia = formatter.remover_exposicao_funcoes(resposta_ia)
         
         # 🚨 CORREÇÃO: WhatsApp usa *texto* (UM asterisco), não **texto** (dois asteriscos)
         # Limpar formatação incorreta se for WhatsApp

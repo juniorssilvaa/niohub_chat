@@ -406,6 +406,12 @@ class TelegramService:
                 return
 
             resposta_ia = ia_result.get('resposta')
+            
+            # 🚨 SEGURANÇA CRÍTICA: Remover qualquer código antes de enviar ao cliente
+            if resposta_ia:
+                from core.ai_response_formatter import AIResponseFormatter
+                formatter = AIResponseFormatter()
+                resposta_ia = formatter.remover_exposicao_funcoes(resposta_ia)
             if not resposta_ia:
                 return
             

@@ -189,7 +189,27 @@ async def try_handle_fatura_flow(*, mensagem: str, provedor, contexto: Dict[str,
     if in_suspensao:
         return None
 
+    # 🚨 VERIFICAÇÃO CRÍTICA: Se não está em fluxo de fatura e a mensagem atual não é intenção de fatura,
+    # verificar se o contexto original era sobre problema de internet
+    # Se sim, NÃO iniciar fluxo de fatura mesmo que tenha palavras-chave ambíguas
     if not in_fatura and not start_fatura:
+        # Verificar histórico para ver se o contexto original era sobre internet
+        history_items = await redis_memory_service.get_ai_context(provedor_id, conversation_id, channel, phone, limit=15)
+        internet_problem_keywords = ["internet", "sem internet", "internet lenta", "internet caiu", "internet caindo", 
+                                     "sem sinal", "sem acesso", "problema", "problema na internet", "internet não funciona",
+                                     "wifi", "roteador", "modem", "led vermelho", "sinal", "conexão", "conexao"]
+        
+        # Verificar nas primeiras mensagens do cliente se mencionou problema de internet
+        for msg_data in history_items:
+            if msg_data.get('role') == 'user':
+                content_lower = (msg_data.get('content') or '').lower()
+                # Verificar se é uma das primeiras mensagens do cliente (não apenas CPF/CNPJ)
+                if len(content_lower) > 20:  # Mensagens maiores que apenas CPF/CNPJ
+                    if any(keyword in content_lower for keyword in internet_problem_keywords):
+                        # Contexto original é sobre internet - NÃO iniciar fluxo de fatura
+                        logger.info(f"[FATURA_FLOW] Contexto original é internet - não iniciando fluxo de fatura na conversa {conversation_id}")
+                        return None
+        
         return None
 
     # Anti-mistura de fluxo: se já estamos em FATURA, não deixar desviar.
@@ -344,6 +364,41 @@ async def try_handle_fatura_flow(*, mensagem: str, provedor, contexto: Dict[str,
                 "final_action": "WAIT_CONFIRM_OR_CHOICE",
                 "ai_conversation_id": f"ai:{provedor_id}:{channel}:{conversation_id}",
             }
+
+        # 🚨 VERIFICAÇÃO CRÍTICA: Verificar se o contexto original era sobre problema de internet
+        # Se o cliente entrou reclamando de internet, NÃO enviar fatura quando confirmar dados
+        # Deixar a IA genérica continuar com o suporte de internet
+        history_items = await redis_memory_service.get_ai_context(provedor_id, conversation_id, channel, phone, limit=15)
+        
+        # Verificar nas primeiras mensagens do cliente se mencionou problema de internet
+        internet_problem_keywords = ["internet", "sem internet", "internet lenta", "internet caiu", "internet caindo", 
+                                     "sem sinal", "sem acesso", "problema", "problema na internet", "internet não funciona",
+                                     "wifi", "roteador", "modem", "led vermelho", "sinal", "conexão", "conexao"]
+        
+        original_intent_is_internet = False
+        for msg_data in history_items:
+            if msg_data.get('role') == 'user':
+                content_lower = (msg_data.get('content') or '').lower()
+                # Verificar se é uma das primeiras mensagens do cliente (não apenas CPF/CNPJ)
+                if len(content_lower) > 20:  # Mensagens maiores que apenas CPF/CNPJ
+                    if any(keyword in content_lower for keyword in internet_problem_keywords):
+                        original_intent_is_internet = True
+                        logger.info(f"[FATURA_FLOW] Contexto original detectado: problema de internet na conversa {conversation_id}")
+                        break
+        
+        # Se o contexto original era sobre internet e o cliente confirmou dados, NÃO enviar fatura
+        # Deixar a IA genérica continuar com o suporte
+        if original_intent_is_internet and _is_yes(mensagem):
+            logger.info(f"[FATURA_FLOW] Cliente confirmou dados mas contexto original é internet - deixando IA genérica continuar suporte na conversa {conversation_id}")
+            # Limpar o fluxo de fatura e deixar a IA genérica continuar
+            await redis_memory_service.update_ai_state(
+                provedor_id,
+                conversation_id,
+                {"flow": "NONE", "step": "INICIAL", "dados_confirmados": True},
+                channel,
+                phone
+            )
+            return None  # Deixar IA genérica continuar
 
         cpf = mem.get("cpf_cnpj")
         if not cpf:

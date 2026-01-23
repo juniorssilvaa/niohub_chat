@@ -1495,6 +1495,11 @@ def call_ai_and_respond_whatsapp(conversation, contact, provedor, content: str, 
             logger.warning(f"[WhatsAppWebhook] IA retornou resposta vazia para {conversation.id}")
             return
         
+        # 🚨 SEGURANÇA CRÍTICA: Remover qualquer código antes de enviar ao cliente
+        from core.ai_response_formatter import AIResponseFormatter
+        formatter = AIResponseFormatter()
+        resposta_ia = formatter.remover_exposicao_funcoes(resposta_ia)
+        
         # 3. Formatação WhatsApp (Markdown compatível)
         import re
         resposta_ia = re.sub(r'\*\*([^*]+?)\*\*', r'*\1*', resposta_ia)

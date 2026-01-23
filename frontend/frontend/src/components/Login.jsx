@@ -41,6 +41,21 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // #region agent log
+    console.log('[AUTH-DEBUG] Login.jsx:42: handleSubmit chamado', { username, loading });
+    try {
+      fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Login.jsx:42',message:'handleSubmit chamado',data:{username,loading},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    } catch (e) {}
+    // #endregion
+    if (loading) {
+      // #region agent log
+      console.log('[AUTH-DEBUG] Login.jsx:42: handleSubmit bloqueado - já em loading', { username });
+      try {
+        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Login.jsx:42',message:'handleSubmit bloqueado - já em loading',data:{username},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      } catch (e) {}
+      // #endregion
+      return;
+    }
     setLoading(true);
     setError('');
 

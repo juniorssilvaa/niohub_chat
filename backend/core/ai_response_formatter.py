@@ -58,10 +58,40 @@ class AIResponseFormatter:
     def remover_exposicao_funcoes(self, resposta: str) -> str:
         """
         Remove qualquer exposição de funções internas, chamadas de funções, código ou dados técnicos da resposta.
-        CRÍTICO: Remove estruturas JSON, resultados brutos de funções, e qualquer dado do backend.
+        CRÍTICO: Remove estruturas JSON, resultados brutos de funções, código Python, e qualquer dado do backend.
         """
         if not resposta:
             return resposta
+        
+        # 🚨 REMOVER CÓDIGO PYTHON (CRÍTICO - NUNCA DEVE APARECER PARA O CLIENTE)
+        # Remove chamadas print() completas ou parciais
+        resposta = re.sub(r'print\s*\([^)]*\)', '', resposta, flags=re.IGNORECASE)
+        resposta = re.sub(r'print\s*\([^)]*$', '', resposta, flags=re.IGNORECASE)  # print() incompleto
+        resposta = re.sub(r'print\s*\([^)]*\.', '', resposta, flags=re.IGNORECASE)  # print(default_api.)
+        
+        # Remove código Python parcial (variáveis com underscore seguido de ponto)
+        resposta = re.sub(r'\b[a-z_]+_[a-z_]+\s*\.', '', resposta, flags=re.IGNORECASE)  # default_api.
+        resposta = re.sub(r'\b[a-z_]+_[a-z_]+\s*\(', '', resposta, flags=re.IGNORECASE)  # funcao_interna(
+        
+        # Remove console.log, console.debug, etc.
+        resposta = re.sub(r'console\.(log|debug|warn|error|info)\s*\([^)]*\)', '', resposta, flags=re.IGNORECASE)
+        
+        # Remove código JavaScript/TypeScript parcial
+        resposta = re.sub(r'console\.(log|debug|warn|error|info)\s*\([^)]*$', '', resposta, flags=re.IGNORECASE)
+        
+        # Remove padrões de código (variáveis com underscore no início ou meio)
+        resposta = re.sub(r'\b_[a-z_]+\s*[=\.\(]', '', resposta, flags=re.IGNORECASE)  # _variavel = ou . ou (
+        resposta = re.sub(r'\b[a-z]+_[a-z_]+\s*[=\.\(]', '', resposta, flags=re.IGNORECASE)  # variavel_interna = ou . ou (
+        
+        # Remove linhas que são claramente código (começam com palavras-chave de programação)
+        palavras_chave_codigo = [
+            r'^\s*(def|class|import|from|return|if|else|elif|for|while|try|except|finally|with|async|await)\s+',
+            r'^\s*(var|let|const|function|async\s+function)\s+',
+            r'^\s*#\s*(region|endregion|TODO|FIXME|DEBUG|HACK)',
+            r'^\s*//\s*(region|endregion|TODO|FIXME|DEBUG|HACK)',
+        ]
+        for padrao in palavras_chave_codigo:
+            resposta = re.sub(padrao, '', resposta, flags=re.IGNORECASE | re.MULTILINE)
         
         # 🚨 REMOVER ESTRUTURAS JSON/DICT COMPLETAS (CRÍTICO DE SEGURANÇA)
         # Remove padrões como: {'success': True, ...}, {"horario_info": {...}}, etc.
@@ -105,6 +135,21 @@ class AIResponseFormatter:
         resposta = re.sub(r'["\']horario_info["\']\s*:\s*\{[^}]*\}', '', resposta, flags=re.IGNORECASE)
         resposta = re.sub(r'["\']dentro_horario["\']\s*:\s*(?:True|False)', '', resposta, flags=re.IGNORECASE)
         resposta = re.sub(r'["\']message["\']\s*:\s*["\'][^"\']+["\']', '', resposta, flags=re.IGNORECASE)
+        
+        # Remover linhas que contêm apenas código (sem texto legível)
+        linhas = resposta.split('\n')
+        linhas_limpas = []
+        for linha in linhas:
+            linha_limpa = linha.strip()
+            # Se a linha é apenas código (contém apenas caracteres técnicos), remover
+            if linha_limpa and not re.search(r'[a-záàâãéêíóôõúç]{3,}', linha_limpa, re.IGNORECASE):
+                # Linha não contém palavras legíveis, provavelmente é código
+                continue
+            # Se a linha começa com padrões de código, remover
+            if re.match(r'^\s*(print|console|def|class|import|#|//)', linha_limpa, re.IGNORECASE):
+                continue
+            linhas_limpas.append(linha)
+        resposta = '\n'.join(linhas_limpas)
         
         # CORREÇÃO: Não usar re.sub(r'\s+', ' ', resposta) pois remove quebras de linha
         # Preservar quebras de linha mas remover espaços duplicados horizontais

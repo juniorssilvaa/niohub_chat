@@ -186,7 +186,22 @@ export default function ConversasDashboard() {
       }
     } catch (error) {
       console.log('Credenciais inválidas, removendo...');
+      // #region agent log
+      const authTokenBefore = localStorage.getItem('auth_token');
+      const tokenBefore = localStorage.getItem('token');
+      console.log('[AUTH-DEBUG] ConversasDashboard.jsx:189: removendo token', { authTokenExists: !!authTokenBefore, tokenExists: !!tokenBefore, error: error.message });
+      try {
+        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversasDashboard.jsx:189',message:'ConversasDashboard removendo token',data:{authTokenExists:!!authTokenBefore,tokenExists:!!tokenBefore,error:error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      } catch (e) {}
+      // #endregion
       localStorage.removeItem('token');
+      // #region agent log
+      const authTokenAfter = localStorage.getItem('auth_token');
+      console.log('[AUTH-DEBUG] ConversasDashboard.jsx:189: removeu token', { authTokenStillExists: !!authTokenAfter });
+      try {
+        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversasDashboard.jsx:189',message:'ConversasDashboard removeu token',data:{authTokenStillExists:!!authTokenAfter},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      } catch (e) {}
+      // #endregion
     }
 
     // Tentar sessão ativa

@@ -929,6 +929,12 @@ def evolution_webhook(request):
             
             resposta_ia = ia_result.get('resposta') if ia_result.get('success') else None
             
+            # 🚨 SEGURANÇA CRÍTICA: Remover qualquer código antes de enviar ao cliente
+            if resposta_ia:
+                from core.ai_response_formatter import AIResponseFormatter
+                formatter = AIResponseFormatter()
+                resposta_ia = formatter.remover_exposicao_funcoes(resposta_ia)
+            
             # 7. Enviar resposta para Evolution (WhatsApp)
             evolution_url = f'{settings.EVOLUTION_URL}/message/sendText/{instance}'
             evolution_apikey = settings.EVOLUTION_API_KEY
@@ -3015,6 +3021,13 @@ def webhook_evolution_uazapi(request):
                         resposta_ia = "Desculpe, estou com dificuldades técnicas no momento. Por favor, tente novamente em alguns instantes ou entre em contato com nosso suporte."
                 else:
                     logger.warning(f"[UAZAPI] ia_result não definido para conversa {conversation.id}")
+        
+        # 🚨 SEGURANÇA CRÍTICA: Remover qualquer código antes de enviar ao cliente
+        if resposta_ia:
+            from core.ai_response_formatter import AIResponseFormatter
+            formatter = AIResponseFormatter()
+            resposta_ia = formatter.remover_exposicao_funcoes(resposta_ia)
+        
         # 3. Enviar resposta para Uazapi (WhatsApp)
         import requests
         send_result = None
