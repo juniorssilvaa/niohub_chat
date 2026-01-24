@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { MessageCircle, Send, XCircle, Edit2, Plus, Save, Globe, MoreVertical, Trash2 } from 'lucide-react';
+import { MessageCircle, Send, XCircle, Edit2, Plus, Save, Globe, MoreVertical, Trash2, Bot } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import fotoPerfilNull from '../assets/foto-perfil-null.gif';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
 import { getApiBaseUrl, buildApiPath } from '../utils/apiBaseUrl';
 import useMetaEmbeddedSignupListener from '../hooks/useMetaEmbeddedSignupListener.js';
 import { useNavigate } from 'react-router-dom';
+import { Switch } from './ui/switch';
 
 function StatusBadge({ status, t }) {
   let color = 'bg-yellow-500';
@@ -34,7 +35,7 @@ function StatusBadge({ status, t }) {
   );
 }
 
-function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onCheckStatus, onDeleteInstance, deletingChannelId, isProcessing, t }) {
+function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onCheckStatus, onDeleteInstance, deletingChannelId, isProcessing, onToggleIA, t }) {
   const isWhatsapp = channel.tipo === 'whatsapp' || channel.tipo === 'whatsapp_session';
   const isWhatsappOficial = channel.tipo === 'whatsapp_oficial';
   
@@ -167,22 +168,35 @@ function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onChe
           )}
         </div>
         </div>
-      {/* Botão lixeira no canto direito absoluto */}
-      <button
-        onClick={() => onDeleteInstance(channel)}
-        disabled={deletingChannelId === channel.id}
-        className="absolute top-2 right-2 bg-gradient-to-r from-gray-700 to-gray-900 hover:from-red-600 hover:to-red-800 text-white p-1 rounded-full text-xs font-semibold shadow disabled:opacity-50 disabled:cursor-not-allowed"
-        title={deletingChannelId === channel.id ? 'Deletando...' : t('deletar_instancia')}
-      >
-        {deletingChannelId === channel.id ? (
-          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-        ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+      {/* Toggle IA + lixeira no canto direito absoluto */}
+      <div className="absolute top-2 right-2 flex items-center gap-2">
+        {isConnected && (
+          <div className="flex items-center gap-1.5">
+            <Bot className="w-4 h-4 text-gray-400" />
+            <span className="text-xs text-gray-400">IA:</span>
+            <Switch
+              checked={channel.ia_ativa !== false}
+              onCheckedChange={(checked) => onToggleIA(channel.id, checked)}
+              disabled={isProcessingState}
+            />
+          </div>
         )}
-      </button>
+        <button
+          onClick={() => onDeleteInstance(channel)}
+          disabled={deletingChannelId === channel.id}
+          className="bg-gradient-to-r from-gray-700 to-gray-900 hover:from-red-600 hover:to-red-800 text-white p-1 rounded-full text-xs font-semibold shadow disabled:opacity-50 disabled:cursor-not-allowed"
+          title={deletingChannelId === channel.id ? 'Deletando...' : t('deletar_instancia')}
+        >
+          {deletingChannelId === channel.id ? (
+            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+          )}
+        </button>
+      </div>
       <div className="flex items-center gap-2">
         {/* Badge de status */}
         {isProcessingState ? (
@@ -1378,6 +1392,44 @@ export default function Integrations({ provedorId }) {
       alert('Funcionalidade de edição para este tipo de canal ainda não está disponível');
     }
   };
+
+  const handleToggleIA = async (channelId, iaAtiva) => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      if (!token) {
+        setToast({ show: true, message: 'Token não encontrado. Faça login novamente.', type: 'error' });
+        return;
+      }
+
+      const response = await axios.patch(
+        `/api/canais/${channelId}/`,
+        { ia_ativa: iaAtiva },
+        {
+          headers: { Authorization: `Token ${token}` }
+        }
+      );
+
+      // Atualizar o canal na lista local
+      setChannels(prevChannels =>
+        prevChannels.map(ch =>
+          ch.id === channelId ? { ...ch, ia_ativa: iaAtiva } : ch
+        )
+      );
+
+      setToast({
+        show: true,
+        message: iaAtiva ? 'IA ativada com sucesso!' : 'IA desativada com sucesso!',
+        type: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar status da IA:', error);
+      setToast({
+        show: true,
+        message: 'Erro ao atualizar status da IA. Tente novamente.',
+        type: 'error'
+      });
+    }
+  };
   
   // Funções de tradução
   const translateCategory = (category) => {
@@ -2496,6 +2548,7 @@ export default function Integrations({ provedorId }) {
               onDisconnect={handleDisconnect}
               onCheckStatus={handleCheckStatus}
               onDeleteInstance={handleDeleteInstance}
+              onToggleIA={handleToggleIA}
               deletingChannelId={deletingChannelId}
               isProcessing={processingChannels.has(channel.id)}
               t={t}

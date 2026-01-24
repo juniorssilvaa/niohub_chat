@@ -25,13 +25,16 @@ import gmailIcon from '../assets/gmail.png';
 import instagramIcon from '../assets/instagram.png';
 import logoImage from '../assets/logo.png';
 import chatBgPattern from '../assets/chat-bg-pattern.svg';
+import chatBgPatternLight from '../assets/chat-bg-pattern-light.svg';
 import CustomAudioPlayer from './ui/CustomAudioPlayer';
 import FilePreview from './FilePreview';
 import { buildMediaUrl } from '../config/environment';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
+import { useTheme } from '../hooks/useTheme';
 
 const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, user }) => {
   const navigate = useNavigate();
+  const isDarkTheme = useTheme();
   
   // Verificação de segurança para evitar erros
   if (!conversation) {
@@ -2505,13 +2508,14 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       <div 
         ref={scrollContainerRef} 
         onScroll={handleScrollContainer} 
-        className="relative flex-1 overflow-y-auto p-4 dark:bg-[#0b141a] bg-[#efeae2]"
+        className="relative flex-1 overflow-y-auto p-4 dark:bg-[#000000] bg-[#efeae2]"
         style={{ 
           minHeight: '200px',
-          backgroundImage: `url(${chatBgPattern})`,
+          backgroundImage: `url(${isDarkTheme ? chatBgPattern : chatBgPatternLight})`,
           backgroundRepeat: 'repeat',
-          backgroundSize: '400px 400px',
-          backgroundPosition: 'center'
+          backgroundSize: '200px 200px',
+          backgroundPosition: 'center',
+          opacity: 1
         }}
       >
         {/* Conteúdo das mensagens */}
@@ -2573,7 +2577,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                 <div className={`
                   rounded-2xl px-4 py-3 shadow-sm
                   ${isCustomer 
-                    ? 'bg-[#d1d5db] text-[#1f2937]'  // Cinza médio fixo, não muda com tema
+                    ? 'bg-[#4A5568] text-white'  // Cinza-azulado escuro para mensagens recebidas
                     : isAI
                       ? 'bg-blue-500 text-white'  // Mensagens da IA em azul
                       : isBot 

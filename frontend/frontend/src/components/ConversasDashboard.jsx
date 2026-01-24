@@ -3,6 +3,9 @@ import { Users, AlertTriangle, Flame, HelpCircle, Clock, MoreVertical, Bot, Mess
 import axios from 'axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
+import { useTheme } from '../hooks/useTheme';
+import chatBgPattern from '../assets/chat-bg-pattern.svg';
+import chatBgPatternLight from '../assets/chat-bg-pattern-light.svg';
 // Remover: import { toast } from './ui/sonner';
 
 const statusMap = [
@@ -72,6 +75,7 @@ const blocos = [
 ];
 
 export default function ConversasDashboard() {
+  const isDarkTheme = useTheme();
   const [counts, setCounts] = useState({ ia: 0, fila: 0, atendimento: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -1054,8 +1058,8 @@ export default function ConversasDashboard() {
     
     const align = isCliente ? 'justify-start' : 'justify-end';
     
-    // Cores correspondentes ao ChatArea: cliente = cinza (bg-muted), sistema/agente = azul
-    const bg = (isBot || isAtendente) ? 'bg-blue-500 text-white' : 'bg-muted text-foreground';
+    // Cores correspondentes ao ChatArea: cliente = cinza-azulado escuro, sistema/agente = azul
+    const bg = (isBot || isAtendente) ? 'bg-blue-500 text-white' : 'bg-[#4A5568] text-white';
     
     return (
       <div key={msg.id} className={`flex ${align} mb-4`}>
@@ -1456,7 +1460,14 @@ export default function ConversasDashboard() {
                 
                 {/* Área de mensagens com scroll */}
                 <div 
-                  className="messages-container flex-1 overflow-y-auto flex flex-col gap-3 p-4 bg-background rounded-b-lg"
+                  className="messages-container flex-1 overflow-y-auto flex flex-col gap-3 p-4 dark:bg-[#000000] bg-[#efeae2] rounded-b-lg"
+                  style={{ 
+                    backgroundImage: `url(${isDarkTheme ? chatBgPattern : chatBgPatternLight})`,
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: '200px 200px',
+                    backgroundPosition: 'center',
+                    opacity: 1
+                  }}
                 >
                 {modalLoading ? (
                     <div className="text-muted-foreground text-center py-8">

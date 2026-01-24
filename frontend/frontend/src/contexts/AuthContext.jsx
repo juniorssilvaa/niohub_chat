@@ -31,14 +31,15 @@ const debugLog = (location, message, data, hypothesisId) => {
 };
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
 
-  const booted = useRef(false);
-  const refreshing = useRef(false);
-  const refreshQueue = useRef([]);
+  const booted = React.useRef(false);
+  const refreshing = React.useRef(false);
+  const refreshQueue = React.useRef([]);
+  const loginInProgress = React.useRef(false);
 
-  const logout = useCallback(async () => {
+  const logout = React.useCallback(async () => {
     // #region agent log
     const tokenBefore = localStorage.getItem('auth_token');
     debugLog('AuthContext.jsx:18', 'logout iniciado', { tokenExists: !!tokenBefore, tokenPrefix: tokenBefore?.substring(0, 10) }, 'A');
@@ -59,7 +60,7 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
-  const refreshToken = useCallback(async () => {
+  const refreshToken = React.useCallback(async () => {
     // #region agent log
     const tokenBefore = localStorage.getItem('auth_token');
     debugLog('AuthContext.jsx:31', 'refreshToken iniciado', { alreadyRefreshing: refreshing.current, tokenExists: !!tokenBefore }, 'D');
@@ -111,7 +112,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Request interceptor (PASSIVO - apenas adiciona token se existir, SEM warnings/logs)
-  useEffect(() => {
+  React.useEffect(() => {
     const req = axios.interceptors.request.use(config => {
       const token = localStorage.getItem('auth_token');
       
@@ -129,7 +130,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Response interceptor (PASSIVO - só tenta refresh se houver token e for 401)
-  useEffect(() => {
+  React.useEffect(() => {
     const res = axios.interceptors.response.use(
       r => r,
       async error => {
@@ -175,7 +176,7 @@ export function AuthProvider({ children }) {
     return () => axios.interceptors.response.eject(res);
   }, [refreshToken]);
 
-  const bootstrap = useCallback(async () => {
+  const bootstrap = React.useCallback(async () => {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.jsx:133',message:'bootstrap iniciado',data:{alreadyBooted:booted.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
@@ -281,8 +282,7 @@ export function AuthProvider({ children }) {
     }
   }, [logout, refreshToken]);
 
-  const loginInProgress = useRef(false);
-  const login = useCallback(async (username, password) => {
+  const login = React.useCallback(async (username, password) => {
     // #region agent log
     const tokenBeforeLogin = localStorage.getItem('auth_token');
     const alreadyInProgress = loginInProgress.current;
@@ -371,7 +371,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Bootstrap executa UMA ÚNICA VEZ
-  useEffect(() => {
+  React.useEffect(() => {
     bootstrap();
   }, [bootstrap]);
 

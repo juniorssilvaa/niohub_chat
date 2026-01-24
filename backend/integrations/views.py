@@ -912,6 +912,51 @@ def evolution_webhook(request):
                     'bloqueado': True
                 }
             
+            # Verificar se a IA está ativa no canal
+            if should_call_ai:
+                from core.models import Canal
+                canal = None
+                # Tentar buscar canal pelo channel_id do inbox
+                if conversation.inbox.channel_id and conversation.inbox.channel_id != 'default':
+                    try:
+                        canal = Canal.objects.filter(
+                            id=conversation.inbox.channel_id,
+                            provedor=provedor
+                        ).first()
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Se não encontrou pelo channel_id, buscar pelo tipo do canal
+                if not canal:
+                    channel_type = conversation.inbox.channel_type
+                    if channel_type == 'whatsapp_oficial':
+                        canal = Canal.objects.filter(
+                            provedor=provedor,
+                            tipo='whatsapp_oficial',
+                            ativo=True
+                        ).first()
+                    elif channel_type == 'telegram':
+                        canal = Canal.objects.filter(
+                            provedor=provedor,
+                            tipo='telegram',
+                            ativo=True
+                        ).first()
+                    elif channel_type == 'whatsapp':
+                        # Para WhatsApp normal, buscar por nome da instância se disponível
+                        instance_name = conversation.inbox.additional_attributes.get('instance') if conversation.inbox.additional_attributes else None
+                        if instance_name:
+                            canal = Canal.objects.filter(
+                                provedor=provedor,
+                                nome=instance_name,
+                                tipo__in=['whatsapp', 'whatsapp_session'],
+                                ativo=True
+                            ).first()
+                
+                # Se encontrou o canal e a IA está desativada, não chamar IA
+                if canal and not canal.ia_ativa:
+                    logger.info(f"[EVOLUTION] IA NÃO chamada - canal {canal.id} ({canal.nome}) tem IA desativada (ia_ativa=False)")
+                    should_call_ai = False
+            
             if should_call_ai:
                 ia_result = openai_service.generate_response_sync(
                     mensagem=content,

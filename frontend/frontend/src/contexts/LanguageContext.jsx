@@ -715,7 +715,7 @@ const translations = {
 };
 
 export const LanguageProvider = ({ children }) => {
-  const [language, setLanguage] = useState(() => {
+  const [language, setLanguage] = React.useState(() => {
     // Tentar carregar do localStorage
     const savedLanguage = localStorage.getItem('user_language');
     if (savedLanguage) return savedLanguage;
@@ -731,7 +731,7 @@ export const LanguageProvider = ({ children }) => {
   });
 
   // Carregar idioma do usuário ao montar
-  useEffect(() => {
+  React.useEffect(() => {
     const loadUserLanguage = async () => {
       try {
         const token = localStorage.getItem('token');

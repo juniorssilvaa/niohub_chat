@@ -372,6 +372,12 @@ class TelegramService:
             if not provedor:
                 return
             
+            # Verificar se a IA está ativa no canal
+            canal_ia_ativa = await sync_to_async(lambda: self.canal.ia_ativa)()
+            if not canal_ia_ativa:
+                logger.info(f"[Telegram] IA NÃO chamada - canal {self.canal.id} ({self.canal.nome}) tem IA desativada (ia_ativa=False)")
+                return
+            
             # 2. Chamar Orquestrador de IA (Mestre)
             from core.openai_service import openai_service
             

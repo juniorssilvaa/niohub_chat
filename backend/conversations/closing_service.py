@@ -36,7 +36,8 @@ class ClosingService:
         try:
             conversation.status = 'closing'
             conversation.closing_requested_at = timezone.now()
-            conversation.save(update_fields=['status', 'closing_requested_at'])
+            conversation.assignee = None  # Garantir que não fique "atribuída" após IA finalizar
+            conversation.save(update_fields=['status', 'closing_requested_at', 'assignee'])
             
             tolerance = tolerance_minutes or cls.DEFAULT_TOLERANCE_MINUTES
             logger.info(
@@ -66,8 +67,9 @@ class ClosingService:
         
         try:
             conversation.status = 'closed'
+            conversation.assignee = None  # Garantir que não fique "atribuída" ao reabrir na próxima mensagem
             # Manter closing_requested_at para histórico
-            conversation.save(update_fields=['status'])
+            conversation.save(update_fields=['status', 'assignee'])
             logger.info(f"Encerramento finalizado para conversa {conversation.id}")
             
             # Criar CSAT agora que a conversa está definitivamente fechada

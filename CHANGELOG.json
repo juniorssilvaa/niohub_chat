@@ -1,6 +1,19 @@
 {
-  "current_version": "2.26.2",
+  "current_version": "2.26.3",
   "versions": [
+    {
+      "version": "2.26.3",
+      "version_type": "patch",
+      "date": "2026-01-24",
+      "title": "Ativar e desativar IA por canal",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Ativar e desativar IA",
+          "description": "Agora é possível desativar e ativar a IA por canal. O toggle fica no card do canal (ao lado da lixeira) e permite controlar se a IA responde automaticamente naquele canal ou não."
+        }
+      ]
+    },
     {
       "version": "2.26.2",
       "version_type": "patch",

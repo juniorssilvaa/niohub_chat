@@ -8,23 +8,21 @@ import django
 from django.conf import settings
 
 # Configurar encoding UTF-8 para Windows (de forma segura)
-if sys.platform == 'win32':
+# Não substituir stdout/stderr durante "migrate" para evitar "I/O operation on closed file"
+if sys.platform == 'win32' and 'migrate' not in sys.argv:
     try:
         import io
         if hasattr(sys.stderr, 'buffer'):
             try:
                 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
             except (ValueError, AttributeError, OSError):
-                # Se stderr estiver fechado, não fazer nada
                 pass
         if hasattr(sys.stdout, 'buffer'):
             try:
                 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
             except (ValueError, AttributeError, OSError):
-                # Se stdout estiver fechado, não fazer nada
                 pass
     except Exception:
-        # Se houver qualquer erro, continuar sem configurar encoding
         pass
 
 # Configurar logging básico para garantir que logs apareçam (de forma segura)

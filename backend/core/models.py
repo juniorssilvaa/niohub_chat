@@ -246,6 +246,9 @@ class Canal(models.Model):
     phone_number_id = models.CharField(max_length=100, null=True, blank=True, verbose_name='Phone Number ID')
     token = models.TextField(null=True, blank=True, verbose_name='Access Token')
     status = models.CharField(max_length=20, default='connected', verbose_name='Status')
+    
+    # Campo para controlar se a IA está ativa neste canal
+    ia_ativa = models.BooleanField(default=True, verbose_name='IA Ativa', help_text='Se desativado, a IA não responderá automaticamente neste canal, mas o provedor ainda poderá enviar e receber mensagens normalmente.')
 
     class Meta:
         verbose_name = 'Canal'

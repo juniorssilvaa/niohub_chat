@@ -68,14 +68,16 @@ class FaturaService:
 
     def buscar_fatura_sgp(self, provedor, cpf_cnpj: str) -> Optional[Dict[str, Any]]:
         """
-        Busca fatura no SGP via endpoint /api/ura/fatura2via/ usando CPF/CNPJ diretamente
+        Busca fatura mais atrasada no SGP via endpoint /api/ura/titulos/
+        Filtra faturas em aberto com vencimento passado e retorna a mais antiga.
+        Se não houver faturas em atraso, retorna mensagem positiva.
         
         Args:
             provedor: Objeto Provedor com configurações SGP
             cpf_cnpj: CPF ou CNPJ do cliente para buscar fatura
             
         Returns:
-            Dados da fatura ou None se erro
+            Dados da fatura mais atrasada no formato esperado ou dict com mensagem positiva
         """
         try:
             # region agent log
@@ -126,29 +128,117 @@ class FaturaService:
             # Remover formatação do CPF/CNPJ (apenas números) para enviar ao SGP
             cpf_cnpj_limpo = ''.join(filter(str.isdigit, str(cpf_cnpj)))
             
-            # IMPORTANTE: Sempre usar CPF/CNPJ, nunca contratoId para buscar fatura
-            # O endpoint /api/ura/fatura2via/ requer CPF/CNPJ no campo 'cpfcnpj'
-            resultado = sgp.segunda_via_fatura(cpf_cnpj_limpo)
+            # Listar todas as faturas do cliente
+            resultado = sgp.listar_titulos(cpf_cnpj_limpo, limit=250)
 
             # region agent log
             _debug_log(
                 "buscar_fatura_sgp_result",
                 {
                     "provedor_id": getattr(provedor, "id", None),
-                    "sgp_status": resultado.get("status") if isinstance(resultado, dict) else None,
-                    "has_links": bool(resultado.get("links")) if isinstance(resultado, dict) else None,
+                    "has_titulos": bool(resultado.get("titulos")) if isinstance(resultado, dict) else None,
+                    "total_titulos": len(resultado.get("titulos", [])) if isinstance(resultado, dict) else None,
                 },
                 location="fatura_service.py:buscar_fatura_sgp:result",
                 hypothesis_id="H3",
             )
             # endregion
 
-            if resultado and resultado.get('status') == 1:
-                return resultado
-            else:
+            if not resultado or not isinstance(resultado, dict):
                 return None
+            
+            titulos = resultado.get('titulos', [])
+            if not titulos:
+                # Nenhuma fatura encontrada - retornar mensagem positiva
+                return {
+                    'status': 0,
+                    'mensagem_positiva': True,
+                    'mensagem': 'Parabéns! Todas as suas faturas estão pagas. Não há nenhuma fatura em aberto ou em atraso.'
+                }
+            
+            # Data atual para comparação
+            hoje = datetime.now().date()
+            
+            # Filtrar faturas em aberto com vencimento passado
+            faturas_atrasadas = []
+            for titulo in titulos:
+                status = titulo.get('status', '').lower()
+                data_vencimento_str = titulo.get('dataVencimento', '')
+                
+                # Verificar se está em aberto
+                if status != 'aberto':
+                    continue
+                
+                # Verificar se a data de vencimento é válida e está no passado
+                try:
+                    if data_vencimento_str:
+                        data_vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
+                        if data_vencimento < hoje:
+                            faturas_atrasadas.append({
+                                'titulo': titulo,
+                                'data_vencimento': data_vencimento
+                            })
+                except (ValueError, TypeError):
+                    # Se não conseguir parsear a data, pular esta fatura
+                    continue
+            
+            # Se não houver faturas em atraso, verificar se há faturas abertas (não vencidas)
+            if not faturas_atrasadas:
+                faturas_abertas = [t for t in titulos if t.get('status', '').lower() == 'aberto']
+                if not faturas_abertas:
+                    # Nenhuma fatura em aberto - retornar mensagem positiva
+                    return {
+                        'status': 0,
+                        'mensagem_positiva': True,
+                        'mensagem': 'Parabéns! Todas as suas faturas estão pagas. Não há nenhuma fatura em aberto ou em atraso.'
+                    }
+                else:
+                    # Há faturas abertas mas não vencidas - pegar a mais próxima do vencimento
+                    faturas_ordenadas = []
+                    for titulo in faturas_abertas:
+                        data_vencimento_str = titulo.get('dataVencimento', '')
+                        try:
+                            if data_vencimento_str:
+                                data_vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
+                                faturas_ordenadas.append({
+                                    'titulo': titulo,
+                                    'data_vencimento': data_vencimento
+                                })
+                        except (ValueError, TypeError):
+                            continue
+                    
+                    if faturas_ordenadas:
+                        # Ordenar por data de vencimento (mais próxima primeiro)
+                        faturas_ordenadas.sort(key=lambda x: x['data_vencimento'])
+                        fatura_selecionada = faturas_ordenadas[0]['titulo']
+                    else:
+                        # Não conseguiu parsear datas - pegar primeira fatura aberta
+                        fatura_selecionada = faturas_abertas[0]
+            else:
+                # Ordenar faturas atrasadas por data de vencimento (mais antiga primeiro)
+                faturas_atrasadas.sort(key=lambda x: x['data_vencimento'])
+                fatura_selecionada = faturas_atrasadas[0]['titulo']
+            
+            # Converter para o formato esperado pelo sistema (compatível com segunda_via_fatura)
+            # O formato esperado tem: status, links (array com fatura, codigopix, linhadigitavel, link, vencimento, valor)
+            fatura_formatada = {
+                'status': 1,
+                'links': [{
+                    'fatura': str(fatura_selecionada.get('numeroDocumento', fatura_selecionada.get('id', 'N/A'))),
+                    'codigopix': fatura_selecionada.get('codigoPix', ''),
+                    'linhadigitavel': fatura_selecionada.get('linhaDigitavel', ''),
+                    'link': fatura_selecionada.get('link_cobranca') or fatura_selecionada.get('link', ''),
+                    'vencimento': fatura_selecionada.get('dataVencimento', ''),
+                    'vencimento_original': fatura_selecionada.get('dataVencimento', ''),
+                    'valor': float(fatura_selecionada.get('valorCorrigido', fatura_selecionada.get('valor', 0)))
+                }],
+                'nome_cliente': fatura_selecionada.get('clienteNome', '')
+            }
+            
+            return fatura_formatada
                 
         except Exception as e:
+            logger.exception(f"[FATURA] Erro ao buscar fatura SGP: {e}")
             return None
 
     def enviar_fatura(self, provedor, numero_whatsapp: str, dados_fatura: Dict[str, Any], conversation=None, tipo_pagamento: str = 'pix') -> Dict[str, Any]:

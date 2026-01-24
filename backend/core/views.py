@@ -91,14 +91,14 @@ def changelog_view(request):
             # Retornar estrutura vazia se não encontrar
             return JsonResponse({
                 "versions": [],
-                "current_version": "2.26.0"
+                "current_version": "2.26.3"
             }, safe=False)
     except Exception as e:
         logger.error(f'Erro ao carregar changelog: {e}')
         # Retornar estrutura vazia em caso de erro
         return JsonResponse({
             "versions": [],
-            "current_version": "2.26.0"
+            "current_version": "2.26.3"
         }, safe=False)
 
 
@@ -1045,6 +1045,51 @@ def evolution_webhook(request):
                     'motivo': 'Contato bloqueado para atendimento',
                     'bloqueado': True
                 }
+            
+            # Verificar se a IA está ativa no canal
+            if should_call_ai:
+                from core.models import Canal
+                canal = None
+                # Tentar buscar canal pelo channel_id do inbox
+                if conversation.inbox.channel_id and conversation.inbox.channel_id != 'default':
+                    try:
+                        canal = Canal.objects.filter(
+                            id=conversation.inbox.channel_id,
+                            provedor=provedor
+                        ).first()
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Se não encontrou pelo channel_id, buscar pelo tipo do canal
+                if not canal:
+                    channel_type = conversation.inbox.channel_type
+                    if channel_type == 'whatsapp_oficial':
+                        canal = Canal.objects.filter(
+                            provedor=provedor,
+                            tipo='whatsapp_oficial',
+                            ativo=True
+                        ).first()
+                    elif channel_type == 'telegram':
+                        canal = Canal.objects.filter(
+                            provedor=provedor,
+                            tipo='telegram',
+                            ativo=True
+                        ).first()
+                    elif channel_type == 'whatsapp':
+                        # Para WhatsApp normal, buscar por nome da instância se disponível
+                        instance_name = conversation.inbox.additional_attributes.get('instance') if conversation.inbox.additional_attributes else None
+                        if instance_name:
+                            canal = Canal.objects.filter(
+                                provedor=provedor,
+                                nome=instance_name,
+                                tipo__in=['whatsapp', 'whatsapp_session'],
+                                ativo=True
+                            ).first()
+                
+                # Se encontrou o canal e a IA está desativada, não chamar IA
+                if canal and not canal.ia_ativa:
+                    logger.info(f"[EVOLUTION] IA NÃO chamada - canal {canal.id} ({canal.nome}) tem IA desativada (ia_ativa=False)")
+                    should_call_ai = False
             
             if should_call_ai:
                 # NOTA: A IA não deve usar reply automaticamente
@@ -2913,25 +2958,60 @@ def webhook_evolution_uazapi(request):
             # Verificar se conversa está atribuída ou em espera
             # Permitir resposta da IA se não estiver atribuída e não estiver fechada
             elif conversation.assignee is None and conversation.status not in ['closed', 'resolved']:
-                try:
-                    ia_result = openai_service.generate_response_sync(
-                        mensagem=str(content),  # Garantir que é string
-                        provedor=provedor,
-                        contexto={'conversation': conversation}
-                    )
-                    
-                    # IMPORTANTE: Se a conversa está em 'pending', não alterar status nem atribuição
-                    # A IA pode responder, mas a conversa continua aguardando atendente/equipe
-                    if conversation.status != 'pending':
-                        # Verificar se a IA detectou interesse comercial e atualizar status de recuperação
-                        # Apenas se NÃO estiver em pending
-                        if ia_result.get('success') and 'TRANSFERÊNCIA DETECTADA: VENDAS' in str(ia_result):
-                            from conversations.recovery_service import ConversationRecoveryService
-                            recovery_service = ConversationRecoveryService()
-                            recovery_service.update_recovery_status_from_conversation(conversation.id, str(content))
+                # Verificar se a IA está ativa no canal
+                from core.models import Canal
+                canal = None
+                # Tentar buscar canal pelo channel_id do inbox
+                if conversation.inbox.channel_id and conversation.inbox.channel_id != 'default':
+                    try:
+                        canal = Canal.objects.filter(
+                            id=conversation.inbox.channel_id,
+                            provedor=provedor
+                        ).first()
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Se não encontrou pelo channel_id, buscar pelo tipo do canal
+                if not canal:
+                    channel_type = conversation.inbox.channel_type
+                    if channel_type == 'whatsapp':
+                        # Para WhatsApp normal, buscar por nome da instância se disponível
+                        instance_name = conversation.inbox.additional_attributes.get('instance') if conversation.inbox.additional_attributes else None
+                        if instance_name:
+                            canal = Canal.objects.filter(
+                                provedor=provedor,
+                                nome=instance_name,
+                                tipo__in=['whatsapp', 'whatsapp_session'],
+                                ativo=True
+                            ).first()
+                
+                # Se encontrou o canal e a IA está desativada, não chamar IA
+                if canal and not canal.ia_ativa:
+                    logger.info(f"[UAZAPI] IA NÃO chamada - canal {canal.id} ({canal.nome}) tem IA desativada (ia_ativa=False)")
+                    ia_result = {
+                        'success': False,
+                        'motivo': 'IA desativada no canal',
+                        'ia_desativada': True
+                    }
+                else:
+                    try:
+                        ia_result = openai_service.generate_response_sync(
+                            mensagem=str(content),  # Garantir que é string
+                            provedor=provedor,
+                            contexto={'conversation': conversation}
+                        )
                         
-                except Exception as e:
-                    ia_result = {'success': False, 'erro': str(e)}
+                        # IMPORTANTE: Se a conversa está em 'pending', não alterar status nem atribuição
+                        # A IA pode responder, mas a conversa continua aguardando atendente/equipe
+                        if conversation.status != 'pending':
+                            # Verificar se a IA detectou interesse comercial e atualizar status de recuperação
+                            # Apenas se NÃO estiver em pending
+                            if ia_result.get('success') and 'TRANSFERÊNCIA DETECTADA: VENDAS' in str(ia_result):
+                                from conversations.recovery_service import ConversationRecoveryService
+                                recovery_service = ConversationRecoveryService()
+                                recovery_service.update_recovery_status_from_conversation(conversation.id, str(content))
+                    except Exception as e:
+                        ia_result = {'success': False, 'erro': str(e)}
             else:
                 ia_result = {'success': False, 'motivo': 'Conversa atribuída ou em espera'}
         else:

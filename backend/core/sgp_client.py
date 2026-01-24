@@ -203,6 +203,29 @@ class SGPClient:
             timeout=30
         ).json()
 
+    def listar_titulos(self, cpf_cnpj, limit=250):
+        """
+        Lista títulos (faturas) do cliente via endpoint /api/ura/titulos/
+        
+        Args:
+            cpf_cnpj: CPF ou CNPJ do cliente
+            limit: Limite de resultados (padrão: 250, máximo: 250)
+            
+        Returns:
+            Resposta JSON com paginacao e titulos
+        """
+        data = {
+            'token': self.token,
+            'app': self.app_name,
+            'cpfcnpj': str(cpf_cnpj),
+            'limit': min(limit, 250)  # Máximo permitido é 250
+        }
+        return requests.post(
+            f'{self.base_url}/api/ura/titulos/',
+            data=data,
+            timeout=30
+        ).json()
+
     # ==========================================================
     # MANUTENÇÕES
     # ==========================================================

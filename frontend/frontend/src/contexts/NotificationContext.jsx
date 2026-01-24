@@ -16,32 +16,32 @@ export const useNotifications = () => {
 export const NotificationProvider = ({ children }) => {
   // ✅ Usar usuário do AuthContext ao invés de buscar novamente
   const { user: authUser } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [hasNewMessages, setHasNewMessages] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const websocketRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [painelWsConnected, setPainelWsConnected] = useState(false);
-  const [unreadMessagesByUser, setUnreadMessagesByUser] = useState({});
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [hasNewMessages, setHasNewMessages] = React.useState(false);
+  const [currentUser, setCurrentUser] = React.useState(null);
+  const websocketRef = React.useRef(null);
+  const reconnectTimeoutRef = React.useRef(null);
+  const [isConnected, setIsConnected] = React.useState(false);
+  const [painelWsConnected, setPainelWsConnected] = React.useState(false);
+  const [unreadMessagesByUser, setUnreadMessagesByUser] = React.useState({});
 
-  const internalChatWsRef = useRef(null);
-  const [internalChatUnreadCount, setInternalChatUnreadCount] = useState(0);
-  const [internalChatUnreadByUser, setInternalChatUnreadByUser] = useState({});
-  const initializingRef = useRef(false);
-  const painelWsRef = useRef(null);
-  const painelReconnectRef = useRef(null);
-  const connectionFailuresRef = useRef({ internalChat: 0, privateChat: 0 });
-  const soundEnabledRef = useRef(false);
-  const newMsgSoundRef = useRef('mixkit-bell-notification-933.wav');
-  const newConvSoundRef = useRef('mixkit-digital-quick-tone-2866.wav');
-  const audioRef = useRef(null);
-  const faviconTimerRef = useRef(null);
-  const isFaviconBlinkingRef = useRef(false);
+  const internalChatWsRef = React.useRef(null);
+  const [internalChatUnreadCount, setInternalChatUnreadCount] = React.useState(0);
+  const [internalChatUnreadByUser, setInternalChatUnreadByUser] = React.useState({});
+  const initializingRef = React.useRef(false);
+  const painelWsRef = React.useRef(null);
+  const painelReconnectRef = React.useRef(null);
+  const connectionFailuresRef = React.useRef({ internalChat: 0, privateChat: 0 });
+  const soundEnabledRef = React.useRef(false);
+  const newMsgSoundRef = React.useRef('mixkit-bell-notification-933.wav');
+  const newConvSoundRef = React.useRef('mixkit-digital-quick-tone-2866.wav');
+  const audioRef = React.useRef(null);
+  const faviconTimerRef = React.useRef(null);
+  const isFaviconBlinkingRef = React.useRef(false);
 
   // ✅ Sincronizar usuário do AuthContext com currentUser local
   // Isso evita chamadas desnecessárias de /me
-  useEffect(() => {
+  React.useEffect(() => {
     if (authUser) {
       setCurrentUser(authUser);
       soundEnabledRef.current = !!authUser.sound_notifications_enabled;

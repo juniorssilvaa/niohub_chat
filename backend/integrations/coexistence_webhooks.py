@@ -545,8 +545,9 @@ def process_message_echoes(waba_id: str, value: dict):
             else:
                 conv_created = False
             
-            # Se a conversa já existia mas estava fechada, reabrir com IA
-            if conversation.status in ["closed", "resolved", "finalizada"]:
+            # Se a conversa já existia mas estava fechada ou em closing, reabrir com IA
+            # Incluir "closing": cliente retornou durante janela de tolerância ou após IA ter finalizado
+            if conversation.status in ["closed", "resolved", "finalizada", "closing"]:
                 conversation.status = "snoozed"
                 conversation.team = ia_team
                 conversation.assignee = None
@@ -1005,8 +1006,9 @@ def process_incoming_messages(waba_id: str, value: dict):
             else:
                 conv_created = False
             
-            # Se a conversa já existia mas estava fechada, reabrir com IA
-            if conversation.status in ["closed", "resolved", "finalizada"]:
+            # Se a conversa já existia mas estava fechada ou em closing, reabrir com IA
+            # Incluir "closing": cliente retornou durante janela de tolerância ou após IA ter finalizado
+            if conversation.status in ["closed", "resolved", "finalizada", "closing"]:
                 conversation.status = "snoozed"  # Com IA
                 conversation.team = ia_team       # Atribuir à equipe IA
                 conversation.assignee = None
@@ -1453,6 +1455,38 @@ def call_ai_and_respond_whatsapp(conversation, contact, provedor, content: str, 
             logger.warning(f"[WhatsAppWebhook] IA ignorada: provedor não encontrado.")
             return
         
+        # Verificar se a IA está ativa no canal
+        from core.models import Canal
+        canal_obj = None
+        # O parâmetro 'canal' pode ser um objeto Canal ou None
+        if canal and isinstance(canal, Canal):
+            canal_obj = canal
+        else:
+            # Tentar buscar canal pelo channel_id do inbox
+            if conversation.inbox.channel_id and conversation.inbox.channel_id != 'default':
+                try:
+                    canal_obj = Canal.objects.filter(
+                        id=conversation.inbox.channel_id,
+                        provedor=provedor
+                    ).first()
+                except (ValueError, TypeError):
+                    pass
+            
+            # Se não encontrou pelo channel_id, buscar pelo tipo do canal
+            if not canal_obj:
+                channel_type = conversation.inbox.channel_type
+                if channel_type == 'whatsapp_oficial':
+                    canal_obj = Canal.objects.filter(
+                        provedor=provedor,
+                        tipo='whatsapp_oficial',
+                        ativo=True
+                    ).first()
+        
+        # Se encontrou o canal e a IA está desativada, não chamar IA
+        if canal_obj and not canal_obj.ia_ativa:
+            logger.info(f"[WhatsAppWebhook] IA NÃO chamada - canal {canal_obj.id} ({canal_obj.nome}) tem IA desativada (ia_ativa=False)")
+            return
+        
         # 2. Chamar Orquestrador de IA (Mestre)
         from core.openai_service import openai_service
         
@@ -1469,7 +1503,9 @@ def call_ai_and_respond_whatsapp(conversation, contact, provedor, content: str, 
         # 2.1 Indicador de Digitação (Início)
         try:
             from integrations.whatsapp_cloud_send import send_typing_indicator
-            canal_obj = Canal.objects.filter(provedor=provedor, tipo="whatsapp_oficial", ativo=True).first()
+            # Usar canal_obj já obtido acima, ou buscar novamente se necessário
+            if not canal_obj:
+                canal_obj = Canal.objects.filter(provedor=provedor, tipo="whatsapp_oficial", ativo=True).first()
             if canal_obj and reply_to_message_id:
                 send_typing_indicator(canal_obj, reply_to_message_id)
         except Exception:

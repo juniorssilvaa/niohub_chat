@@ -672,7 +672,7 @@ class CanalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Canal
         fields = [
-            'id', 'tipo', 'nome', 'ativo', 'provedor',
+            'id', 'tipo', 'nome', 'ativo', 'provedor', 'ia_ativa',
             'api_id', 'api_hash', 'app_title', 'short_name',  # Telegram
             'verification_code', 'phone_number',  # Telegram/WhatsApp
             'waba_id', 'phone_number_id', 'token', 'status',  # WhatsApp Oficial

@@ -316,7 +316,17 @@ class AIActionsHandler:
                 
                 fs = FaturaService()
                 dados = fs.buscar_fatura_sgp(provedor, cpf)
-                if not dados: return {"success": False, "erro": "Nenhuma fatura em aberto."}
+                
+                # Verificar se retornou mensagem positiva (todas as faturas pagas)
+                if dados and dados.get('mensagem_positiva'):
+                    return {
+                        "success": True,
+                        "mensagem": dados.get('mensagem', 'Parabéns! Todas as suas faturas estão pagas.'),
+                        "mensagem_formatada": dados.get('mensagem', 'Parabéns! Todas as suas faturas estão pagas.')
+                    }
+                
+                if not dados or dados.get('status') != 1: 
+                    return {"success": False, "erro": "Nenhuma fatura em aberto."}
                 
                 if not phone or phone == 'unknown': return {"success": False, "erro": "Telefone não identificado."}
 

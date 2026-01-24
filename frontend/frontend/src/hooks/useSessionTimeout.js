@@ -1,13 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import axios from 'axios';
 
 const useSessionTimeout = () => {
-  // Hooks devem ser chamados sempre, antes de qualquer retorno condicional
-  const timeoutRef = useRef(null);
-  const warningTimeoutRef = useRef(null);
-  const sessionTimeoutRef = useRef(30); // valor padrão de 30 minutos
-  
-  // Verificar se estamos em um ambiente válido (após chamar hooks)
+  // Hooks devem ser chamados sempre, antes de qualquer retorno condicional.
+  // Usar React.useRef explicitamente para evitar "Invalid hook call" / múltiplas cópias de React.
+  const timeoutRef = React.useRef(null);
+  const warningTimeoutRef = React.useRef(null);
+  const sessionTimeoutRef = React.useRef(30); // valor padrão de 30 minutos
+
   const isClient = typeof window !== 'undefined';
 
   // Buscar timeout configurado do usuário
@@ -85,18 +85,15 @@ const useSessionTimeout = () => {
 
   const startTimeout = () => {
     if (!isClient) return;
-    
-    // Buscar timeout configurado do usuário e iniciar o timeout
+
     fetchUserSessionTimeout().then(() => {
       resetTimeout();
 
-      // Resetar timeout em qualquer atividade do usuário
       const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click', 'keydown'];
-      events.forEach(event => {
+      events.forEach((event) => {
         document.addEventListener(event, resetTimeout, true);
       });
 
-      // Retornar função de limpeza
       return () => {
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
@@ -104,17 +101,15 @@ const useSessionTimeout = () => {
         if (warningTimeoutRef.current) {
           clearTimeout(warningTimeoutRef.current);
         }
-        events.forEach(event => {
+        events.forEach((event) => {
           document.removeEventListener(event, resetTimeout, true);
         });
       };
     });
   };
 
-  // Função para atualizar o timeout quando as configurações mudarem
   const updateTimeout = async () => {
     if (!isClient) return;
-    
     await fetchUserSessionTimeout();
     resetTimeout();
   };
