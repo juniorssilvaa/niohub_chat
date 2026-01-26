@@ -7,6 +7,7 @@ from django.db import transaction
 from django.db.models import Q
 from core.models import Provedor, User, AuditLog, Canal
 from core.pagination import DefaultPagination
+from rest_framework.pagination import PageNumberPagination
 from .models import Contact, Inbox, Conversation, Message, Team, TeamMember
 from .models import CSATFeedback, MessageReaction
 from .serializers import (
@@ -2489,10 +2490,18 @@ def send_presence_via_uazapi(conversation, presence_type):
         return False, f"Erro ao enviar presença via Uazapi: {str(e)}"
 
 
+class MessagePagination(PageNumberPagination):
+    """Paginação customizada para mensagens - permite até 10000 mensagens por página"""
+    page_size = 1000
+    page_size_query_param = 'page_size'
+    max_page_size = 10000
+
+
 class MessageViewSet(viewsets.ModelViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = MessagePagination
     
     def get_queryset(self):
         user = self.request.user

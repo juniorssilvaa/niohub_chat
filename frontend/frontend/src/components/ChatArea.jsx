@@ -296,15 +296,32 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     try {
-      // Buscar TODAS as mensagens da conversa (sem limite)
-      const res = await axios.get(`/api/messages/?conversation=${conversation.id}&page_size=5000&ordering=created_at`, {
-        headers: { Authorization: `Token ${token}` }
-      });
+      // Buscar TODAS as mensagens da conversa com paginação automática
+      let allMessages = [];
+      let page = 1;
+      let hasMore = true;
+      const maxPages = 20; // Proteção contra loops infinitos (máx 200k mensagens)
       
-      const messages = res.data.results || res.data;
+      while (hasMore && page <= maxPages) {
+        const res = await axios.get(`/api/messages/?conversation=${conversation.id}&page_size=10000&ordering=created_at&page=${page}`, {
+          headers: { Authorization: `Token ${token}` }
+        });
+        
+        const pageMessages = res.data.results || (Array.isArray(res.data) ? res.data : []);
+        allMessages = [...allMessages, ...pageMessages];
+        
+        // Verificar se há mais páginas
+        hasMore = res.data.next !== null && pageMessages.length > 0;
+        page++;
+        
+        // Parar se não há mais mensagens
+        if (pageMessages.length === 0) {
+          hasMore = false;
+        }
+      }
       
       // Processar todas as mensagens sem filtros desnecessários
-      const processedMessages = messages.map(msg => {
+      const processedMessages = allMessages.map(msg => {
         let processedContent = processMessageContent(msg.content, msg.is_from_customer);
         
         //  Remover assinatura do agente se presente
