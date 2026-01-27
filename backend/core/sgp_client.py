@@ -66,7 +66,7 @@ class SGPClient:
     # ==========================================================
     # LIBERAÇÃO POR CONFIANÇA
     # ==========================================================
-    def liberar_por_confianca(self, contrato, cpf_cnpj=None):
+    def liberar_por_confianca(self, contrato, cpf_cnpj=None, conteudo=None):
         data = {
             'token': self.token,
             'app': self.app_name,
@@ -82,6 +82,13 @@ class SGPClient:
                 .replace('/', '')
             )
             data['cpfCnpj'] = cpf_cnpj_limpo
+        
+        # Adicionar conteúdo se fornecido (o que o cliente disse, ex: "vou paga amanhã")
+        # Se não fornecido, usar "Liberação Via NioChat" como padrão
+        if conteudo:
+            data['conteudo'] = str(conteudo).strip()
+        else:
+            data['conteudo'] = "Liberação Via NioChat"
 
         return requests.post(
             f'{self.base_url}/api/ura/liberacaopromessa/',

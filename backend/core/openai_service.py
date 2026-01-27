@@ -67,7 +67,9 @@ class OpenAIService:
         # Manter apenas campos seguros
         safe_fields = [
             'success', 'mensagem_formatada', 'mensagem', 'erro', 'error', 'protocolo',
-            'is_suspenso', 'contrato_suspenso', 'contrato_status_display', 'motivo_status'
+            'is_suspenso', 'contrato_suspenso', 'contrato_status_display', 'motivo_status',
+            'recurso_indisponivel',  # Indica que o recurso não está disponível e deve usar mensagem_formatada
+            'liberado_dias', 'data_promessa'  # Informações sobre a liberação (dias e data)
         ]
         
         for key in safe_fields:
@@ -354,6 +356,21 @@ class OpenAIService:
 
                     # Adicionar ao histórico de resultados para o prompt
                     results_history.append({"name": fname, "response": res})
+                    
+                    # Se for liberar_por_confianca e retornar mensagem_formatada (sucesso ou recurso indisponível),
+                    # usar a mensagem formatada diretamente como resposta final
+                    if fname == "liberar_por_confianca" and res.get("mensagem_formatada"):
+                        final_response_text = res.get("mensagem_formatada")
+                        await redis_memory_service.update_ai_state(
+                            provedor.id, conversation_id,
+                            {"last_ia_response": final_response_text, "last_ia_action": fname},
+                            channel, contact_phone
+                        )
+                        return {
+                            "success": True,
+                            "resposta": final_response_text,
+                            "ai_conversation_id": ai_conversation_id,
+                        }
                     
                     # Formatar para a resposta da função no Gemini (Usando filtro do Mestre para segurança)
                     function_responses_parts.append(genai.types.Part(

@@ -359,15 +359,51 @@ class AIActionsHandler:
             elif function_name == "liberar_por_confianca":
                 cid = function_args.get('contrato')
                 cpf_cnpj = function_args.get('cpf_cnpj') or conversation_state.get('cpf_cnpj')
+                conteudo = function_args.get('conteudo')  # Conteúdo que o cliente disse (ex: "vou paga amanhã")
                 if not cid: return {"success": False, "erro": "Contrato obrigatório."}
                 
-                sgp_res = sgp.liberar_por_confianca(contrato=str(cid), cpf_cnpj=cpf_cnpj)
-                if sgp_res.get('success') or sgp_res.get('msg', '').lower() in ['liberado', 'sucesso']:
+                sgp_res = sgp.liberar_por_confianca(contrato=str(cid), cpf_cnpj=cpf_cnpj, conteudo=conteudo)
+                
+                # Verificar se o desbloqueio foi bem-sucedido
+                liberado = sgp_res.get('liberado', False)
+                status = sgp_res.get('status')
+                msg = sgp_res.get('msg', '')
+                liberado_dias = sgp_res.get('liberado_dias')
+                data_promessa = sgp_res.get('data_promessa')
+                
+                # Sucesso: liberado = true ou status = 1 ou mensagem contém "liberado"/"sucesso"
+                if liberado is True or status == 1 or (isinstance(msg, str) and msg.lower() in ['liberado', 'sucesso']):
                     if conversation_id:
                         redis_memory_service.update_ai_state_sync(provedor.id, conversation_id, {"flow": "NONE", "step": "INICIAL", "is_suspenso": False}, channel, phone)
-                    res = {"success": True, "mensagem_formatada": "Pronto! Realizei o desbloqueio em confiança. Seu acesso voltará em alguns minutos. 😊"}
+                    
+                    # Construir mensagem de sucesso com informações sobre os dias de liberação
+                    if liberado_dias:
+                        mensagem_sucesso = f"Pronto! Realizei o desbloqueio em confiança. Seu acesso ficará liberado por {liberado_dias} {'dia' if liberado_dias == 1 else 'dias'}"
+                        if data_promessa:
+                            mensagem_sucesso += f" (até {data_promessa})"
+                        mensagem_sucesso += ". Seu acesso voltará em alguns minutos. 😊"
+                    else:
+                        mensagem_sucesso = "Pronto! Realizei o desbloqueio em confiança. Seu acesso voltará em alguns minutos. 😊"
+                    
+                    res = {
+                        "success": True, 
+                        "mensagem_formatada": mensagem_sucesso,
+                        "liberado_dias": liberado_dias,
+                        "data_promessa": data_promessa
+                    }
                 else:
-                    res = {"success": False, "erro": sgp_res.get('msg') or "Erro no desbloqueio."}
+                    # Verificar se é caso de recurso não disponível
+                    msg_lower = str(msg).lower() if msg else ''
+                    if 'não disponível' in msg_lower or 'nao disponivel' in msg_lower or 'recurso não disponível' in msg_lower or 'recurso nao disponivel' in msg_lower:
+                        # Retornar mensagem formatada informando que o recurso não está disponível
+                        res = {
+                            "success": False, 
+                            "mensagem_formatada": f"Entendo que você precisa do desbloqueio, mas infelizmente o recurso de desbloqueio em confiança não está disponível para seu contrato no momento. {msg if msg else 'Por favor, entre em contato com nossa equipe financeira para regularizar sua situação.'}",
+                            "recurso_indisponivel": True
+                        }
+                    else:
+                        # Outros erros - retornar mensagem genérica
+                        res = {"success": False, "erro": msg or "Erro no desbloqueio."}
 
             # Persistir idempotência SGP
             if res.get('success') and conversation_id and function_name != "consultar_cliente_sgp":
@@ -399,7 +435,7 @@ class AIActionsHandler:
             {"type": "function", "function": {"name": "gerar_fatura_completa", "description": "Gera e envia fatura completa para o cliente via WhatsApp. Use quando o cliente pedir fatura, segunda via, boleto ou PIX.", "parameters": {"type": "object", "properties": {"cpf_cnpj": {"type": "string"}, "tipo_pagamento": {"type": "string", "enum": ["pix", "boleto"]}}, "required": ["cpf_cnpj"]}}},
             {"type": "function", "function": {"name": "verificar_acesso_sgp", "description": "Verifica se o acesso à internet do contrato está online ou offline. Use APENAS se o contrato NÃO estiver suspenso. NUNCA use para contrato suspenso.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}}, "required": ["contrato"]}}},
             {"type": "function", "function": {"name": "criar_chamado_tecnico", "description": "Cria chamado técnico no SGP. Use APENAS se o contrato NÃO estiver suspenso e após fazer diagnóstico técnico. NUNCA use para contrato suspenso.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}, "conteudo": {"type": "string"}}, "required": ["contrato", "conteudo"]}}},
-            {"type": "function", "function": {"name": "liberar_por_confianca", "description": "Realiza desbloqueio em confiança do contrato suspenso. Use quando o cliente quiser desbloquear o acesso sem pagar imediatamente. O CPF/CNPJ é opcional e será buscado da memória se não fornecido.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}, "cpf_cnpj": {"type": "string", "description": "CPF/CNPJ do cliente (opcional, será buscado da memória se não fornecido)"}}, "required": ["contrato"]}}}
+            {"type": "function", "function": {"name": "liberar_por_confianca", "description": "Realiza desbloqueio em confiança do contrato suspenso. Use quando o cliente quiser desbloquear o acesso sem pagar imediatamente. O CPF/CNPJ é opcional e será buscado da memória se não fornecido. O conteúdo (conteudo) deve ser o que o cliente disse sobre quando vai pagar (ex: 'vou paga amanhã'), ou deixe vazio para usar 'Liberação Via NioChat' como padrão.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}, "cpf_cnpj": {"type": "string", "description": "CPF/CNPJ do cliente (opcional, será buscado da memória se não fornecido)"}, "conteudo": {"type": "string", "description": "Conteúdo da promessa de pagamento que o cliente mencionou (ex: 'vou paga amanhã'). Se o cliente não mencionou nada específico, deixe vazio ou não inclua este parâmetro para usar 'Liberação Via NioChat' como padrão."}}, "required": ["contrato"]}}}
         ]
 
     def convert_tools_to_gemini(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
