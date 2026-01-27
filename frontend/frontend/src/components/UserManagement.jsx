@@ -113,6 +113,10 @@ const UserManagement = ({ provedorId }) => {
   const [showMenuId, setShowMenuId] = useState(null);
   const [showResetModal, setShowResetModal] = useState(false);
   const [userToReset, setUserToReset] = useState(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
+  const [resetPasswordError, setResetPasswordError] = useState('');
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
   const [editUserPermissions, setEditUserPermissions] = useState([]);
   const [editUserName, setEditUserName] = useState('');
   const [editUserLastName, setEditUserLastName] = useState('');
@@ -404,6 +408,10 @@ const UserManagement = ({ provedorId }) => {
 
   const handleResetPassword = (user) => {
     setUserToReset(user);
+    setResetPasswordValue('');
+    setResetPasswordConfirm('');
+    setResetPasswordError('');
+    setResetPasswordLoading(false);
     setShowResetModal(true);
     setShowMenuId(null);
   };
@@ -411,6 +419,51 @@ const UserManagement = ({ provedorId }) => {
   const handleCloseResetModal = () => {
     setShowResetModal(false);
     setUserToReset(null);
+    setResetPasswordValue('');
+    setResetPasswordConfirm('');
+    setResetPasswordError('');
+    setResetPasswordLoading(false);
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    setResetPasswordError('');
+    const newPass = resetPasswordValue.trim();
+    const confirm = resetPasswordConfirm.trim();
+    if (!newPass) {
+      setResetPasswordError('Digite a nova senha.');
+      return;
+    }
+    if (!confirm) {
+      setResetPasswordError('Confirme a nova senha.');
+      return;
+    }
+    if (newPass !== confirm) {
+      setResetPasswordError('As senhas não coincidem.');
+      return;
+    }
+    if (newPass.length < 6) {
+      setResetPasswordError('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+    setResetPasswordLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      await axios.patch(`/api/users/${userToReset.id}/`, { password: newPass }, {
+        headers: { Authorization: `Token ${token}` }
+      });
+      handleCloseResetModal();
+      setErrorMsg('');
+      alert('Senha redefinida com sucesso!');
+    } catch (err) {
+      const msg = err.response?.data?.password?.[0]
+        || err.response?.data?.error
+        || err.response?.data?.detail
+        || 'Erro ao redefinir senha. Tente novamente.';
+      setResetPasswordError(typeof msg === 'string' ? msg : 'Erro ao redefinir senha. Tente novamente.');
+    } finally {
+      setResetPasswordLoading(false);
+    }
   };
 
   const handleToggleMenu = (userId) => {
@@ -800,15 +853,40 @@ const UserManagement = ({ provedorId }) => {
               >
                 ×
               </button>
-              <h2 className="text-xl font-bold mb-4">Redefinir senha de {userToReset.name}</h2>
-              <form className="space-y-4" onSubmit={e => { e.preventDefault(); alert('Senha redefinida!'); handleCloseResetModal(); }}>
+              <h2 className="text-xl font-bold mb-4">Redefinir senha de {userToReset.username || userToReset.name || 'usuário'}</h2>
+              <form className="space-y-4" onSubmit={handleResetPasswordSubmit}>
+                {resetPasswordError && (
+                  <div className="p-3 rounded-lg bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 text-sm">
+                    {resetPasswordError}
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium mb-1">Nova senha</label>
-                  <input type="password" className="niochat-input w-full" required />
+                  <input
+                    type="password"
+                    className="niochat-input w-full"
+                    value={resetPasswordValue}
+                    onChange={(e) => setResetPasswordValue(e.target.value)}
+                    placeholder="Nova senha"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Confirme a nova senha</label>
+                  <input
+                    type="password"
+                    className="niochat-input w-full"
+                    value={resetPasswordConfirm}
+                    onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                    placeholder="Confirme a nova senha"
+                    autoComplete="new-password"
+                  />
                 </div>
                 <div className="flex justify-end gap-2 mt-6">
                   <button type="button" className="niochat-button" onClick={handleCloseResetModal}>Cancelar</button>
-                  <button type="submit" className="niochat-button niochat-button-primary">Salvar</button>
+                  <button type="submit" className="niochat-button niochat-button-primary" disabled={resetPasswordLoading}>
+                    {resetPasswordLoading ? 'Salvando...' : 'Salvar'}
+                  </button>
                 </div>
               </form>
             </div>

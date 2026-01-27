@@ -142,7 +142,7 @@ const ConversationsPage = ({ selectedConversation, setSelectedConversation, prov
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full overflow-x-hidden min-w-0">
       <ConversationList
         onConversationSelect={(conversation) => {
           setSelectedConversation(conversation);

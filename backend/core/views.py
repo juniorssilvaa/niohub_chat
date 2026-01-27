@@ -3677,6 +3677,36 @@ class UserViewSet(viewsets.ModelViewSet):
         if user.user_type not in ['superadmin', 'admin']:
             raise PermissionDenied('Apenas administradores podem deletar usuários')
         instance.delete()
+
+    @action(detail=False, methods=['post'], url_path='reset-password')
+    def reset_password(self, request):
+        """
+        Altera a senha do usuário autenticado.
+        POST body: { "new_password": "..." }
+        """
+        user = request.user
+        new_password = request.data.get('new_password')
+        if not new_password or not isinstance(new_password, str):
+            return Response(
+                {'error': 'new_password é obrigatório'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        new_password = new_password.strip()
+        if len(new_password) < 6:
+            return Response(
+                {'error': 'A senha deve ter pelo menos 6 caracteres'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            from django.contrib.auth.password_validation import validate_password
+            validate_password(new_password, user=user)
+        except Exception as e:
+            err = getattr(e, 'messages', [str(e)])
+            msg = err[0] if err else 'Senha não atende aos critérios de segurança'
+            return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+        return Response({'detail': 'Senha alterada com sucesso'}, status=status.HTTP_200_OK)
     
     @action(detail=False, methods=['get'], url_path='my_provider_users')
     def my_provider_users(self, request):

@@ -1000,7 +1000,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   }, [conversations, activeTab, searchTerm, user?.id, userPermissions]);
 
   return (
-    <div className="w-64 border-r border-border bg-background flex flex-col h-full">
+    <div className="w-64 flex-shrink-0 border-r border-border bg-background flex flex-col h-full">
       <style>{`
         .conversation-list::-webkit-scrollbar {
           width: 6px;

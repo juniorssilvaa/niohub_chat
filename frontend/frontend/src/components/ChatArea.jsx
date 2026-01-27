@@ -2387,7 +2387,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div className="flex-1 flex flex-col bg-background min-w-0 min-h-0 overflow-hidden">
       {/* Header da conversa */}
       <div className="border-b border-border p-4 bg-card">
           <div className="flex items-center justify-between">
@@ -2525,7 +2525,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       <div 
         ref={scrollContainerRef} 
         onScroll={handleScrollContainer} 
-        className="relative flex-1 overflow-y-auto p-4 dark:bg-[#000000] bg-[#efeae2]"
+        className="relative flex-1 overflow-y-auto overflow-x-hidden p-4 dark:bg-[#000000] bg-[#efeae2]"
         style={{ 
           minHeight: '200px',
           backgroundImage: `url(${isDarkTheme ? chatBgPattern : chatBgPatternLight})`,
@@ -2589,8 +2589,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             }
             
             return (
-              <div key={msg.id} className={`flex ${getMessageAlignment(msg, content)} group mb-4`}>
-              <div className={`max-w-[70%] ${getMessageOrder(msg, content)}`}>
+              <div key={msg.id} className={`flex ${getMessageAlignment(msg, content)} group mb-4 min-w-0`}>
+              <div className={`max-w-[70%] min-w-0 ${getMessageOrder(msg, content)}`}>
                 <div className={`
                   rounded-2xl px-4 py-3 shadow-sm
                   ${isCustomer 
@@ -2854,7 +2854,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                   
                   {/* Conteúdo da mensagem - NÃO mostrar se for mídia pura */}
                   {content && !hasImage && !hasVideo && !hasAudio && !hasDocument && (
-                    <div className="whitespace-pre-wrap break-words">
+                    <div className="whitespace-pre-wrap break-words break-all" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       {(() => {
                         const displayContent = !isCustomer && content.includes('*') && content.includes('disse:*') 
                           ? content.split('\n').slice(1).join('\n').trim() || content
