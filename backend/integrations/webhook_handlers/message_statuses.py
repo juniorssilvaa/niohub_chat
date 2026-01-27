@@ -7,6 +7,7 @@ Processa atualizações de status de mensagens enviadas:
 - read: Mensagem lida pelo destinatário
 - failed: Falha ao enviar mensagem
 """
+import json
 import logging
 from datetime import datetime
 from django.utils import timezone
@@ -84,7 +85,7 @@ def process_message_statuses(waba_id: str, value: dict):
             return
         
         # Processar cada status
-        for status_data in statuses:
+        for idx, status_data in enumerate(statuses):
             message_id = status_data.get("id")  # ID da mensagem no WhatsApp (wamid)
             status = status_data.get("status")  # sent, delivered, read, failed
             timestamp = status_data.get("timestamp")
@@ -121,7 +122,6 @@ def process_message_statuses(waba_id: str, value: dict):
                         break
             
             if not message:
-                logger.debug(f"[MessageStatuses] Mensagem não encontrada para status: message_id={message_id}, status={status}")
                 continue
             
             # Garantir que o external_id esteja no campo correto para futuras buscas
@@ -162,6 +162,8 @@ def process_message_statuses(waba_id: str, value: dict):
                 additional_attrs["read_by"] = recipient_id
             elif status == "delivered":
                 additional_attrs["delivered_at"] = status_timestamp.isoformat()
+            elif status == "sent":
+                additional_attrs["sent_at"] = status_timestamp.isoformat()
             elif status == "failed":
                 error_data = status_data.get("errors", [])
                 if error_data:
@@ -218,10 +220,8 @@ def process_message_statuses(waba_id: str, value: dict):
                         ws_data
                     )
                 except Exception as ws_error:
-                    logger.debug(f"[MessageStatuses] Erro ao enviar WebSocket: {ws_error}")
-            
-            logger.info(f"[MessageStatuses] Status atualizado: message_id={message_id}, status={status}, message_db_id={message.id}")
+                    logger.error(f"[MessageStatuses] Erro ao enviar WebSocket: {ws_error}", exc_info=True)
     
     except Exception as e:
-        logger.error(f"Erro ao processar statuses de mensagens: {str(e)}", exc_info=True)
+        logger.error(f"[MessageStatuses] Erro ao processar statuses de mensagens: {str(e)}", exc_info=True)
 

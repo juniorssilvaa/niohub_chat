@@ -7,6 +7,16 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
 
+// Desabilitar todos os logs de console em produção
+if (import.meta.env?.PROD) {
+  const noop = () => {};
+  ['log', 'debug', 'info', 'warn', 'error'].forEach((method) => {
+    if (typeof console[method] === 'function') {
+      console[method] = noop;
+    }
+  });
+}
+
 createRoot(document.getElementById("root")).render(
   <ErrorBoundary>
     <Router>

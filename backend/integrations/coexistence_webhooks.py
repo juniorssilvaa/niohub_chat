@@ -271,85 +271,70 @@ def route_webhook_event(field: str, waba_id: str, value: dict):
     - history → IGNORAR (apenas ACK 200)
     - Outros campos existentes → processar normalmente
     """
-    logger.info(f"[Webhook] Processando evento: field={field}, waba_id={waba_id}")
-    
     # 1. business_status_update - CRÍTICO
     if field == "business_status_update":
-        logger.info(f"[Webhook] Roteando business_status_update para waba_id {waba_id}")
         process_business_status_update(waba_id, value)
         return
     
     # 2. account_alerts - IMPORTANTE
     if field == "account_alerts":
-        logger.info(f"[Webhook] Roteando account_alerts para waba_id {waba_id}")
         process_account_alerts(waba_id, value)
         return
     
     # 3. Templates - OPCIONAL (vários eventos)
     if field == "message_template_components_update":
-        logger.info(f"[Webhook] Roteando message_template_components_update para waba_id {waba_id}")
         process_template_components_update(waba_id, value)
         return
     
     if field == "message_template_quality_update":
-        logger.info(f"[Webhook] Roteando message_template_quality_update para waba_id {waba_id}")
         process_template_quality_update(waba_id, value)
         return
     
     if field == "message_template_status_update":
-        logger.info(f"[Webhook] Roteando message_template_status_update para waba_id {waba_id}")
         process_template_status_update(waba_id, value)
         return
     
     if field == "template_category_update":
-        logger.info(f"[Webhook] Roteando template_category_update para waba_id {waba_id}")
         process_template_category_update(waba_id, value)
         return
     
     if field == "template_correct_category_detection":
-        logger.info(f"[Webhook] Roteando template_correct_category_detection para waba_id {waba_id}")
         process_template_correct_category_detection(waba_id, value)
         return
     
     # 4. User Preferences - IMPORTANTE
     if field == "user_preferences":
-        logger.info(f"[Webhook] Roteando user_preferences para waba_id {waba_id}")
         process_user_preferences(waba_id, value)
         return
     
     # 5. Message Statuses - IMPORTANTE (status de mensagens enviadas: sent, delivered, read, failed)
     if field == "statuses":
-        logger.info(f"[Webhook] Roteando statuses para waba_id {waba_id}")
         process_message_statuses(waba_id, value)
         return
     
     # 6. automatic_events - Processar apenas typing indicators
     if field == "automatic_events":
-        logger.info(f"[Webhook] Processando automatic_events para waba_id {waba_id}")
         from .webhook_handlers.typing_indicators import process_typing_indicators
         process_typing_indicators(waba_id, value)
         return
     
     # 7. history - IGNORAR COMPLETAMENTE (pode conter payloads grandes)
     if field == "history":
-        logger.info(f"[Webhook] Ignorando history para waba_id {waba_id}")
         return
     
     # 8. Outros campos existentes (manter compatibilidade)
     if field == "smb_message_echoes":
-        logger.info(f"[Webhook] Roteando smb_message_echoes para waba_id {waba_id}")
         process_message_echoes(waba_id, value)
     elif field == "smb_app_state_sync":
-        logger.info(f"[Webhook] Roteando smb_app_state_sync para waba_id {waba_id}")
         process_state_sync(waba_id, value)
     elif field == "messages":
-        logger.info(f"[Webhook] Roteando messages para waba_id {waba_id}")
-        process_incoming_messages(waba_id, value)
+        # Verificar se há statuses dentro do value (confirmações de leitura/entrega)
+        if value.get("statuses"):
+            process_message_statuses(waba_id, value)
+        else:
+            process_incoming_messages(waba_id, value)
     elif field == "phone_number_name_update" or field == "phone_number_quality_update":
         process_phone_number_update(waba_id, value)
-    else:
-        # Field desconhecido - ignorar silenciosamente
-        pass
 
 
 @csrf_exempt
@@ -415,7 +400,7 @@ def whatsapp_cloud_webhook(request):
         if not entries:
             return JsonResponse({"status": "success"}, status=200)
         
-        for entry in entries:
+        for entry_idx, entry in enumerate(entries):
             waba_id = entry.get("id")
             changes = entry.get("changes", [])
             
@@ -436,6 +421,11 @@ def whatsapp_cloud_webhook(request):
             for change in changes:
                 field = change.get("field")
                 value = change.get("value", {})
+                
+                # VERIFICAÇÃO ESPECIAL: Se field="messages" e há statuses dentro, processar statuses diretamente
+                if field == "messages" and value.get("statuses"):
+                    process_message_statuses(waba_id, value)
+                    continue  # Não processar como mensagem normal
                 
                 if not field:
                     continue

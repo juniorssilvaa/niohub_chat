@@ -227,45 +227,123 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     return uniqueMessages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   };
 
-  // Componente para exibir ícone de status de leitura
+  // Componente para exibir ícone de status de leitura (estilo WhatsApp)
   const MessageStatusIcon = ({ message }) => {
     const status = message.additional_attributes?.last_status;
     const readAt = message.additional_attributes?.read_at;
     const deliveredAt = message.additional_attributes?.delivered_at;
+    const sentAt = message.additional_attributes?.sent_at;
     
-    // Se foi lida, mostrar dois checkmarks azuis
-    if (status === 'read' || readAt) {
+    // Determinar o status atual (prioridade: read > delivered > sent)
+    let currentStatus = status;
+    if (readAt || status === 'read') {
+      currentStatus = 'read';
+    } else if (deliveredAt || status === 'delivered') {
+      currentStatus = 'delivered';
+    } else if (sentAt || status === 'sent') {
+      currentStatus = 'sent';
+    }
+    
+    // Se não há status definido mas a mensagem não é temporária e tem external_id, assumir "sent"
+    // (mensagem foi enviada com sucesso)
+    if (!currentStatus && !message.isTemporary && (message.external_id || message.additional_attributes?.external_id)) {
+      currentStatus = 'sent';
+    }
+    
+    // 3️⃣ Mensagem lida pelo usuário - 2 tickets azuis fortes
+    if (currentStatus === 'read') {
       return (
-        <span className="text-blue-300 flex items-center" title="Lida">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          <CheckCircle2 className="w-3.5 h-3.5 -ml-1.5" />
+        <span className="inline-flex items-center ml-1.5 transition-all duration-300 ease-in-out" title="Lida">
+          <svg 
+            width="20" 
+            height="14" 
+            viewBox="0 0 16 11" 
+            fill="none" 
+            xmlns="http://www.w3.org/2000/svg"
+            className="transition-all duration-300 ease-in-out"
+          >
+            {/* Primeiro checkmark (atrás) - azul forte */}
+            <path 
+              d="M0.5 5.5L3 8L7 4" 
+              stroke="#2563EB" 
+              strokeWidth="2.5" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+              fill="none"
+            />
+            {/* Segundo checkmark (frente, deslocado) - azul muito forte */}
+            <path 
+              d="M8.5 5.5L11 8L15.5 3" 
+              stroke="#1D4ED8" 
+              strokeWidth="2.5" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </svg>
         </span>
       );
     }
     
-    // Se foi entregue, mostrar dois checkmarks cinzas
-    if (status === 'delivered' || deliveredAt) {
+    // 2️⃣ Mensagem entregue no celular - 2 tickets cinza (só fica azul quando ler)
+    if (currentStatus === 'delivered') {
       return (
-        <span className="text-white/50 flex items-center" title="Entregue">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          <CheckCircle2 className="w-3.5 h-3.5 -ml-1.5" />
+        <span className="inline-flex items-center ml-1.5 transition-all duration-300 ease-in-out" title="Entregue">
+          <svg 
+            width="20" 
+            height="14" 
+            viewBox="0 0 16 11" 
+            fill="none" 
+            xmlns="http://www.w3.org/2000/svg"
+            className="transition-all duration-300 ease-in-out"
+          >
+            {/* Primeiro checkmark (atrás) - cinza médio */}
+            <path 
+              d="M0.5 5.5L3 8L7 4" 
+              stroke="#6B7280" 
+              strokeWidth="2.5" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+              fill="none"
+            />
+            {/* Segundo checkmark (frente, deslocado) - cinza forte */}
+            <path 
+              d="M8.5 5.5L11 8L15.5 3" 
+              stroke="#4B5563" 
+              strokeWidth="2.5" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </svg>
         </span>
       );
     }
     
-    // Se foi enviada, mostrar um checkmark cinza
-    if (status === 'sent') {
-      return (
-        <span className="text-white/50" title="Enviada">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-        </span>
-      );
-    }
-    
-    // Status desconhecido ou pendente - mostrar um checkmark cinza (padrão)
+    // 1️⃣ Mensagem enviada - 1 ticket cinza forte
     return (
-      <span className="text-white/50" title="Enviando...">
-        <CheckCircle2 className="w-3.5 h-3.5" />
+      <span
+        className="inline-flex items-center ml-1.5 transition-all duration-300 ease-in-out"
+        title={currentStatus === 'sent' ? 'Enviada' : 'Enviando...'}
+      >
+        <svg
+          width="14"
+          height="11"
+          viewBox="0 0 12 9"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="transition-all duration-300 ease-in-out"
+        >
+          {/* Checkmark único cinza forte */}
+          <path
+            d="M1 4.5L4.5 8L11 1.5"
+            stroke="#4B5563"  // cinza bem mais escuro para não parecer azul
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </svg>
       </span>
     );
   };
@@ -2601,7 +2679,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                         ? 'bg-blue-500 text-white'
                         : isSystemMessage
                           ? 'bg-blue-500 text-white'  // Mensagens do sistema em azul
-                          : 'bg-blue-500 text-white'  // Mensagens do agente em azul
+                          : 'bg-[#4F46E5] text-white'  // Mensagens do agente (envio) na cor solicitada
                   }
                   ${isLarge ? 'rounded-2xl' : 'rounded-2xl'}
                 `}>
@@ -2950,9 +3028,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       )}
                       {/* Status de leitura para mensagens enviadas pelo agente (apenas WhatsApp) */}
                       {!isCustomer && conversation.inbox?.channel_type === 'whatsapp' && 
-                       (msg.external_id || msg.additional_attributes?.external_id) && 
                        !msg.isTemporary && (
-                        <MessageStatusIcon message={msg} />
+                        <MessageStatusIcon 
+                          key={`status-${msg.id}-${msg.additional_attributes?.last_status || 'pending'}`}
+                          message={msg} 
+                        />
                 )}
               </div>
                     

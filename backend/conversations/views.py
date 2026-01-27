@@ -2786,6 +2786,11 @@ class MessageViewSet(viewsets.ModelViewSet):
                 additional_attrs['sent_success'] = True
                 additional_attrs['channel_type'] = channel_type
                 
+                # Definir status inicial como "sent" quando mensagem é enviada com sucesso
+                # Isso garante que o ticket apareça imediatamente no frontend
+                additional_attrs['last_status'] = 'sent'
+                additional_attrs['sent_at'] = timezone.now().isoformat()
+                
                 if channel_type == 'telegram':
                     additional_attrs['telegram_sent'] = True
                 elif 'whatsapp_response' in locals() and whatsapp_response:
@@ -3831,6 +3836,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             # Usar get_or_create em vez de update_or_create para reduzir conflitos
             max_retries = 3
             retry_count = 0
+            reaction_obj = None  # Inicializar antes do loop
             
             while retry_count < max_retries:
                 try:
@@ -3899,193 +3905,36 @@ class MessageViewSet(viewsets.ModelViewSet):
                         # Se não for erro de lock ou esgotaram as tentativas, relançar o erro
                         raise
 
-                # 5. NOTIFICAÇÃO (WebSocket) - Emitir apenas um evento
+            # 5. NOTIFICAÇÃO (WebSocket) - Emitir apenas um evento (fora do loop while)
+            try:
                 channel_layer = get_channel_layer()
-                async_to_sync(channel_layer.group_send)(
-                    f"conversation_{conversation.id}",
-                    {
-                        "type": "message_reaction",
-                        "message_id": message.id,
-                        "reaction": {
-                            "id": reaction_obj.id if reaction_obj else None,
-                            "emoji": emoji,
-                            "is_from_customer": False,
-                            "removed": emoji == ''
+                if channel_layer:
+                    async_to_sync(channel_layer.group_send)(
+                        f"conversation_{conversation.id}",
+                        {
+                            "type": "message_reaction",
+                            "message_id": message.id,
+                            "reaction": {
+                                "id": reaction_obj.id if reaction_obj else None,
+                                "emoji": emoji,
+                                "is_from_customer": False,
+                                "removed": emoji == ''
+                            }
                         }
-                    }
-                )
+                    )
+            except Exception as ws_error:
+                # Log mas não falhar se WebSocket der erro
+                logger.warning(f"Erro ao enviar WebSocket de reação: {ws_error}")
 
-                return Response({
-                    'success': True,
-                    'message': 'Reação processada com sucesso',
-                    'reaction': {'emoji': emoji, 'message_id': message.id}
-                })
+            return Response({
+                'success': True,
+                'message': 'Reação processada com sucesso',
+                'reaction': {'emoji': emoji, 'message_id': message.id}
+            })
 
         except Exception as e:
             logger.error(f"Erro crítico em react: {e}", exc_info=True)
             return Response({'error': str(e)}, status=500)
-            
-            # Se chegou aqui, não é WhatsApp Official, então usar Uazapi (lógica original)
-            # Buscar credenciais Uazapi (mesma lógica das outras funções)
-            uazapi_token = None
-            uazapi_url = None
-            
-            
-            # Buscar na integração WhatsApp primeiro
-            whatsapp_integration = WhatsAppIntegration.objects.filter(provedor=provedor).first()
-            if whatsapp_integration:
-                uazapi_token = whatsapp_integration.access_token
-                uazapi_url = (
-                    whatsapp_integration.settings.get('whatsapp_url')
-                    if whatsapp_integration.settings else None
-                )
-            else:
-                pass
-            
-            # Fallback para integracoes_externas
-            if not uazapi_token or uazapi_token == '':
-                integracoes = provedor.integracoes_externas or {}
-                uazapi_token = integracoes.get('whatsapp_token')
-            if not uazapi_url or uazapi_url == '':
-                integracoes = provedor.integracoes_externas or {}
-                uazapi_url = integracoes.get('whatsapp_url')
-            
-            if not uazapi_token or not uazapi_url:
-                return Response({'error': 'Configuração Uazapi não encontrada'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Preparar payload para Uazapi
-            chat_id = conversation.contact.phone
-            
-            # Se não tem phone, tentar buscar nos additional_attributes do contato
-            if not chat_id and conversation.contact.additional_attributes:
-                chat_id = conversation.contact.additional_attributes.get('chatid')
-                
-                # Se ainda não tem chatid, tentar sender_lid
-                if not chat_id:
-                    chat_id = conversation.contact.additional_attributes.get('sender_lid')
-            
-            if not chat_id:
-                return Response({'error': 'Contato não possui número para reação'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Limpar o chat_id se necessário
-            if chat_id:
-                # Remover sufixos existentes
-                chat_id = chat_id.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '')
-                # Adicionar sufixo correto
-                chat_id = f"{chat_id}@s.whatsapp.net"
-            
-            # Verificar se o chat_id é válido
-            if not chat_id or chat_id == '@s.whatsapp.net':
-                return Response({'error': 'Chat ID inválido para reação'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verificar se o original_message_id é válido
-            if not original_message_id:
-                return Response({'error': 'ID da mensagem original inválido para reação'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verificar se o emoji é válido
-            if emoji and len(emoji) > 10:
-                return Response({'error': 'Emoji inválido para reação'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # IMPORTANTE: Para reações, sempre usar o messageid da mensagem ORIGINAL
-            # Não o external_id completo
-            payload = {
-                'number': chat_id,
-                'text': emoji,
-                'id': original_message_id  # Usar o messageid da mensagem ORIGINAL
-            }
-            
-            # Enviar reação via Uazapi
-            response = requests.post(
-                f"{uazapi_url.rstrip('/')}/message/react",
-                headers={'token': uazapi_token, 'Content-Type': 'application/json'},
-                json=payload,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                
-                # Atualizar reação na mensagem original (do cliente)
-                # IMPORTANTE: Uazapi só permite UMA reação ativa por mensagem
-                # Quando uma nova reação é enviada, ela SUBSTITUI a anterior
-                if message.is_from_customer:
-                    # Mensagem do cliente - salvar reação do agente aqui
-                    additional_attrs = message.additional_attributes or {}
-                    if emoji:
-                        # SUBSTITUIR reação anterior (não adicionar nova)
-                        additional_attrs['agent_reaction'] = {
-                            'emoji': emoji,
-                            'timestamp': result.get('reaction', {}).get('timestamp'),
-                            'status': result.get('reaction', {}).get('status', 'sent')
-                        }
-                    else:
-                        # Remover reação do agente
-                        if 'agent_reaction' in additional_attrs:
-                            del additional_attrs['agent_reaction']
-                    
-                    message.additional_attributes = additional_attrs
-                    message.save()
-                else:
-                    # Mensagem do agente - salvar reação enviada aqui
-                    additional_attrs = message.additional_attributes or {}
-                    if emoji:
-                        # SUBSTITUIR reação anterior (não adicionar nova)
-                        additional_attrs['reaction'] = {
-                            'emoji': emoji,
-                            'timestamp': result.get('reaction', {}).get('timestamp'),
-                            'status': result.get('reaction', {}).get('status', 'sent')
-                        }
-                    else:
-                        # Remover reação
-                        if 'reaction' in additional_attrs:
-                            del additional_attrs['reaction']
-                    
-                    message.additional_attributes = additional_attrs
-                    message.save()
-                
-                # Emitir evento WebSocket para atualização de reação
-                channel_layer = get_channel_layer()
-                from conversations.serializers import MessageSerializer
-                message_data = MessageSerializer(message).data
-                
-                async_to_sync(channel_layer.group_send)(
-                    f'conversation_{conversation.id}',
-                    {
-                        'type': 'message_updated',
-                        'action': 'reaction_updated',
-                        'message': message_data,
-                        'sender': None,
-                        'timestamp': message.updated_at.isoformat(),
-                    }
-                )
-                
-                # Serializar a mensagem atualizada
-                from conversations.serializers import MessageSerializer
-                message_data = MessageSerializer(message).data
-                
-                return Response({
-                    'success': True,
-                    'message': 'Reação enviada com sucesso' if emoji else 'Reação removida com sucesso',
-                    'reaction': result.get('reaction', {}),
-                    'updated_message': message_data
-                })
-            else:
-                error_msg = f"Erro Uazapi: {response.status_code}"
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get('message', error_msg)
-                except:
-                    pass
-                
-                return Response({
-                    'success': False,
-                    'error': error_msg
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
-        except Message.DoesNotExist:
-            return Response({'error': 'Mensagem não encontrada'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({'error': f'Erro interno: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'])
     def delete_message(self, request):
