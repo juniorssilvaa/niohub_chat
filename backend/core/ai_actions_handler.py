@@ -253,17 +253,23 @@ class AIActionsHandler:
             if function_name == "consultar_cliente_sgp":
                 cpf_cnpj = function_args.get('cpf_cnpj', '').replace('.', '').replace('-', '').replace('/', '')
                 
-                # Memória de consulta rápida
-                if conversation_state.get('cpf_cnpj') == cpf_cnpj and conversation_state.get('servico_plano'):
-                    return {"success": True, "cliente_encontrado": True, "nome": conversation_state.get('nome_cliente'), "usando_memoria": True}
-                
+                # 🚨 REGRA CRÍTICA: SEMPRE consultar o SGP - NUNCA usar dados da memória
+                # Isso garante que sempre usamos dados reais e atualizados do SGP
+                # e evita misturar dados de clientes diferentes ou de outros provedores
                 sgp_res = sgp.consultar_cliente(cpf_cnpj)
                 contratos = [c for c in sgp_res.get('contratos', []) if c.get('contratoStatusDisplay', '').lower() not in ['cancelado', 'cancelada']]
                 
                 if not contratos:
                     res = {"success": True, "cliente_encontrado": False, "erro": "Nenhum contrato ativo/suspenso encontrado."}
                 else:
-                    nome = contratos[0].get('razaoSocial', 'Cliente')
+                    # 🚨 REGRA CRÍTICA: Usar APENAS o nome que vem do SGP (razaoSocial)
+                    # Se não houver razaoSocial, usar 'Cliente' - NUNCA inventar nomes
+                    nome = contratos[0].get('razaoSocial', '')
+                    if not nome or nome.strip() == '':
+                        nome = 'Cliente'  # Padrão apenas se não vier do SGP
+                    else:
+                        nome = nome.strip()  # Limpar espaços extras
+                    
                     msg = self._formatar_contratos_padrao(contratos, nome)
                     c = contratos[0]
                     step = "AGUARDANDO_ESCOLHA_CONTRATO" if len(contratos) > 1 else "AGUARDANDO_CONFIRMACAO_CONTRATO"

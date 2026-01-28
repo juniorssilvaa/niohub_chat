@@ -69,8 +69,22 @@ class OpenAIService:
             'success', 'mensagem_formatada', 'mensagem', 'erro', 'error', 'protocolo',
             'is_suspenso', 'contrato_suspenso', 'contrato_status_display', 'motivo_status',
             'recurso_indisponivel',  # Indica que o recurso não está disponível e deve usar mensagem_formatada
-            'liberado_dias', 'data_promessa'  # Informações sobre a liberação (dias e data)
+            'liberado_dias', 'data_promessa',  # Informações sobre a liberação (dias e data)
+            'nome', 'cliente_encontrado'  # Nome do cliente retornado pelo SGP (apenas para referência, sempre usar mensagem_formatada)
         ]
+        
+        # Para consultar_cliente_sgp, SEMPRE priorizar mensagem_formatada que já contém o nome correto
+        if fname == "consultar_cliente_sgp" and res.get("mensagem_formatada"):
+            # Retornar apenas mensagem_formatada para garantir que a IA use exatamente o que veio do SGP
+            return {
+                "success": res.get("success", False),
+                "mensagem_formatada": res.get("mensagem_formatada"),
+                "cliente_encontrado": res.get("cliente_encontrado", False),
+                "is_suspenso": res.get("is_suspenso", False),
+                "contrato_suspenso": res.get("contrato_suspenso", False),
+                "contrato_status_display": res.get("contrato_status_display"),
+                "motivo_status": res.get("motivo_status")
+            }
         
         for key in safe_fields:
             if key in res:
@@ -356,6 +370,21 @@ class OpenAIService:
 
                     # Adicionar ao histórico de resultados para o prompt
                     results_history.append({"name": fname, "response": res})
+                    
+                    # Se for consultar_cliente_sgp e retornar mensagem_formatada, usar diretamente
+                    # Isso garante que o nome e dados do cliente venham EXATAMENTE do SGP, sem invenções
+                    if fname == "consultar_cliente_sgp" and res.get("mensagem_formatada") and res.get("cliente_encontrado"):
+                        final_response_text = res.get("mensagem_formatada")
+                        await redis_memory_service.update_ai_state(
+                            provedor.id, conversation_id,
+                            {"last_ia_response": final_response_text, "last_ia_action": fname},
+                            channel, contact_phone
+                        )
+                        return {
+                            "success": True,
+                            "resposta": final_response_text,
+                            "ai_conversation_id": ai_conversation_id,
+                        }
                     
                     # Se for liberar_por_confianca e retornar mensagem_formatada (sucesso ou recurso indisponível),
                     # usar a mensagem formatada diretamente como resposta final

@@ -1049,6 +1049,61 @@ export default function ConversasDashboard() {
     });
   };
 
+  // Ícone de status dos tickets (igual ao ChatArea)
+  const ModalMessageStatusIcon = ({ message }) => {
+    const status = message.additional_attributes?.last_status;
+    const readAt = message.additional_attributes?.read_at;
+    const deliveredAt = message.additional_attributes?.delivered_at;
+    const sentAt = message.additional_attributes?.sent_at;
+
+    let currentStatus = status;
+    if (readAt || status === 'read') {
+      currentStatus = 'read';
+    } else if (deliveredAt || status === 'delivered') {
+      currentStatus = 'delivered';
+    } else if (sentAt || status === 'sent') {
+      currentStatus = 'sent';
+    }
+
+    // Se não há status mas a mensagem foi enviada com external_id, assumir "sent"
+    if (!currentStatus && !message.isTemporary && (message.external_id || message.additional_attributes?.external_id)) {
+      currentStatus = 'sent';
+    }
+
+    // 3️⃣ Mensagem lida - 2 tickets azuis fortes
+    if (currentStatus === 'read') {
+      return (
+        <span className="inline-flex items-center ml-1" title="Lida">
+          <svg width="16" height="12" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0.5 5.5L3 8L7 4" stroke="#0066FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <path d="M8.5 5.5L11 8L15.5 3" stroke="#0066FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </svg>
+        </span>
+      );
+    }
+
+    // 2️⃣ Mensagem entregue - 2 tickets cinza neutros
+    if (currentStatus === 'delivered') {
+      return (
+        <span className="inline-flex items-center ml-1" title="Entregue">
+          <svg width="16" height="12" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0.5 5.5L3 8L7 4" stroke="#D1D5DB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <path d="M8.5 5.5L11 8L15.5 3" stroke="#9CA3AF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </svg>
+        </span>
+      );
+    }
+
+    // 1️⃣ Mensagem enviada - 1 ticket cinza
+    return (
+      <span className="inline-flex items-center ml-1" title={currentStatus === 'sent' ? 'Enviada' : 'Enviando...'}>
+        <svg width="12" height="10" viewBox="0 0 12 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M1 4.5L4.5 8L11 1.5" stroke="#9CA3AF" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      </span>
+    );
+  };
+
   // Renderização dos balões de mensagem
   function renderMensagem(msg) {
     //  CORRIGIDO: Melhor detecção de tipo de mensagem
@@ -1059,7 +1114,7 @@ export default function ConversasDashboard() {
     const align = isCliente ? 'justify-start' : 'justify-end';
     
     // Cores correspondentes ao ChatArea: cliente = cinza-azulado escuro, sistema/agente = azul
-    const bg = (isBot || isAtendente) ? 'bg-blue-500 text-white' : 'bg-[#4A5568] text-white';
+    const bg = (isBot || isAtendente) ? 'bg-[#2196F3] text-white' : 'bg-[#4A5568] text-white';
     
     return (
       <div key={msg.id} className={`flex ${align} mb-4`}>
@@ -1096,10 +1151,24 @@ export default function ConversasDashboard() {
               </p>
             )}
           </div>
-          <div className={`flex items-center mt-2 space-x-1 text-xs text-muted-foreground ${(isAtendente || isBot) ? 'justify-end' : 'justify-start'}`}>
+          <div
+            className={`flex items-center mt-2 space-x-1 text-xs text-muted-foreground ${
+              (isAtendente || isBot) ? 'justify-end' : 'justify-start'
+            }`}
+          >
             <span className="bg-background/80 px-2 py-1 rounded-full">
-              {(msg.created_at || msg.timestamp) ? new Date(msg.created_at || msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+              {(msg.created_at || msg.timestamp)
+                ? new Date(msg.created_at || msg.timestamp).toLocaleTimeString('pt-BR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : ''}
             </span>
+            {(isAtendente || isBot) &&
+              (modalConversa?.inbox?.channel_type === 'whatsapp' || modalConversa?.channel === 'whatsapp') &&
+              !msg.isTemporary && (
+                <ModalMessageStatusIcon message={msg} />
+              )}
           </div>
         </div>
       </div>

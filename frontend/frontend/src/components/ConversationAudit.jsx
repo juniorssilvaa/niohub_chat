@@ -8,6 +8,8 @@ import { getMessages, getAuditLogs } from '../lib/supabase';
 import whatsappIcon from '../assets/whatsapp.png';
 import telegramIcon from '../assets/telegram.png';
 import gmailIcon from '../assets/gmail.png';
+import chatBgPattern from '../assets/chat-bg-pattern.svg';
+import chatBgPatternLight from '../assets/chat-bg-pattern-light.svg';
 
 export default function ConversationAudit({ provedorId }) {
   const [conversations, setConversations] = useState([]);
@@ -24,6 +26,119 @@ export default function ConversationAudit({ provedorId }) {
     dateFrom: '',
     dateTo: ''
   });
+
+  // Ícones de status de mensagem (igual ao ChatArea)
+  const AuditMessageStatusIcon = ({ message }) => {
+    const status = message.additional_attributes?.last_status;
+    const readAt = message.additional_attributes?.read_at;
+    const deliveredAt = message.additional_attributes?.delivered_at;
+    const sentAt = message.additional_attributes?.sent_at;
+
+    let currentStatus = status;
+    if (readAt || status === 'read') {
+      currentStatus = 'read';
+    } else if (deliveredAt || status === 'delivered') {
+      currentStatus = 'delivered';
+    } else if (sentAt || status === 'sent') {
+      currentStatus = 'sent';
+    }
+
+    if (!currentStatus && !message.isTemporary && (message.external_id || message.additional_attributes?.external_id)) {
+      currentStatus = 'sent';
+    }
+
+    // READ: 2 tickets azul forte
+    if (currentStatus === 'read') {
+      return (
+        <span className="inline-flex items-center ml-1 transition-all duration-300 ease-in-out" title="Lida">
+          <svg
+            width="16"
+            height="12"
+            viewBox="0 0 16 11"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="transition-all duration-300 ease-in-out"
+          >
+            <path
+              d="M0.5 5.5L3 8L7 4"
+              stroke="#0066FF"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <path
+              d="M8.5 5.5L11 8L15.5 3"
+              stroke="#0066FF"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </svg>
+        </span>
+      );
+    }
+
+    // DELIVERED: 2 tickets cinza neutro
+    if (currentStatus === 'delivered') {
+      return (
+        <span className="inline-flex items-center ml-1 transition-all duration-300 ease-in-out" title="Entregue">
+          <svg
+            width="16"
+            height="12"
+            viewBox="0 0 16 11"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="transition-all duration-300 ease-in-out"
+          >
+            <path
+              d="M0.5 5.5L3 8L7 4"
+              stroke="#D1D5DB"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <path
+              d="M8.5 5.5L11 8L15.5 3"
+              stroke="#9CA3AF"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </svg>
+        </span>
+      );
+    }
+
+    // SENT: 1 ticket cinza
+    return (
+      <span
+        className="inline-flex items-center ml-1 transition-all duration-300 ease-in-out"
+        title={currentStatus === 'sent' ? 'Enviada' : 'Enviando...'}
+      >
+        <svg
+          width="12"
+          height="10"
+          viewBox="0 0 12 9"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="transition-all duration-300 ease-in-out"
+        >
+          <path
+            d="M1 4.5L4.5 8L11 1.5"
+            stroke="#9CA3AF"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </svg>
+      </span>
+    );
+  };
 
   useEffect(() => {
     if (provedorId) {
@@ -780,7 +895,17 @@ export default function ConversationAudit({ provedorId }) {
                           <p className="mt-2 text-sm text-muted-foreground">Carregando mensagens...</p>
                         </div>
                       ) : conversationMessages.length > 0 ? (
-                        <div className="bg-background rounded-lg p-4 max-h-96 overflow-y-auto">
+                        <div
+                          className="bg-background rounded-lg p-4 max-h-96 overflow-y-auto"
+                          style={{
+                            // Mesmo tema de fundo do ChatArea (WhatsApp)
+                            minHeight: '200px',
+                            backgroundImage: `url(${chatBgPattern})`,
+                            backgroundRepeat: 'no-repeat',
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center center'
+                          }}
+                        >
                           <div className="space-y-4">
                             {conversationMessages.map((message, index) => {
                               // Verificar tipos especiais de conteúdo
@@ -808,7 +933,7 @@ export default function ConversationAudit({ provedorId }) {
                                   <div className={`max-w-xs lg:max-w-md rounded-2xl px-4 py-3 shadow-sm ${
                                     isCustomer 
                                       ? 'bg-muted text-foreground' 
-                                      : 'bg-blue-500 text-white'
+                                      : 'bg-[#2196F3] text-white'
                                   }`}>
                                     <div className="text-sm font-medium mb-1">
                                       {isCustomer 
@@ -946,6 +1071,23 @@ export default function ConversationAudit({ provedorId }) {
                                         })}
                                       </div>
                                     )}
+
+                                    {/* Timestamp + status (igual ao ChatArea) */}
+                                    <div className={`flex items-center justify-end mt-2 text-xs ${isCustomer ? 'text-muted-foreground' : 'text-white'}`}>
+                                      <span>
+                                        {new Date(message.created_at || message.timestamp).toLocaleString('pt-BR', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          day: '2-digit',
+                                          month: '2-digit'
+                                        })}
+                                      </span>
+                                      {!isCustomer &&
+                                        conversationDetails?.inbox?.channel_type === 'whatsapp' &&
+                                        !message.isTemporary && (
+                                          <AuditMessageStatusIcon message={message} />
+                                        )}
+                                    </div>
                                     
                                     <div className="text-xs opacity-70 mt-1">
                                       {message.created_at ? 

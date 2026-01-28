@@ -250,32 +250,32 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       currentStatus = 'sent';
     }
     
-    // 3️⃣ Mensagem lida pelo usuário - 2 tickets azuis fortes
+    // 3️⃣ Mensagem lida pelo usuário - 2 tickets azuis bem fortes
     if (currentStatus === 'read') {
       return (
-        <span className="inline-flex items-center ml-1.5 transition-all duration-300 ease-in-out" title="Lida">
+        <span className="inline-flex items-center ml-1 transition-all duration-300 ease-in-out" title="Lida">
           <svg 
-            width="20" 
-            height="14" 
+            width="16" 
+            height="12" 
             viewBox="0 0 16 11" 
             fill="none" 
             xmlns="http://www.w3.org/2000/svg"
             className="transition-all duration-300 ease-in-out"
           >
-            {/* Primeiro checkmark (atrás) - azul forte */}
+            {/* Primeiro checkmark (atrás) - azul bem forte */}
             <path 
               d="M0.5 5.5L3 8L7 4" 
-              stroke="#2563EB" 
-              strokeWidth="2.5" 
+              stroke="#0066FF" 
+              strokeWidth="2.2" 
               strokeLinecap="round" 
               strokeLinejoin="round"
               fill="none"
             />
-            {/* Segundo checkmark (frente, deslocado) - azul muito forte */}
+            {/* Segundo checkmark (frente, deslocado) - azul bem forte */}
             <path 
               d="M8.5 5.5L11 8L15.5 3" 
-              stroke="#1D4ED8" 
-              strokeWidth="2.5" 
+              stroke="#0066FF" 
+              strokeWidth="2.2" 
               strokeLinecap="round" 
               strokeLinejoin="round"
               fill="none"
@@ -285,32 +285,32 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       );
     }
     
-    // 2️⃣ Mensagem entregue no celular - 2 tickets cinza (só fica azul quando ler)
+    // 2️⃣ Mensagem entregue no celular - 2 tickets cinza bem neutros (sem tom roxo)
     if (currentStatus === 'delivered') {
       return (
-        <span className="inline-flex items-center ml-1.5 transition-all duration-300 ease-in-out" title="Entregue">
+        <span className="inline-flex items-center ml-1 transition-all duration-300 ease-in-out" title="Entregue">
           <svg 
-            width="20" 
-            height="14" 
+            width="16" 
+            height="12" 
             viewBox="0 0 16 11" 
             fill="none" 
             xmlns="http://www.w3.org/2000/svg"
             className="transition-all duration-300 ease-in-out"
           >
-            {/* Primeiro checkmark (atrás) - cinza médio */}
+            {/* Primeiro checkmark (atrás) - cinza claro neutro */}
             <path 
               d="M0.5 5.5L3 8L7 4" 
-              stroke="#6B7280" 
-              strokeWidth="2.5" 
+              stroke="#D1D5DB" 
+              strokeWidth="2.2" 
               strokeLinecap="round" 
               strokeLinejoin="round"
               fill="none"
             />
-            {/* Segundo checkmark (frente, deslocado) - cinza forte */}
+            {/* Segundo checkmark (frente, deslocado) - cinza médio neutro */}
             <path 
               d="M8.5 5.5L11 8L15.5 3" 
-              stroke="#4B5563" 
-              strokeWidth="2.5" 
+              stroke="#9CA3AF" 
+              strokeWidth="2.2" 
               strokeLinecap="round" 
               strokeLinejoin="round"
               fill="none"
@@ -320,25 +320,25 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       );
     }
     
-    // 1️⃣ Mensagem enviada - 1 ticket cinza forte
+    // 1️⃣ Mensagem enviada - 1 ticket cinza neutro (sem tom roxo)
     return (
       <span
-        className="inline-flex items-center ml-1.5 transition-all duration-300 ease-in-out"
+        className="inline-flex items-center ml-1 transition-all duration-300 ease-in-out"
         title={currentStatus === 'sent' ? 'Enviada' : 'Enviando...'}
       >
         <svg
-          width="14"
-          height="11"
+          width="12"
+          height="10"
           viewBox="0 0 12 9"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
           className="transition-all duration-300 ease-in-out"
         >
-          {/* Checkmark único cinza forte */}
+          {/* Checkmark único cinza neutro (sem tom roxo) */}
           <path
             d="M1 4.5L4.5 8L11 1.5"
-            stroke="#4B5563"  // cinza bem mais escuro para não parecer azul
-            strokeWidth="2.6"
+            stroke="#9CA3AF"
+            strokeWidth="2.4"
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
@@ -2606,10 +2606,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         className="relative flex-1 overflow-y-auto overflow-x-hidden p-4 dark:bg-[#000000] bg-[#efeae2]"
         style={{ 
           minHeight: '200px',
+          // Tema de fundo estilo WhatsApp (imagem enviada)
           backgroundImage: `url(${isDarkTheme ? chatBgPattern : chatBgPatternLight})`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '200px 200px',
-          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center center',
           opacity: 1
         }}
       >
@@ -2670,18 +2671,13 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               <div key={msg.id} className={`flex ${getMessageAlignment(msg, content)} group mb-4 min-w-0`}>
               <div className={`max-w-[70%] min-w-0 ${getMessageOrder(msg, content)}`}>
                 <div className={`
-                  rounded-2xl px-4 py-3 shadow-sm
+                  px-5 py-3 shadow-sm
                   ${isCustomer 
-                    ? 'bg-[#4A5568] text-white'  // Cinza-azulado escuro para mensagens recebidas
-                    : isAI
-                      ? 'bg-blue-500 text-white'  // Mensagens da IA em azul
-                      : isBot 
-                        ? 'bg-blue-500 text-white'
-                        : isSystemMessage
-                          ? 'bg-blue-500 text-white'  // Mensagens do sistema em azul
-                          : 'bg-[#4F46E5] text-white'  // Mensagens do agente (envio) na cor solicitada
+                    ? 'bg-[#4A5568] text-white rounded-2xl'  // Mensagens recebidas (cliente)
+                    : isAI || isBot || isSystemMessage
+                      ? 'bg-[#2196F3] text-white rounded-2xl'  // IA / bot / sistema
+                      : 'bg-[#2196F3] text-white rounded-2xl'  // Mensagens do agente (envio) - igual ao exemplo
                   }
-                  ${isLarge ? 'rounded-2xl' : 'rounded-2xl'}
                 `}>
                   {/* Resposta a mensagem anterior */}
                   {msg.additional_attributes?.is_reply && (
@@ -3013,8 +3009,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                   )}
 
                   {/* Timestamp e ações */}
-                  <div className={`flex items-center justify-between mt-1`}>
-                    <div className={`flex items-center space-x-2 text-xs ${isCustomer ? 'text-muted-foreground' : 'text-white/70'}`}>
+                  <div className={`flex items-center justify-end mt-1`}>
+                    <div className={`flex items-center space-x-2 text-xs ${isCustomer ? 'text-muted-foreground' : 'text-white'}`}>
                       <span>
                       {new Date(msg.created_at || msg.timestamp).toLocaleString('pt-BR', {
                         hour: '2-digit',
