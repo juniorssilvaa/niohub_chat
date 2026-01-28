@@ -1,12 +1,11 @@
-import React from 'react';
+import { useRef } from 'react';
 import axios from 'axios';
 
 const useSessionTimeout = () => {
   // Hooks devem ser chamados sempre, antes de qualquer retorno condicional.
-  // Usar React.useRef explicitamente para evitar "Invalid hook call" / múltiplas cópias de React.
-  const timeoutRef = React.useRef(null);
-  const warningTimeoutRef = React.useRef(null);
-  const sessionTimeoutRef = React.useRef(30); // valor padrão de 30 minutos
+  const timeoutRef = useRef(null);
+  const warningTimeoutRef = useRef(null);
+  const sessionTimeoutRef = useRef(30); // valor padrão de 30 minutos
 
   const isClient = typeof window !== 'undefined';
 
