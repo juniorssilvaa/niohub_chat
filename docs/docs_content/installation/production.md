@@ -102,9 +102,14 @@ sudo nano /opt/niochat/backend/.env
 
 ```env
 # Django
+ENVIRONMENT=production
 DEBUG=False
 SECRET_KEY=sua_chave_secreta_aqui
 ALLOWED_HOSTS=seu-dominio.com,www.seu-dominio.com
+
+# Sentry (logs e erros de produção)
+SENTRY_DSN=https://sua-chave@xxx.ingest.sentry.io/numero-do-projeto
+SENTRY_TEST_KEY=chave_secreta_para_testar_endpoint_sentry
 
 # Banco de Dados
 DATABASE_URL=postgresql://niochat:senha_segura@localhost:5432/niochat

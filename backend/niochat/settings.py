@@ -497,3 +497,37 @@ if LOGGING_CONFIG is None:
         # Se falhar, usar configuração básica
         logging.basicConfig(level=logging.INFO)
 
+# ============================================
+# SENTRY (monitoramento de erros e performance)
+# ============================================
+# Funciona em produção com DEBUG=False: basta definir SENTRY_DSN e ENVIRONMENT no .env.
+# Em desenvolvimento, deixe SENTRY_DSN vazio para não enviar eventos.
+SENTRY_DSN = config('SENTRY_DSN', default='')
+SENTRY_TEST_KEY = config('SENTRY_TEST_KEY', default='')  # para /api/sentry-test/?key= em produção
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    # Captura logs como breadcrumbs (INFO e acima); ERROR vira evento
+    sentry_logging = LoggingIntegration(
+        level=logging.INFO,
+        event_level=logging.ERROR,
+    )
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=ENVIRONMENT,  # ex: production, development
+        release=VERSION,
+        integrations=[
+            DjangoIntegration(),
+            RedisIntegration(),
+            sentry_logging,
+        ],
+        traces_sample_rate=config('SENTRY_TRACES_SAMPLE_RATE', default=0.1, cast=float),
+        profiles_sample_rate=config('SENTRY_PROFILES_SAMPLE_RATE', default=0.0, cast=float),
+        send_default_pii=config('SENTRY_SEND_PII', default=False, cast=bool),
+        debug=DEBUG,  # só afeta logs no console; eventos são enviados com DEBUG=True ou False
+    )
+

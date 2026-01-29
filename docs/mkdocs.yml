@@ -40,6 +40,7 @@ nav:
   - 'Integração com Supabase': 'supabase/integration.md'
   - 'Configuração':
     - 'Supabase': 'configuration/supabase.md'
+    - 'Sentry': 'configuration/sentry.md'
   - 'Changelog': 'changelog.md'
 
 plugins:

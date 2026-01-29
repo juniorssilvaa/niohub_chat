@@ -63,6 +63,61 @@ def health_view(request):
     )
 
 
+@require_http_methods(["GET"])
+def sentry_test_view(request):
+    """
+    Endpoint para validar integração com Sentry.
+    Produção (DEBUG=False): use ?key=<SENTRY_TEST_KEY> (defina SENTRY_TEST_KEY no .env).
+    Desenvolvimento: aceita também requisições de localhost ou ?dsn=<DSN> em DEBUG.
+    Gera um erro intencional que deve aparecer em Sentry > Issues.
+    """
+    from decouple import config
+    # Usar valores carregados no startup (settings) – funciona em produção com DEBUG=False
+    sentry_dsn = getattr(settings, 'SENTRY_DSN', '') or config('SENTRY_DSN', default='')
+    # Em DEBUG, permitir passar DSN na URL para testar: ?dsn=https://...
+    if not sentry_dsn and settings.DEBUG:
+        sentry_dsn = (request.GET.get('dsn') or '').strip()
+    test_key = getattr(settings, 'SENTRY_TEST_KEY', '') or config('SENTRY_TEST_KEY', default='')
+    key_param = request.GET.get('key', '')
+
+    if not sentry_dsn:
+        return JsonResponse({
+            "ok": False,
+            "message": "Sentry não está configurado. Defina SENTRY_DSN no .env ou use ?dsn=<seu_dsn> (apenas em DEBUG)."
+        }, status=400)
+
+    # Se DSN veio da URL (DEBUG), inicializar Sentry para este processo
+    if settings.DEBUG and request.GET.get('dsn') and not getattr(settings, 'SENTRY_DSN', ''):
+        try:
+            import sentry_sdk
+            from sentry_sdk.integrations.django import DjangoIntegration
+            sentry_sdk.init(dsn=sentry_dsn, integrations=[DjangoIntegration()])
+        except Exception as e:
+            logger.exception("Erro ao inicializar Sentry com DSN da URL")
+
+    # Permitir: DEBUG, ou chave correta, ou requisição de localhost (para testes)
+    remote = request.META.get('REMOTE_ADDR', '') or request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+    is_localhost = remote in ('127.0.0.1', '::1', 'localhost', '')
+    if not settings.DEBUG and not is_localhost and (not test_key or key_param != test_key):
+        return JsonResponse({
+            "ok": False,
+            "message": "Não autorizado. Use ?key=<SENTRY_TEST_KEY> ou ative DEBUG."
+        }, status=403)
+
+    # Enviar mensagem de teste para Sentry (aparece em Issues como mensagem)
+    try:
+        import sentry_sdk
+        sentry_sdk.capture_message(
+            "Teste Sentry NioChat - validação da integração",
+            level="info"
+        )
+    except Exception as e:
+        logger.exception("Erro ao enviar mensagem de teste ao Sentry")
+
+    # Gerar exceção intencional para aparecer em Sentry > Issues
+    raise ValueError("Teste Sentry NioChat - erro intencional para validar integração")
+
+
 def changelog_view(request):
     """
     Retorna o conteúdo do CHANGELOG.json

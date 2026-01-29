@@ -28,6 +28,7 @@ urlpatterns = [
     path('users/status/', views.UserViewSet.as_view({'get': 'status'}), name='users_status'),
     path('health/', views.health_view, name='health'),
     path('health', views.health_view, name='health_no_slash'),  # Sem trailing slash também funciona
+    path('sentry-test/', views.sentry_test_view, name='sentry-test'),
     path('changelog/', views.changelog_view, name='changelog'),
     path('supabase-config/', views.supabase_config_view, name='supabase-config'),
     path('system-config/', views.SystemConfigView.as_view(), name='system-config'),
