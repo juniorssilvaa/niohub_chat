@@ -38,7 +38,7 @@ class OpenAIService:
         self.model = "gemini-2.0-flash"
         self.client = None
         self.max_tokens = 2000
-        self.temperature = 0.8
+        self.temperature = 0.5
         
         # Inicializar Sub-agentes (Missão: Execução e Formatação)
         self.actions = AIActionsHandler(openai_service=self)
