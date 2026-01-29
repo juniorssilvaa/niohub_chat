@@ -161,9 +161,15 @@ class AIActionsHandler:
             method_name = DATABASE_FUNCTION_MAPPING.get(function_name)
             if not method_name: return {"success": False, "erro": f"Ação '{function_name}' não mapeada."}
             
-            # Garantir conversation_id correto
-            if 'conversation_id' in function_args and conversation_id:
-                function_args['conversation_id'] = conversation_id
+            # Garantir conversation_id correto (injetar automaticamente se não fornecido)
+            if conversation_id:
+                # Para funções que precisam de conversation_id, injetar automaticamente se não fornecido
+                if function_name in ['criar_resumo_suporte', 'executar_transferencia_conversa', 'transferir_conversa_inteligente', 'encerrar_atendimento']:
+                    if 'conversation_id' not in function_args or not function_args.get('conversation_id'):
+                        function_args['conversation_id'] = conversation_id
+                # Para outras funções, apenas atualizar se já existir
+                elif 'conversation_id' in function_args and function_args.get('conversation_id'):
+                    function_args['conversation_id'] = conversation_id
             
             method = getattr(db_tools, method_name)
             
@@ -303,6 +309,87 @@ class AIActionsHandler:
                         "motivo_status": c.get('motivo_status')
                     }
 
+            elif function_name == "verificar_manutencao_sgp":
+                cpf_cnpj = function_args.get('cpf_cnpj', '')
+                if not cpf_cnpj:
+                    cpf_cnpj = conversation_state.get('cpf_cnpj')
+                if not cpf_cnpj:
+                    return {"success": False, "erro": "CPF/CNPJ necessário para verificar manutenção."}
+                
+                if conversation_state.get('is_suspenso'):
+                    return {"success": False, "erro": "Contrato suspenso. Não é necessário verificar manutenção."}
+                
+                cpf_limpo = cpf_cnpj.replace('.', '').replace('-', '').replace('/', '')
+                sgp_res = sgp.listar_manutencoes(cpf_limpo)
+                
+                # Verificar se há manutenções ativas/programadas
+                manutencoes = []
+                if isinstance(sgp_res, list):
+                    manutencoes = sgp_res
+                elif isinstance(sgp_res, dict):
+                    if sgp_res.get('status') == 1 and sgp_res.get('manutencoes'):
+                        manutencoes = sgp_res.get('manutencoes', [])
+                    elif sgp_res.get('manutencoes'):
+                        manutencoes = sgp_res.get('manutencoes', [])
+                
+                if manutencoes:
+                    # Filtrar manutenções futuras ou em andamento
+                    from django.utils import timezone
+                    agora = timezone.now()
+                    manutencoes_ativas = []
+                    for manut in manutencoes:
+                        # Verificar se a manutenção está programada para o futuro ou em andamento
+                        data_manut = manut.get('data_manutencao') or manut.get('data') or manut.get('data_inicio')
+                        if data_manut:
+                            try:
+                                from datetime import datetime
+                                if isinstance(data_manut, str):
+                                    # Tentar parsear a data
+                                    dt_manut = datetime.fromisoformat(data_manut.replace('Z', '+00:00'))
+                                else:
+                                    dt_manut = data_manut
+                                # Se a manutenção é hoje ou futura, considerar ativa
+                                if dt_manut.date() >= agora.date():
+                                    manutencoes_ativas.append(manut)
+                            except:
+                                # Se não conseguir parsear, considerar ativa
+                                manutencoes_ativas.append(manut)
+                        else:
+                            # Se não tem data, considerar ativa
+                            manutencoes_ativas.append(manut)
+                    
+                    if manutencoes_ativas:
+                        # Formatar informações da manutenção
+                        info_manut = []
+                        for manut in manutencoes_ativas[:3]:  # Máximo 3 manutenções
+                            data = manut.get('data_manutencao') or manut.get('data') or manut.get('data_inicio') or 'Data não informada'
+                            descricao = manut.get('descricao') or manut.get('motivo') or manut.get('observacao') or 'Manutenção programada'
+                            info_manut.append(f"- {descricao} (Data: {data})")
+                        
+                        mensagem = f"Verifiquei aqui e há manutenção programada para seu contrato:\n\n" + "\n".join(info_manut)
+                        if len(manutencoes_ativas) > 3:
+                            mensagem += f"\n\nE mais {len(manutencoes_ativas) - 3} manutenção(ões) programada(s)."
+                        mensagem += "\n\nO problema que você está enfrentando pode estar relacionado a essa manutenção. Após a conclusão da manutenção, seu acesso deve voltar ao normal."
+                        
+                        res = {
+                            "success": True,
+                            "tem_manutencao": True,
+                            "manutencoes": manutencoes_ativas,
+                            "mensagem_formatada": mensagem
+                        }
+                    else:
+                        res = {
+                            "success": True,
+                            "tem_manutencao": False,
+                            "mensagem_formatada": "Não há manutenção programada para seu contrato no momento."
+                        }
+                else:
+                    res = {
+                        "success": True,
+                        "tem_manutencao": False,
+                        "mensagem_formatada": "Não há manutenção programada para seu contrato no momento."
+                    }
+
             elif function_name == "verificar_acesso_sgp":
                 cid = function_args.get('contrato')
                 if not cid: return {"success": False, "erro": "Contrato obrigatório."}
@@ -311,9 +398,53 @@ class AIActionsHandler:
                     return {"success": False, "erro": "Contrato suspenso por falta de pagamento.", "contrato_suspenso": True}
                 
                 sgp_res = sgp.verifica_acesso(cid)
-                status = "Online" if (isinstance(sgp_res, list) and len(sgp_res) > 0) or (isinstance(sgp_res, dict) and sgp_res.get('status') == 1) else "Offline"
-                msg_status = "sua conexão está normal" if status == "Online" else "não consegui detectar seu equipamento online"
-                res = {"success": True, "status_conexao": status, "mensagem_formatada": f"Verifiquei aqui e {msg_status}. Como posso ajudar?"}
+                
+                # Verificar se é manutenção em andamento (status == 9)
+                if isinstance(sgp_res, dict) and sgp_res.get('status') == 9:
+                    # Há manutenção em andamento
+                    msg_manutencao_raw = sgp_res.get('msg', '')
+                    protocolo = sgp_res.get('protocolo', '')
+                    tempo = sgp_res.get('tempo', '')
+                    
+                    # Formatar mensagem de forma amigável (a IA vai melhorar ainda mais)
+                    # Remover quebras de linha \r\n e limpar a mensagem
+                    msg_manutencao_limpa = msg_manutencao_raw.replace('\r\n', ' ').replace('\n', ' ').strip()
+                    
+                    # Criar mensagem base para a IA melhorar
+                    mensagem_base = f"Identifiquei que há uma manutenção preventiva em andamento na sua região."
+                    if msg_manutencao_limpa:
+                        mensagem_base += f" {msg_manutencao_limpa}"
+                    if protocolo:
+                        mensagem_base += f" Protocolo: {protocolo}"
+                    if tempo:
+                        mensagem_base += f" Tempo estimado: {tempo}"
+                    
+                    res = {
+                        "success": True,
+                        "status_conexao": "Manutencao",
+                        "tem_manutencao": True,
+                        "protocolo": protocolo,
+                        "tempo_estimado": tempo,
+                        "mensagem_manutencao_raw": msg_manutencao_raw,
+                        "mensagem_manutencao_limpa": msg_manutencao_limpa,
+                        "mensagem_formatada": mensagem_base,
+                        "instrucao_ia": "Você deve criar sua própria mensagem sobre a manutenção de forma educada, profissional e amigável usando suas próprias palavras. NUNCA copie literalmente a mensagem_manutencao_raw ou mensagem_manutencao_limpa do SGP. Use as informações disponíveis (protocolo, tempo_estimado) mas crie uma mensagem natural, variada e adaptada ao contexto da conversa. Seja empático e explique que o problema está relacionado à manutenção preventiva."
+                    }
+                elif isinstance(sgp_res, dict) and sgp_res.get('status') == 1:
+                    # Online
+                    status = "Online"
+                    msg_status = "sua conexão está normal"
+                    res = {"success": True, "status_conexao": status, "mensagem_formatada": f"Verifiquei aqui e {msg_status}. Como posso ajudar?"}
+                elif isinstance(sgp_res, list) and len(sgp_res) > 0:
+                    # Online (formato de lista)
+                    status = "Online"
+                    msg_status = "sua conexão está normal"
+                    res = {"success": True, "status_conexao": status, "mensagem_formatada": f"Verifiquei aqui e {msg_status}. Como posso ajudar?"}
+                else:
+                    # Offline
+                    status = "Offline"
+                    msg_status = "não consegui detectar seu equipamento online"
+                    res = {"success": True, "status_conexao": status, "mensagem_formatada": f"Verifiquei aqui e {msg_status}. Como posso ajudar?"}
 
             elif function_name == "gerar_fatura_completa":
                 cpf = function_args.get('cpf_cnpj', '')
@@ -439,8 +570,9 @@ class AIActionsHandler:
         return [
             {"type": "function", "function": {"name": "consultar_cliente_sgp", "description": "Consulta cliente SGP por CPF/CNPJ. Retorna informações do contrato incluindo status (Suspenso/Ativo) e motivo da suspensão. Use SEMPRE quando o cliente relatar problemas de internet para verificar se o contrato está suspenso antes de fazer diagnóstico técnico.", "parameters": {"type": "object", "properties": {"cpf_cnpj": {"type": "string"}}, "required": ["cpf_cnpj"]}}},
             {"type": "function", "function": {"name": "gerar_fatura_completa", "description": "Gera e envia fatura completa para o cliente via WhatsApp. Use quando o cliente pedir fatura, segunda via, boleto ou PIX.", "parameters": {"type": "object", "properties": {"cpf_cnpj": {"type": "string"}, "tipo_pagamento": {"type": "string", "enum": ["pix", "boleto"]}}, "required": ["cpf_cnpj"]}}},
-            {"type": "function", "function": {"name": "verificar_acesso_sgp", "description": "Verifica se o acesso à internet do contrato está online ou offline. Use APENAS se o contrato NÃO estiver suspenso. NUNCA use para contrato suspenso.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}}, "required": ["contrato"]}}},
-            {"type": "function", "function": {"name": "criar_chamado_tecnico", "description": "Cria chamado técnico no SGP. Use APENAS se o contrato NÃO estiver suspenso e após fazer diagnóstico técnico. NUNCA use para contrato suspenso.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}, "conteudo": {"type": "string"}}, "required": ["contrato", "conteudo"]}}},
+            {"type": "function", "function": {"name": "verificar_manutencao_sgp", "description": "Verifica se há manutenção programada para o cliente. Use APENAS se o contrato NÃO estiver suspenso e após confirmar os dados do cliente. Se houver manutenção, informe ao cliente e NÃO abra chamado técnico.", "parameters": {"type": "object", "properties": {"cpf_cnpj": {"type": "string"}}, "required": ["cpf_cnpj"]}}},
+            {"type": "function", "function": {"name": "verificar_acesso_sgp", "description": "Verifica se o acesso à internet do contrato está online, offline ou em manutenção. Retorna status_conexao que pode ser 'Online', 'Offline' ou 'Manutencao'. Se retornar 'Manutencao' ou tem_manutencao=True, há manutenção preventiva em andamento - NÃO abra chamado técnico. IMPORTANTE: Quando houver manutenção, você DEVE criar sua própria mensagem de forma educada, profissional e amigável usando suas próprias palavras. NUNCA copie literalmente a mensagem_manutencao_raw do SGP. Use as informações (protocolo, tempo_estimado) mas crie uma mensagem natural e variada, adaptando ao contexto da conversa. Use APENAS se o contrato NÃO estiver suspenso. NUNCA use para contrato suspenso.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}}, "required": ["contrato"]}}},
+            {"type": "function", "function": {"name": "criar_chamado_tecnico", "description": "Cria chamado técnico no SGP. Use APENAS se o contrato NÃO estiver suspenso, NÃO houver manutenção programada e após coletar todas as informações de diagnóstico e criar o resumo. NUNCA use para contrato suspenso ou se houver manutenção.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}, "conteudo": {"type": "string"}}, "required": ["contrato", "conteudo"]}}},
             {"type": "function", "function": {"name": "liberar_por_confianca", "description": "Realiza desbloqueio em confiança do contrato suspenso. Use quando o cliente quiser desbloquear o acesso sem pagar imediatamente. O CPF/CNPJ é opcional e será buscado da memória se não fornecido. O conteúdo (conteudo) deve ser o que o cliente disse sobre quando vai pagar (ex: 'vou paga amanhã'), ou deixe vazio para usar 'Liberação Via NioChat' como padrão.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}, "cpf_cnpj": {"type": "string", "description": "CPF/CNPJ do cliente (opcional, será buscado da memória se não fornecido)"}, "conteudo": {"type": "string", "description": "Conteúdo da promessa de pagamento que o cliente mencionou (ex: 'vou paga amanhã'). Se o cliente não mencionou nada específico, deixe vazio ou não inclua este parâmetro para usar 'Liberação Via NioChat' como padrão."}}, "required": ["contrato"]}}}
         ]
 

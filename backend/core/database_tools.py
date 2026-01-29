@@ -798,6 +798,60 @@ class DatabaseTools:
                 'erro': f"Erro ao consultar estatísticas: {str(e)}"
             }
 
+    def criar_resumo_suporte(self, conversation_id: int, resumo_texto: str) -> Dict[str, Any]:
+        """
+        Tool: criar_resumo_suporte
+        Cria uma mensagem de resumo do atendimento de suporte na conversa.
+        Esta mensagem fica visível no chat para o cliente e para os atendentes.
+        
+        Args:
+            conversation_id: ID da conversa
+            resumo_texto: Texto do resumo do que o cliente disse e o que a IA entendeu
+        
+        Returns:
+            Dict com resultado da operação
+        """
+        try:
+            conversa = Conversation.objects.filter(
+                id=conversation_id,
+                inbox__provedor=self.provedor
+            ).first()
+            
+            if not conversa:
+                return {
+                    'success': False,
+                    'erro': f'Conversa {conversation_id} não encontrada'
+                }
+            
+            # Criar mensagem de resumo
+            mensagem_resumo = Message.objects.create(
+                conversation=conversa,
+                content=resumo_texto,
+                message_type='text',
+                is_from_customer=False,
+                additional_attributes={
+                    'system_message': True,
+                    'tipo': 'resumo_suporte',
+                    'criado_por': 'IA'
+                }
+            )
+            
+            logger.info(f"[RESUMO] Resumo de suporte criado na conversa {conversation_id}")
+            
+            return {
+                'success': True,
+                'mensagem_id': mensagem_resumo.id,
+                'conversation_id': conversation_id,
+                'mensagem': 'Resumo criado com sucesso na conversa'
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao criar resumo de suporte: {e}", exc_info=True)
+            return {
+                'success': False,
+                'erro': f"Erro ao criar resumo: {str(e)}"
+            }
+
 # Factory function para criar instância das ferramentas
 def create_database_tools(provedor: Provedor) -> DatabaseTools:
     """Cria instância das ferramentas de banco para um provedor específico"""

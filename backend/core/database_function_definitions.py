@@ -105,6 +105,28 @@ DATABASE_FUNCTION_TOOLS = [
             },
             "strict": True
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "criar_resumo_suporte",
+            "description": "Cria um resumo do atendimento de suporte na conversa. Use após coletar todas as informações do cliente sobre o problema técnico. O resumo ficará visível no chat para o cliente e atendentes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "integer",
+                        "description": "ID da conversa onde o resumo será criado"
+                    },
+                    "resumo_texto": {
+                        "type": "string",
+                        "description": "Texto do resumo contendo: o que o cliente disse, o que a IA entendeu, informações coletadas (dispositivos conectados, reinício do modem, quando começou, etc.)"
+                    }
+                },
+                "required": ["conversation_id", "resumo_texto"]
+            },
+            "strict": True
+        }
     }
 ]
 
@@ -115,7 +137,8 @@ DATABASE_FUNCTION_MAPPING = {
     "executar_transferencia_conversa": "executar_transferencia_conversa",
     "transferir_conversa_inteligente": "transferir_conversa_inteligente",
     "buscar_conversas_ativas": "buscar_conversas_ativas",
-    "encerrar_atendimento": "encerrar_atendimento"
+    "encerrar_atendimento": "encerrar_atendimento",
+    "criar_resumo_suporte": "criar_resumo_suporte"
 }
 
 # Instruções específicas para o sistema prompt
@@ -130,6 +153,9 @@ FERRAMENTAS DE BANCO DE DADOS DISPONÍVEIS:
 
 **Para Consultas:**
 5. buscar_conversas_ativas() - Ver conversas em andamento
+
+**Para Suporte Técnico:**
+6. criar_resumo_suporte(conversation_id, resumo_texto) - Cria resumo do atendimento de suporte na conversa. Use após coletar todas as informações de diagnóstico do cliente sobre problemas de internet.
 
 **REGRAS IMPORTANTES:**
 - SEMPRE use buscar_equipes_disponiveis() ANTES de tentar transferir
