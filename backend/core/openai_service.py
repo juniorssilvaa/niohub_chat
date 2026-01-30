@@ -35,7 +35,7 @@ class OpenAIService:
     """
     def __init__(self):
         self.api_key = None
-        self.model = "gemini-2.0-flash"
+        self.model = "gemini-3-pro-preview"
         self.client = None
         self.max_tokens = 2000
         self.temperature = 0.5
@@ -75,7 +75,7 @@ class OpenAIService:
         
         # Para consultar_cliente_sgp, SEMPRE priorizar mensagem_formatada que já contém o nome correto
         if fname == "consultar_cliente_sgp" and res.get("mensagem_formatada"):
-            # Retornar apenas mensagem_formatada para garantir que a IA use exatamente o que veio do SGP
+            # Retornar mensagem_formatada + campos críticos para análise de quantidade de contratos
             return {
                 "success": res.get("success", False),
                 "mensagem_formatada": res.get("mensagem_formatada"),
@@ -83,7 +83,9 @@ class OpenAIService:
                 "is_suspenso": res.get("is_suspenso", False),
                 "contrato_suspenso": res.get("contrato_suspenso", False),
                 "contrato_status_display": res.get("contrato_status_display"),
-                "motivo_status": res.get("motivo_status")
+                "motivo_status": res.get("motivo_status"),
+                "quantidade_contratos": res.get("quantidade_contratos", 0),  # 🚨 CRÍTICO: Quantidade de contratos
+                "tem_apenas_um_contrato": res.get("tem_apenas_um_contrato", False)  # 🚨 CRÍTICO: Flag explícita
             }
         
         for key in safe_fields:
@@ -204,13 +206,16 @@ class OpenAIService:
             if not self.client:
                 self.client = genai.Client(api_key=self.api_key)
 
-            # 2. Carregar Estado (FSM) e Contexto (Memória curta)
+            # 2. Uma única leitura: estado + histórico da conversa (provedor X, conversa X)
+            # 🔒 ISOLAMENTO: provedor.id garante que a IA só acessa dados deste provedor.
+            # Chave Redis: ai:memory:{provedor.id}:{channel}:{conversation_id}:{phone}
+            # Cada provedor tem seu próprio namespace. Novos provedores são automaticamente isolados.
             ch_norm = redis_memory_service.normalize_channel(channel)
             ph_norm = normalize_phone_number(contact_phone)
             ai_conversation_id = f"ai:{provedor.id}:{ch_norm}:{conversation_id}:{ph_norm}"
-            conversation_state = await redis_memory_service.get_ai_state(provedor.id, conversation_id, channel, contact_phone)
-
-            history_items = await redis_memory_service.get_ai_context(provedor.id, conversation_id, channel, contact_phone, limit=15)
+            mem = await redis_memory_service.get_ai_memory(provedor.id, conversation_id, channel, contact_phone)
+            conversation_state = mem["state"]
+            history_items = (mem.get("context") or [])[-15:]
             
             # Identificar se já houve interação da IA
             has_ai_interaction = any(msg.get('role') == 'assistant' for msg in history_items)
@@ -371,10 +376,19 @@ class OpenAIService:
                     # Adicionar ao histórico de resultados para o prompt
                     results_history.append({"name": fname, "response": res})
                     
-                    # Se for consultar_cliente_sgp e retornar mensagem_formatada, usar diretamente
-                    # Isso garante que o nome e dados do cliente venham EXATAMENTE do SGP, sem invenções
-                    if fname == "consultar_cliente_sgp" and res.get("mensagem_formatada") and res.get("cliente_encontrado"):
-                        final_response_text = res.get("mensagem_formatada")
+                    # 🚨 REGRA CRÍTICA: Se for consultar_cliente_sgp, SEMPRE retornar direto (sucesso ou erro)
+                    # NUNCA deixar a IA gerar resposta para consultar_cliente_sgp - evita alucinações e nomes inventados
+                    if fname == "consultar_cliente_sgp":
+                        if res.get("mensagem_formatada") and res.get("cliente_encontrado"):
+                            # Cliente encontrado: usar mensagem formatada do SGP
+                            final_response_text = res.get("mensagem_formatada")
+                        elif res.get("erro"):
+                            # Cliente não encontrado: retornar erro direto, SEM deixar IA gerar
+                            final_response_text = res.get("erro", "Não encontrei contratos ativos para este CPF/CNPJ.")
+                        else:
+                            # Fallback de segurança: erro genérico
+                            final_response_text = "Não foi possível consultar os dados no momento. Tente novamente."
+                        
                         await redis_memory_service.update_ai_state(
                             provedor.id, conversation_id,
                             {"last_ia_response": final_response_text, "last_ia_action": fname},

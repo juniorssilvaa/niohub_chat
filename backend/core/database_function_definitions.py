@@ -110,7 +110,7 @@ DATABASE_FUNCTION_TOOLS = [
         "type": "function",
         "function": {
             "name": "criar_resumo_suporte",
-            "description": "Cria um resumo do atendimento de suporte na conversa. Use após coletar todas as informações do cliente sobre o problema técnico. O resumo ficará visível no chat para o cliente e atendentes.",
+            "description": "Cria um resumo do atendimento de suporte na conversa. Use após coletar todas as informações do cliente sobre o problema técnico. 🚨 IMPORTANTE: O resumo é criado APENAS para atendentes - NÃO é enviado para o cliente. Fica visível apenas no chat interno para a equipe técnica.",
             "parameters": {
                 "type": "object",
                 "properties": {

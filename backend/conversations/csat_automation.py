@@ -19,25 +19,29 @@ class CSATAutomationService:
     @classmethod
     def generate_dynamic_csat_message(cls, provedor, contact, conversation):
         """
-        Gera mensagem CSAT dinâmica usando IA com contexto do cliente e provedor
+        Gera mensagem CSAT dinâmica usando IA com contexto do cliente e provedor.
+        🔒 ISOLAMENTO CORRIGIDO: Usa chave com provedor:conversation:phone
         """
         cliente_nome = contact.name
         
         try:
             from core.openai_service import OpenAIService
-            from core.redis_memory_service import redis_memory_service
+            from core.redis_memory_service import redis_memory_service, normalize_phone_number
             
             try:
                 redis_conn = redis_memory_service.get_redis_sync()
                 if redis_conn:
-                    key = f"conversation:{provedor.id}:{conversation.id}"
+                    # 🔒 CORREÇÃO: Usar novo padrão com isolamento por telefone
+                    phone = normalize_phone_number(contact.phone) if contact else "unknown"
+                    channel = redis_memory_service.normalize_channel(conversation.inbox.channel_type if conversation and conversation.inbox else "whatsapp")
+                    key = f"csat:{provedor.id}:{conversation.id}:{phone}"
                     memory_data = redis_conn.get(key)
                     if memory_data:
                         memory = json.loads(memory_data)
                         if memory.get('nome_cliente'):
                             nome_completo = memory['nome_cliente']
                             cliente_nome = nome_completo.split()[0] if nome_completo else contact.name
-                            logger.info(f"Nome do cliente encontrado na memória Redis: {cliente_nome}")
+                            logger.info(f"Nome do cliente encontrado na memória Redis (isolado): {cliente_nome}")
                 else:
                     logger.warning("Conexão Redis não disponível")
             except Exception as e:

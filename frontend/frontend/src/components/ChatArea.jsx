@@ -2340,6 +2340,13 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   //  USAR LIMPEZA DE DUPLICATAS NO RENDER
   const uniqueMessages = cleanDuplicateMessages(messages);
   
+  // Filtrar mensagens apenas para atendentes se o usuário atual for cliente
+  // Se user não existe ou não é admin/agent, considerar como cliente
+  const isViewingAsAgent = user && (user.user_type === 'superadmin' || user.user_type === 'admin' || user.user_type === 'agent');
+  const filteredMessages = isViewingAsAgent 
+    ? uniqueMessages 
+    : uniqueMessages.filter(msg => !msg.additional_attributes?.apenas_atendentes);
+  
   // Limpeza de duplicatas funcionando corretamente
 
   // Função para lidar com upload de arquivo
@@ -2632,12 +2639,12 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           </div>
         )}
 
-        {uniqueMessages.length === 0 ? (
+        {filteredMessages.length === 0 ? (
           <div className="text-center text-muted-foreground py-8">
             <p>Nenhuma mensagem encontrada</p>
           </div>
         ) : (
-          uniqueMessages.map((msg) => {
+          filteredMessages.map((msg) => {
             const content = msg.content || '';
             const isCustomer = msg.is_from_customer;
             // CORREÇÃO: Identificar mensagens da IA corretamente - verificação mais robusta
@@ -2650,6 +2657,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             const isBot = !isCustomer && !isAI && (msg.message_type === 'incoming' || msg.sender?.sender_type === 'bot');
             const isAgent = !isCustomer && !isBot && !isAI;
             const isSystemMessage = msg.additional_attributes?.system_message || msg.content?.includes('Conversa atribuída para');
+            const isResumoSuporte = msg.additional_attributes?.tipo === 'resumo_suporte' || msg.additional_attributes?.apenas_atendentes;
             const isLarge = isLargeMessage(content);
             
             // Determinar se a mensagem tem mídia
@@ -2674,9 +2682,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                   px-5 py-3 shadow-sm
                   ${isCustomer 
                     ? 'bg-[#4A5568] text-white rounded-2xl'  // Mensagens recebidas (cliente)
-                    : isAI || isBot || isSystemMessage
-                      ? 'bg-[#2196F3] text-white rounded-2xl'  // IA / bot / sistema
-                      : 'bg-[#2196F3] text-white rounded-2xl'  // Mensagens do agente (envio) - igual ao exemplo
+                    : isResumoSuporte
+                      ? 'bg-[#FFF9C4] text-[#856404] rounded-2xl border border-[#FFE69C]'  // Resumo suporte - amarelo fraco
+                      : isAI || isBot || isSystemMessage
+                        ? 'bg-[#2196F3] text-white rounded-2xl'  // IA / bot / sistema
+                        : 'bg-[#2196F3] text-white rounded-2xl'  // Mensagens do agente (envio) - igual ao exemplo
                   }
                 `}>
                   {/* Resposta a mensagem anterior */}

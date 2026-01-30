@@ -802,7 +802,8 @@ class DatabaseTools:
         """
         Tool: criar_resumo_suporte
         Cria uma mensagem de resumo do atendimento de suporte na conversa.
-        Esta mensagem fica visível no chat para o cliente e para os atendentes.
+        🚨 IMPORTANTE: Esta mensagem é criada APENAS para atendentes - NÃO é enviada para o cliente.
+        O resumo fica visível apenas no chat interno para a equipe técnica.
         
         Args:
             conversation_id: ID da conversa
@@ -823,7 +824,7 @@ class DatabaseTools:
                     'erro': f'Conversa {conversation_id} não encontrada'
                 }
             
-            # Criar mensagem de resumo
+            # Criar mensagem de resumo (apenas para atendentes, não visível para o cliente)
             mensagem_resumo = Message.objects.create(
                 conversation=conversa,
                 content=resumo_texto,
@@ -832,7 +833,8 @@ class DatabaseTools:
                 additional_attributes={
                     'system_message': True,
                     'tipo': 'resumo_suporte',
-                    'criado_por': 'IA'
+                    'criado_por': 'IA',
+                    'apenas_atendentes': True  # Flag para indicar que é apenas para atendentes
                 }
             )
             

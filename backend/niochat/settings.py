@@ -485,6 +485,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'core': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }
 

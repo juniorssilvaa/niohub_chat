@@ -256,6 +256,11 @@ class AIActionsHandler:
             sgp = SGPClient(base_url=sgp_url, token=sgp_token, app_name=sgp_app)
             res = {"success": False, "erro": "Ação não reconhecida."}
 
+            logger.info(
+                "[SGP] Chamada | funcao=%s | provedor_id=%s | conversa=%s | canal=%s",
+                function_name, provedor.id, conversation_id, channel
+            )
+
             if function_name == "consultar_cliente_sgp":
                 cpf_cnpj = function_args.get('cpf_cnpj', '').replace('.', '').replace('-', '').replace('/', '')
                 
@@ -263,19 +268,110 @@ class AIActionsHandler:
                 # Isso garante que sempre usamos dados reais e atualizados do SGP
                 # e evita misturar dados de clientes diferentes ou de outros provedores
                 sgp_res = sgp.consultar_cliente(cpf_cnpj)
-                contratos = [c for c in sgp_res.get('contratos', []) if c.get('contratoStatusDisplay', '').lower() not in ['cancelado', 'cancelada']]
                 
+                # 🚨 VALIDAÇÃO: Garantir que a resposta do SGP está no formato esperado
+                if not isinstance(sgp_res, dict):
+                    logger.error("[SGP] consultar_cliente_sgp | Resposta do SGP não é um dict: %s", type(sgp_res))
+                    return {"success": False, "erro": "Erro ao consultar dados no SGP. Tente novamente."}
+                
+                # Extrair contratos do JSON do SGP
+                # Formato esperado: {"msg": "...", "contratos": [{...}]}
+                contratos_raw = sgp_res.get('contratos', [])
+                if not isinstance(contratos_raw, list):
+                    logger.error("[SGP] consultar_cliente_sgp | 'contratos' não é uma lista: %s", type(contratos_raw))
+                    contratos_raw = []
+                
+                # Filtrar apenas contratos ativos/suspensos (não cancelados)
+                contratos = [c for c in contratos_raw if isinstance(c, dict) and c.get('contratoStatusDisplay', '').lower() not in ['cancelado', 'cancelada']]
+
+                logger.info(
+                    "[SGP] consultar_cliente_sgp retornou | contratos=%s | cliente_encontrado=%s",
+                    len(contratos), bool(contratos)
+                )
+
                 if not contratos:
                     res = {"success": True, "cliente_encontrado": False, "erro": "Nenhum contrato ativo/suspenso encontrado."}
                 else:
-                    # 🚨 REGRA CRÍTICA: Usar APENAS o nome que vem do SGP (razaoSocial)
-                    # Se não houver razaoSocial, usar 'Cliente' - NUNCA inventar nomes
-                    nome = contratos[0].get('razaoSocial', '')
-                    if not nome or nome.strip() == '':
-                        nome = 'Cliente'  # Padrão apenas se não vier do SGP
-                    else:
-                        nome = nome.strip()  # Limpar espaços extras
+                    # 🚨 REGRA CRÍTICA: Nome do TITULAR (CPF) deve vir EXCLUSIVAMENTE do JSON do SGP, nunca inventado.
+                    # Estrutura esperada do SGP:
+                    # {
+                    #   "msg": "...",
+                    #   "contratos": [
+                    #     {
+                    #       "razaoSocial": "AMANDA DINIZ DE SOUZA",  ← Nome está AQUI dentro do contrato
+                    #       "cpfCnpj": "700.179.490-25",
+                    #       ...
+                    #     }
+                    #   ]
+                    # }
+                    # 
+                    # Ordem de prioridade:
+                    # 1. Nome no nível superior da resposta (se existir)
+                    # 2. Nome dentro de objeto 'cliente' (se existir)
+                    # 3. Nome dentro do primeiro contrato (contratos[0].razaoSocial) ← CASO MAIS COMUM
+                    # 4. Se nenhum existir, usar 'Cliente'
                     
+                    nome = ''
+                    # Tentar nível superior (geralmente não existe, mas verificar primeiro)
+                    for key in ('razaoSocial', 'nome', 'nomeCliente'):
+                        val = sgp_res.get(key)
+                        if val and isinstance(val, str) and val.strip():
+                            nome = val.strip()
+                            logger.info("[SGP] consultar_cliente_sgp | Nome encontrado no nível superior: %s", key)
+                            break
+                    
+                    # Tentar objeto 'cliente' (se existir)
+                    if not nome and isinstance(sgp_res.get('cliente'), dict):
+                        c = sgp_res.get('cliente', {})
+                        nome = (c.get('razaoSocial') or c.get('nome') or '').strip()
+                        if nome:
+                            logger.info("[SGP] consultar_cliente_sgp | Nome encontrado em objeto 'cliente'")
+                    
+                    # CASO MAIS COMUM: Nome dentro do primeiro contrato (contratos[0].razaoSocial)
+                    # 🚨 SEMPRE ler diretamente do JSON do SGP - nunca inventar
+                    if not nome and contratos and len(contratos) > 0:
+                        primeiro_contrato = contratos[0]
+                        if isinstance(primeiro_contrato, dict):
+                            razao_social_raw = primeiro_contrato.get('razaoSocial')
+                            # Validar que razaoSocial existe e é string válida
+                            if razao_social_raw and isinstance(razao_social_raw, str):
+                                nome = razao_social_raw.strip()
+                                logger.info(
+                                    "[SGP] consultar_cliente_sgp | Nome lido do JSON do SGP: contratos[0].razaoSocial = '%s'",
+                                    nome[:10] + "..." if len(nome) > 10 else nome
+                                )
+                            else:
+                                logger.warning(
+                                    "[SGP] consultar_cliente_sgp | contratos[0].razaoSocial não é string válida: %s (tipo: %s)",
+                                    razao_social_raw, type(razao_social_raw)
+                                )
+                    
+                    # 🚨 GARANTIA: Se chegou aqui sem nome, o SGP não retornou nome válido
+                    # NUNCA inventar nome - sempre usar 'Cliente' como fallback seguro
+                    
+                    # 🚨 VALIDAÇÃO CRÍTICA: Garantir que o nome não seja vazio, inválido ou suspeito
+                    # Se o nome vier vazio ou muito curto, usar 'Cliente' para evitar usar dados incorretos
+                    if not nome or len(nome.strip()) < 3:
+                        nome = 'Cliente'
+                        logger.warning(
+                            "[SGP] consultar_cliente_sgp | Nome inválido ou vazio detectado | CPF=%s | usando 'Cliente' como fallback",
+                            cpf_cnpj[:3] + "***" + cpf_cnpj[-2:] if len(cpf_cnpj) >= 5 else "***"
+                        )
+
+                    # Log detalhado para diagnóstico: nome exato que será usado (mascarado parcialmente)
+                    nome_mascarado = nome[:3] + "***" + nome[-2:] if len(nome) > 5 else "***" if nome != "Cliente" else "Cliente"
+                    primeiro_contrato_razao = contratos[0].get('razaoSocial', '') if contratos else ''
+                    primeiro_contrato_razao_mascarado = primeiro_contrato_razao[:3] + "***" + primeiro_contrato_razao[-2:] if len(primeiro_contrato_razao) > 5 else "***" if primeiro_contrato_razao else "vazio"
+                    
+                    logger.warning(
+                        "[SGP] consultar_cliente_sgp | CPF=%s | nome_usado=%s | nome_resposta_sgp=%s | primeiro_contrato_razaoSocial=%s | contrato_id=%s",
+                        cpf_cnpj[:3] + "***" + cpf_cnpj[-2:] if len(cpf_cnpj) >= 5 else "***",
+                        nome_mascarado,
+                        (sgp_res.get('razaoSocial') or sgp_res.get('nome') or sgp_res.get('nomeCliente') or '')[:3] + "***" if (sgp_res.get('razaoSocial') or sgp_res.get('nome') or sgp_res.get('nomeCliente') or '') else 'vazio',
+                        primeiro_contrato_razao_mascarado,
+                        contratos[0].get('contratoId') if contratos else 'N/A',
+                    )
+
                     msg = self._formatar_contratos_padrao(contratos, nome)
                     c = contratos[0]
                     step = "AGUARDANDO_ESCOLHA_CONTRATO" if len(contratos) > 1 else "AGUARDANDO_CONFIRMACAO_CONTRATO"
@@ -306,7 +402,9 @@ class AIActionsHandler:
                         "is_suspenso": is_suspenso,
                         "contrato_suspenso": is_suspenso,
                         "contrato_status_display": c.get('contratoStatusDisplay'),
-                        "motivo_status": c.get('motivo_status')
+                        "motivo_status": c.get('motivo_status'),
+                        "quantidade_contratos": len(contratos),  # 🚨 CRÍTICO: Quantidade de contratos retornados pelo SGP
+                        "tem_apenas_um_contrato": len(contratos) == 1  # 🚨 CRÍTICO: Flag explícita para IA analisar
                     }
 
             elif function_name == "verificar_manutencao_sgp":
@@ -555,23 +653,19 @@ class AIActionsHandler:
                     channel, phone
                 )
 
+            logger.info("[SGP] %s retornou | success=%s | conversa=%s", function_name, res.get("success"), conversation_id)
             return res
         except Exception as e:
             logger.error(f"Erro crítico em execute_sgp_function: {e}", exc_info=True)
             return {"success": False, "erro": str(e)}
 
-            return {"success": False, "erro": f"Função {function_name} não suportada ou não implementada."}
-        except Exception as e:
-            logger.error(f"Erro crítico em execute_sgp_function (Provedor {provedor.id}): {e}", exc_info=True)
-            return {"success": False, "erro": str(e)}
-
     def get_sgp_tools(self) -> List[Dict[str, Any]]:
         """Retorna definições das ferramentas"""
         return [
-            {"type": "function", "function": {"name": "consultar_cliente_sgp", "description": "Consulta cliente SGP por CPF/CNPJ. Retorna informações do contrato incluindo status (Suspenso/Ativo) e motivo da suspensão. Use SEMPRE quando o cliente relatar problemas de internet para verificar se o contrato está suspenso antes de fazer diagnóstico técnico.", "parameters": {"type": "object", "properties": {"cpf_cnpj": {"type": "string"}}, "required": ["cpf_cnpj"]}}},
+            {"type": "function", "function": {"name": "consultar_cliente_sgp", "description": "Consulta cliente SGP por CPF/CNPJ. Retorna informações do contrato incluindo status (Suspenso/Ativo) e motivo da suspensão. 🚨 CRÍTICO: A função retorna 'quantidade_contratos' e 'tem_apenas_um_contrato' no JSON. Se 'tem_apenas_um_contrato: true' ou 'quantidade_contratos: 1', há APENAS 1 contrato - NÃO pergunte qual contrato, apenas peça confirmação dos dados ('Seus dados estão corretos?'). Se 'quantidade_contratos: 2' ou mais, há múltiplos contratos - aí sim pergunte qual contrato. Use SEMPRE quando o cliente relatar problemas de internet para verificar se o contrato está suspenso antes de fazer diagnóstico técnico.", "parameters": {"type": "object", "properties": {"cpf_cnpj": {"type": "string"}}, "required": ["cpf_cnpj"]}}},
             {"type": "function", "function": {"name": "gerar_fatura_completa", "description": "Gera e envia fatura completa para o cliente via WhatsApp. Use quando o cliente pedir fatura, segunda via, boleto ou PIX.", "parameters": {"type": "object", "properties": {"cpf_cnpj": {"type": "string"}, "tipo_pagamento": {"type": "string", "enum": ["pix", "boleto"]}}, "required": ["cpf_cnpj"]}}},
             {"type": "function", "function": {"name": "verificar_manutencao_sgp", "description": "Verifica se há manutenção programada para o cliente. Use APENAS se o contrato NÃO estiver suspenso e após confirmar os dados do cliente. Se houver manutenção, informe ao cliente e NÃO abra chamado técnico.", "parameters": {"type": "object", "properties": {"cpf_cnpj": {"type": "string"}}, "required": ["cpf_cnpj"]}}},
-            {"type": "function", "function": {"name": "verificar_acesso_sgp", "description": "Verifica se o acesso à internet do contrato está online, offline ou em manutenção. Retorna status_conexao que pode ser 'Online', 'Offline' ou 'Manutencao'. Se retornar 'Manutencao' ou tem_manutencao=True, há manutenção preventiva em andamento - NÃO abra chamado técnico. IMPORTANTE: Quando houver manutenção, você DEVE criar sua própria mensagem de forma educada, profissional e amigável usando suas próprias palavras. NUNCA copie literalmente a mensagem_manutencao_raw do SGP. Use as informações (protocolo, tempo_estimado) mas crie uma mensagem natural e variada, adaptando ao contexto da conversa. Use APENAS se o contrato NÃO estiver suspenso. NUNCA use para contrato suspenso.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}}, "required": ["contrato"]}}},
+            {"type": "function", "function": {"name": "verificar_acesso_sgp", "description": "Verifica se o acesso à internet do contrato está online, offline ou em manutenção. Retorna status_conexao que pode ser 'Online', 'Offline' ou 'Manutencao'. Se retornar 'Manutencao' ou tem_manutencao=True, há manutenção preventiva em andamento - NÃO abra chamado técnico. IMPORTANTE: Quando houver manutenção, você DEVE criar sua própria mensagem de forma educada, profissional e amigável usando suas próprias palavras. NUNCA copie literalmente a mensagem_manutencao_raw do SGP. Use as informações (protocolo, tempo_estimado) mas crie uma mensagem natural e variada, adaptando ao contexto da conversa. 🚨 SE RETORNAR 'Offline': Faça perguntas sobre LED vermelho e modem ligado PRIMEIRO. Se confirmar LED vermelho OU modem desligado, automatize: criar_resumo_suporte + criar_chamado_tecnico + executar_transferencia_conversa para SUPORTE TÉCNICO. Use APENAS se o contrato NÃO estiver suspenso. NUNCA use para contrato suspenso.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}}, "required": ["contrato"]}}},
             {"type": "function", "function": {"name": "criar_chamado_tecnico", "description": "Cria chamado técnico no SGP. Use APENAS se o contrato NÃO estiver suspenso, NÃO houver manutenção programada e após coletar todas as informações de diagnóstico e criar o resumo. NUNCA use para contrato suspenso ou se houver manutenção.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}, "conteudo": {"type": "string"}}, "required": ["contrato", "conteudo"]}}},
             {"type": "function", "function": {"name": "liberar_por_confianca", "description": "Realiza desbloqueio em confiança do contrato suspenso. Use quando o cliente quiser desbloquear o acesso sem pagar imediatamente. O CPF/CNPJ é opcional e será buscado da memória se não fornecido. O conteúdo (conteudo) deve ser o que o cliente disse sobre quando vai pagar (ex: 'vou paga amanhã'), ou deixe vazio para usar 'Liberação Via NioChat' como padrão.", "parameters": {"type": "object", "properties": {"contrato": {"type": "string"}, "cpf_cnpj": {"type": "string", "description": "CPF/CNPJ do cliente (opcional, será buscado da memória se não fornecido)"}, "conteudo": {"type": "string", "description": "Conteúdo da promessa de pagamento que o cliente mencionou (ex: 'vou paga amanhã'). Se o cliente não mencionou nada específico, deixe vazio ou não inclua este parâmetro para usar 'Liberação Via NioChat' como padrão."}}, "required": ["contrato"]}}}
         ]
