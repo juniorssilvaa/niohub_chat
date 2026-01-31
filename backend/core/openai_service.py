@@ -35,7 +35,7 @@ class OpenAIService:
     """
     def __init__(self):
         self.api_key = None
-        self.model = "gemini-3-pro-preview"
+        self.model = "gemini-2.0-flash"
         self.client = None
         self.max_tokens = 2000
         self.temperature = 0.5

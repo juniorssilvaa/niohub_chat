@@ -215,9 +215,9 @@ class EnterpriseGeminiService:
         if not full_prompt.strip():
             return ""
         
-        model_name = kwargs.get('model', 'gemini-3-pro-preview')
+        model_name = kwargs.get('model', 'gemini-2.0-flash')
         if model_name.startswith('gpt'): # Fallback for legacy config
-            model_name = 'gemini-3-pro-preview'
+            model_name = 'gemini-2.0-flash'
         
         # Use new API: client.models.generate_content()
         response = client.models.generate_content(

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Loader2, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
 import useMetaEmbeddedSignupListener from '../hooks/useMetaEmbeddedSignupListener.js';
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 import axios from 'axios';
 
 const MetaFinalizing = () => {
@@ -81,8 +82,9 @@ const MetaFinalizing = () => {
   const launchWhatsAppSignup = () => {
     if (hasLaunched.current) return;
     hasLaunched.current = true;
-    
-    const BACKEND_URL = 'https://api-local.niochat.com.br';
+    // redirect_uri deve ser a URL do backend onde a Meta redireciona com o code (deve estar no Meta App Dashboard)
+    const baseUrl = getApiBaseUrl() || import.meta.env.VITE_API_URL || 'https://api.niochat.com.br';
+    const BACKEND_URL = baseUrl.replace(/\/+$/, '');
     const redirectUri = encodeURIComponent(`${BACKEND_URL}/api/auth/facebook/callback/`);
     
     const extras = encodeURIComponent(JSON.stringify({
