@@ -242,6 +242,18 @@ class ContactViewSet(viewsets.ModelViewSet):
                 return Contact.objects.filter(provedor__in=provedores)
             return Contact.objects.none()
     
+    def perform_create(self, serializer):
+        """Define provedor ao criar contato quando não enviado (contexto da conta atual)."""
+        user = self.request.user
+        data = serializer.validated_data
+        if data.get('provedor') is None and user.user_type != 'superadmin':
+            provedores = Provedor.objects.filter(admins=user, is_active=True)
+            first = provedores.first()
+            if first:
+                serializer.save(provedor=first)
+                return
+        serializer.save()
+
     @action(detail=True, methods=['patch'], url_path='toggle-block-atender')
     def toggle_block_atender(self, request, pk=None):
         """Toggle do bloqueio para atendimento (IA não responde)"""

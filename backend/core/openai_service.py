@@ -35,9 +35,9 @@ class OpenAIService:
     """
     def __init__(self):
         self.api_key = None
-        self.model = "gemini-2.0-flash"
+        self.model = "gemini-3-pro-preview"
         self.client = None
-        self.max_tokens = 2000
+        self.max_tokens = 512
         self.temperature = 0.5
         
         # Inicializar Sub-agentes (Missão: Execução e Formatação)
@@ -296,6 +296,8 @@ class OpenAIService:
 {base_system_prompt}
 {instrucao_dinamica}
 # CONTEXTO ATUAL: {provedor.nome} | Agente: {provedor.nome_agente_ia}
+
+# REGRA DE RESPOSTA: Seja objetivo. Dê respostas curtas e diretas. Evite textos longos, parágrafos extensos ou repetições. Uma ou duas frases costumam ser suficientes quando possível.
 """
 
             # 5. Preparar Ferramentas

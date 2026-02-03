@@ -93,10 +93,11 @@ export default function Contacts({ provedorId }) {
       
       // Mapear os campos do frontend para o formato esperado pelo backend
       const contactData = {
-        name: novoContato.nome,
-        phone: novoContato.telefone,
-        email: novoContato.email || '' // Email opcional
+        name: novoContato.nome.trim() || 'Sem nome',
+        phone: (novoContato.telefone || '').trim().replace(/\s/g, ''),
+        email: (novoContato.email || '').trim() || null
       };
+      if (provedorId) contactData.provedor = parseInt(provedorId, 10);
       
       const res = await axios.post('/api/contacts/', contactData, {
         headers: { Authorization: `Token ${token}` }

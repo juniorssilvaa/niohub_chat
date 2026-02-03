@@ -16,6 +16,18 @@ class ContactSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
+    def validate_email(self, value):
+        """Permite string vazia e converte para None (EmailField aceita null, não '')."""
+        if value is None or (isinstance(value, str) and value.strip() == ''):
+            return None
+        return value
+    
+    def validate_phone(self, value):
+        """Normaliza telefone: remove espaços."""
+        if value is None:
+            return ''
+        return str(value).strip().replace(' ', '') if value else ''
+    
     def get_inbox(self, obj):
         # Buscar a conversa mais recente do contato
         latest_conversation = obj.conversations.order_by('-last_message_at').first()
