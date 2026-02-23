@@ -63,23 +63,30 @@ done
 echo "✅ PostgreSQL disponível!"
 
 echo "Running migrations..."
-# Garantir que migrações intermediárias estejam registradas sem rollback
+# Inserir migrações que foram aplicadas fisicamente mas não registradas no historico
+# (causado por falha em transação anterior — DDL do PostgreSQL auto-commita, mas o INSERT em django_migrations é revertido)
 python -c "
 import os, django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'niochat.settings')
 django.setup()
 from django.db import connection
+
+# Lista de migrações que podem ter sido aplicadas fisicamente mas não registradas
+# Cada entrada: (app, name)
 missing = [
-    '0055_1_alter_provedor_redes_sociais_default',
-    '0055_add_more',
+    ('core', '0055_1_alter_provedor_redes_sociais_default'),
+    ('core', '0055_add_more'),
+    ('core', '0057_add_mensagem_sistema_fields_sqlite'),
+    ('core', '0058_add_openai_transcription_api_key'),
 ]
+
 with connection.cursor() as cursor:
-    for name in missing:
+    for app, name in missing:
         cursor.execute(
-            \"INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)\",
-            ['core', name, 'core', name]
+            'INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)',
+            [app, name, app, name]
         )
-        print(f'Migration {name} garantida no historico.')
+        print(f'Migration {app}.{name} garantida no historico.')
 "
 python manage.py migrate --noinput
 
