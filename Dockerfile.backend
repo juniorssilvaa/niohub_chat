@@ -63,6 +63,10 @@ done
 echo "✅ PostgreSQL disponível!"
 
 echo "Running migrations..."
+# Marcar migrações intermediárias como aplicadas se 0056 já estiver no banco
+# (evita InconsistentMigrationHistory quando 0055_1 e 0055_add_more são novas)
+python manage.py migrate --fake core 0055_1_alter_provedor_redes_sociais_default --noinput 2>/dev/null || true
+python manage.py migrate --fake core 0055_add_more --noinput 2>/dev/null || true
 python manage.py migrate --noinput
 
 echo "Collecting static files..."
