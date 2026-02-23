@@ -63,36 +63,51 @@ done
 echo "✅ PostgreSQL disponível!"
 
 echo "Running migrations..."
-# Inserir migrações que foram aplicadas fisicamente mas não registradas no historico
-# (causado por falha em transação anterior — DDL do PostgreSQL auto-commita, mas o INSERT em django_migrations é revertido)
+echo "Running migrations..."
+# Sincronização inteligente do histórico de migrações com a realidade física do banco
 python -c "
 import os, django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'niochat.settings')
 django.setup()
 from django.db import connection
 
-# Lista de migrações que podem ter sido aplicadas fisicamente mas não registradas
-# Cada entrada: (app, name)
-missing = [
-    ('core', '0055_1_alter_provedor_redes_sociais_default'),
-    ('core', '0055_add_more'),
-    ('core', '0057_add_mensagem_sistema_fields_sqlite'),
-    ('core', '0058_add_openai_transcription_api_key'),
-    ('core', '0059_add_assignment_message'),
-    ('core', '0060_add_systemconfig_key_field'),
-    ('core', '0061_canal_ia_ativa'),
-    ('core', '0062_chatbotflow'),
-    ('core', '0063_add_bot_mode_to_provedor'),
+def column_exists(table, column):
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = %s AND column_name = %s)', [table, column])
+        return cursor.fetchone()[0]
+
+def table_exists(table):
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)', [table])
+        return cursor.fetchone()[0]
+
+# Mapeamento: (nome_migracao, condicao_de_existencia_fisica)
+checks = [
+    ('0058_add_openai_transcription_api_key', column_exists('core_systemconfig', 'openai_transcription_api_key')),
+    ('0061_canal_ia_ativa', column_exists('core_canal', 'ia_ativa')),
+    ('0062_chatbotflow', table_exists('core_chatbotflow')),
+    ('0063_add_bot_mode_to_provedor', column_exists('core_provedor', 'bot_mode')),
 ]
 
 with connection.cursor() as cursor:
-    print(f'--- Verificando {len(missing)} migrações críticas ---')
-    for app, name in missing:
+    # 1. Garantir migrações base que fundamentam o resto
+    for name in ['0055_1_alter_provedor_redes_sociais_default', '0055_add_more']:
         cursor.execute(
             'INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)',
-            [app, name, app, name]
+            ['core', name, 'core', name]
         )
-        print(f'[MIGRATE-FIX] {app}.{name} verificada/inserida.')
+    
+    # 2. Sincronizar migrações problemáticas baseadas na realidade física
+    for name, exists in checks:
+        if exists:
+            cursor.execute(
+                'INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)',
+                ['core', name, 'core', name]
+            )
+            print(f'[MIGRATE-FIX] {name} garantida no historico (existe fisicamente).')
+        else:
+            cursor.execute(\"DELETE FROM django_migrations WHERE app='core' AND name=%s\", [name])
+            print(f'[MIGRATE-FIX] {name} removida do historico (NAO existe fisicamente).')
 "
 python manage.py migrate --noinput
 
