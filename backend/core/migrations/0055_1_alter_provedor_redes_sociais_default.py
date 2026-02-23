@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0056_remove_systemconfig_openai_api_key_and_more'),
+        ('core', '0055_mensagemsistema_assunto_mensagemsistema_mensagem_and_more'),
     ]
 
     operations = [

@@ -166,6 +166,13 @@ class Provedor(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     admins = models.ManyToManyField(User, blank=True, help_text='Usuários administradores deste provedor', related_name='provedores_admin')
     is_active = models.BooleanField(default=True, verbose_name='Ativo')
+    bot_mode = models.CharField(
+        max_length=20,
+        choices=[('ia', 'Inteligência Artificial'), ('chatbot', 'Fluxo de Chatbot')],
+        default='ia',
+        verbose_name='Modo de Atendimento',
+        help_text='Define se o provedor usa IA ou um fluxo de chatbot pré-definido'
+    )
 
     class Meta:
         verbose_name = 'Provedor'
@@ -316,6 +323,7 @@ class MensagemSistema(models.Model):
         ('warning', 'Aviso'),
         ('error', 'Erro'),
         ('success', 'Sucesso'),
+        ('info', 'Informação'),
     ], default='notificacao', verbose_name='Tipo')
     ativa = models.BooleanField(default=True, verbose_name='Ativa')
     data_inicio = models.DateTimeField(null=True, blank=True, verbose_name='Data de Início')
@@ -341,3 +349,20 @@ class MensagemSistema(models.Model):
 
     def __str__(self):
         return self.assunto or self.titulo or 'Mensagem sem título'
+
+class ChatbotFlow(models.Model):
+    name = models.CharField(max_length=200, verbose_name='Nome do Fluxo')
+    provedor = models.ForeignKey(Provedor, on_delete=models.CASCADE, related_name='chatbot_flows', verbose_name='Provedor')
+    nodes = models.JSONField(default=list, blank=True, verbose_name='Nós do Fluxo')
+    edges = models.JSONField(default=list, blank=True, verbose_name='Conexões do Fluxo')
+    is_active = models.BooleanField(default=True, verbose_name='Ativo')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Fluxo de Chatbot'
+        verbose_name_plural = 'Fluxos de Chatbot'
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.provedor.nome})"

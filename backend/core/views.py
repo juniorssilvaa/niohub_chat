@@ -10,7 +10,7 @@ from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.db import models
 from django.conf import settings
-from core.models import CompanyUser, User, Provedor, Canal, AuditLog, SystemConfig, Company, MensagemSistema
+from core.models import CompanyUser, User, Provedor, Canal, AuditLog, SystemConfig, Company, MensagemSistema, ChatbotFlow
 from core.serializers import UserSerializer, UserCreateSerializer, CanalSerializer, AuditLogSerializer, SystemConfigSerializer, ProvedorSerializer, CompanySerializer, MensagemSistemaSerializer
 from django.db.models import Q
 from integrations.models import TelegramIntegration, EmailIntegration, WhatsAppIntegration, WebchatIntegration
@@ -6566,4 +6566,55 @@ def facebook_callback(request):
         "message": "OAuth Meta recebido com sucesso",
         "state": state,
     })
+
+class ChatbotFlowViewSet(viewsets.ModelViewSet):
+    def get_serializer_class(self):
+        from core.serializers import ChatbotFlowSerializer
+        return ChatbotFlowSerializer
+    
+    queryset = ChatbotFlow.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = ChatbotFlow.objects.all()
+        
+        logger.info(f"[CHATBOT-FLOW] get_queryset - User: {user.username} (type: {user.user_type})")
+        
+        if user.user_type != 'superadmin':
+            provedores = Provedor.objects.filter(admins=user)
+            queryset = queryset.filter(provedor__in=provedores)
+            logger.info(f"[CHATBOT-FLOW] Filtrado por provedores do admin: {[p.id for p in provedores]}")
+            
+        provedor_id = self.request.query_params.get('provedor')
+        if provedor_id:
+            queryset = queryset.filter(provedor_id=provedor_id)
+        final_count = queryset.count()
+        logger.info(f"[CHATBOT-FLOW] Fluxos encontrados: {final_count}")
+        return queryset.order_by('-updated_at')
+
+    def perform_create(self, serializer):
+        logger.info(f"[CHATBOT-FLOW] Executando perform_create - Data: {serializer.validated_data.keys()}")
+        if 'provedor' not in serializer.validated_data:
+            provedor = self.request.user.provedores_admin.first()
+            if provedor:
+                logger.info(f"[CHATBOT-FLOW] Provedor automático selecionado: {provedor.id}")
+                serializer.save(provedor=provedor)
+            else:
+                logger.warning("[CHATBOT-FLOW] Nenhum provedor encontrado para o usuário")
+                serializer.save()
+        else:
+            logger.info(f"[CHATBOT-FLOW] Provedor recebido no request: {serializer.validated_data['provedor'].id}")
+            serializer.save()
+
+    def perform_update(self, serializer):
+        logger.info(f"[CHATBOT-FLOW] Executando perform_update para ID {self.kwargs.get('pk')}")
+        edges_received = serializer.validated_data.get('edges', [])
+        nodes_received = serializer.validated_data.get('nodes', [])
+        logger.info(f"[CHATBOT-FLOW] Nós recebidos: {len(nodes_received)}")
+        logger.info(f"[CHATBOT-FLOW] Edges recebidas: {len(edges_received)}")
+        for e in edges_received:
+            logger.info(f"[CHATBOT-FLOW]   Edge: {e.get('source')} → {e.get('target')} | handle={e.get('sourceHandle')}")
+        instance = serializer.save()
+        logger.info(f"[CHATBOT-FLOW] Salvo com sucesso. Nodes no DB: {len(instance.nodes)}")
 

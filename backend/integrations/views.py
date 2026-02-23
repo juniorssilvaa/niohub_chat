@@ -901,6 +901,37 @@ def evolution_webhook(request):
             # Importar openai_service uma vez
             from core.openai_service import openai_service
             
+            # ==========================================================
+            # CHATBOT ENGINE / ROUTING LOGIC (EVOLUTION)
+            # ==========================================================
+            bot_mode = getattr(provedor, 'bot_mode', 'ia')
+            chatbot_handled = False
+            
+            if should_call_ai:
+                if bot_mode == 'chatbot':
+                    logger.info(f"[EVOLUTION] Provador {provedor.id} em modo CHATBOT. Invocando ChatbotEngine.")
+                    try:
+                        from asgiref.sync import async_to_sync
+                        from core.chatbot_engine import ChatbotEngine
+                        
+                        async def run_chatbot_engine():
+                            return await ChatbotEngine.process_message(
+                                provedor_id=provedor.id,
+                                conversation_id=conversation.id,
+                                message_content=content or ""
+                            )
+                        
+                        chatbot_handled = async_to_sync(run_chatbot_engine)()
+                        if chatbot_handled:
+                            logger.info(f"[EVOLUTION] Mensagem processada pelo Chatbot Engine na conversa {conversation.id}")
+                            should_call_ai = False  # Não chamar IA se o chatbot tratou
+                        else:
+                            logger.warning(f"[EVOLUTION] Provedor em modo CHATBOT mas nenhum nó foi executado.")
+                    except Exception as chatbot_err:
+                        logger.error(f"[EVOLUTION] Erro ao invocar Chatbot Engine: {chatbot_err}", exc_info=True)
+                else:
+                    logger.debug(f"[EVOLUTION] Provedor {provedor.id} em modo IA. Seguindo para verificações de IA.")
+
             # Verificar se o contato está bloqueado para atendimento
             # Se bloqueado_atender = True, a IA NÃO deve responder
             if should_call_ai and contact and contact.bloqueado_atender:
@@ -2995,15 +3026,48 @@ def webhook_evolution_uazapi(request):
                       conversation.status not in ['closed', 'resolved'] and
                       not csat_pendente_verificar):
                     try:
-                        # IMPORTANTE: openai_service usa APENAS Google Gemini (google_api_key)
-                        # NUNCA usa openai_transcription_api_key para gerar respostas
-                        # A chave OpenAI só é usada para transcrição de áudio (acima)
-                        logger.info(f"[UAZAPI] Chamando IA (Gemini) para gerar resposta. Conteúdo: {str(content)[:100]}...")
-                        ia_result = openai_service.generate_response_sync(
-                            mensagem=str(content),  # Garantir que é string
-                            provedor=provedor,
-                            contexto={'conversation': conversation, 'canal': 'whatsapp'}
-                        )
+                        # ==========================================================
+                        # CHATBOT ENGINE / ROUTING LOGIC (UAZAPI)
+                        # ==========================================================
+                        bot_mode = getattr(provedor, 'bot_mode', 'ia')
+                        chatbot_handled = False
+                        
+                        if bot_mode == 'chatbot':
+                            logger.info(f"[UAZAPI] Provador {provedor.id} em modo CHATBOT. Invocando ChatbotEngine.")
+                            try:
+                                from asgiref.sync import async_to_sync
+                                from core.chatbot_engine import ChatbotEngine
+                                
+                                async def run_chatbot_engine():
+                                    return await ChatbotEngine.process_message(
+                                        provedor_id=provedor.id,
+                                        conversation_id=conversation.id,
+                                        message_content=str(content) if content else "",
+                                        button_id=None # Poderia extrair button_id se disponível no Uazapi
+                                    )
+                                
+                                chatbot_handled = async_to_sync(run_chatbot_engine)()
+                                if chatbot_handled:
+                                    logger.info(f"[UAZAPI] Mensagem processada pelo Chatbot Engine na conversa {conversation.id}")
+                                    ia_result = {'success': True, 'chatbot_handled': True}
+                                    # Pular IA se o chatbot tratou
+                                    continue_to_ia = False
+                                else:
+                                    logger.warning(f"[UAZAPI] Provedor em modo CHATBOT mas nenhum nó foi executado.")
+                                    continue_to_ia = False # Mesmo que não trate, modo Chatbot bloqueia IA
+                            except Exception as chatbot_err:
+                                logger.error(f"[UAZAPI] Erro ao invocar Chatbot Engine: {chatbot_err}", exc_info=True)
+                                continue_to_ia = False
+                        else:
+                            continue_to_ia = True
+
+                        if continue_to_ia:
+                            logger.info(f"[UAZAPI] Chamando IA (Gemini) para gerar resposta. Conteúdo: {str(content)[:100]}...")
+                            ia_result = openai_service.generate_response_sync(
+                                mensagem=str(content),  # Garantir que é string
+                                provedor=provedor,
+                                contexto={'conversation': conversation, 'canal': 'whatsapp'}
+                            )
                         
                         logger.info(f"[UAZAPI] Resposta da IA obtida: success={ia_result.get('success')}")
                         

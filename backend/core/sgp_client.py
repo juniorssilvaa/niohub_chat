@@ -317,27 +317,36 @@ class SGPClient:
             self.logger.debug("[SGP] gerar_pix | erro=%s", e)
             raise
 
-    def listar_titulos(self, cpf_cnpj, limit=250):
+    def listar_titulos(self, cpf_cnpj=None, contrato=None, limit=250):
         """
         Lista títulos (faturas) do cliente via endpoint /api/ura/titulos/
         """
-        self.logger.debug("[SGP] listar_titulos | POST %s/api/ura/titulos/ | cpfcnpj=%s limit=%s", self.base_url, _mascarar_cpf_cnpj(cpf_cnpj), limit)
+        self.logger.info("[SGP] listar_titulos | POST %s/api/ura/titulos/ | cpfcnpj=%s contrato=%s limit=%s", 
+                          self.base_url, _mascarar_cpf_cnpj(cpf_cnpj), contrato, limit)
         try:
             data = {
                 'token': self.token,
                 'app': self.app_name,
-                'cpfcnpj': str(cpf_cnpj),
                 'limit': min(limit, 250)
             }
+            if contrato:
+                data['contrato'] = str(contrato)
+            elif cpf_cnpj:
+                data['cpfcnpj'] = str(cpf_cnpj)
+            else:
+                self.logger.warning("[SGP] listar_titulos | Nenhum identificador (cpfcnpj ou contrato) fornecido")
+                return {}
+
             r = requests.post(
                 f'{self.base_url}/api/ura/titulos/',
                 data=data,
                 timeout=30
             )
-            self.logger.debug("[SGP] listar_titulos | HTTP %s | resumo=%s", r.status_code, _resumo_resposta(r.json() if r.text else None))
-            return r.json()
+            resp = r.json() if r.text else {}
+            self.logger.info("[SGP] listar_titulos | HTTP %s | resumo=%s", r.status_code, _resumo_resposta(resp))
+            return resp
         except Exception as e:
-            self.logger.debug("[SGP] listar_titulos | erro=%s", e)
+            self.logger.warning("[SGP] listar_titulos | erro=%s", e)
             raise
 
     # ==========================================================

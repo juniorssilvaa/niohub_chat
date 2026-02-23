@@ -15,7 +15,6 @@ import OAuthCallback from './components/OAuthCallback';
 import Changelog from './components/Changelog';
 import UserStatusManager from './components/UserStatusManager';
 
-import { NotificationProvider } from './contexts/NotificationContext';
 import { useAuth } from './contexts/AuthContext';
 import useSessionTimeout from './hooks/useSessionTimeout';
 
@@ -147,7 +146,7 @@ export default function App() {
   ===================================================== */
 
   return (
-    <NotificationProvider>
+    <>
       {whatsappDisconnected && (
         <div className="fixed inset-0 bg-white/90 z-50 flex items-center justify-center">
           <div className="p-10 bg-white rounded-xl text-center">
@@ -189,16 +188,16 @@ export default function App() {
         } />
 
         <Route path="*" element={
-          userRole === 'superadmin' 
+          userRole === 'superadmin'
             ? <Navigate to="/superadmin" replace />
-            : user?.provedor_id 
-            ? <Navigate to={`/app/accounts/${user.provedor_id}/dashboard`} replace />
-            : <Navigate to="/login" replace />
+            : user?.provedor_id
+              ? <Navigate to={`/app/accounts/${user.provedor_id}/dashboard`} replace />
+              : <Navigate to="/login" replace />
         } />
       </Routes>
 
       <Changelog isOpen={showChangelog} onClose={() => setShowChangelog(false)} />
       <UserStatusManager user={user} />
-    </NotificationProvider>
+    </>
   );
 }

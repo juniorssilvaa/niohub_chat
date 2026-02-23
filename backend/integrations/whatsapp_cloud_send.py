@@ -5,7 +5,7 @@ import requests
 import logging
 import json
 import os
-from typing import Tuple, Optional, List, Dict
+from typing import Tuple, Optional, List, Dict, Any
 from core.models import Canal
 from integrations.meta_oauth import PHONE_NUMBERS_API_VERSION
 from django.conf import settings
@@ -405,7 +405,10 @@ def send_via_whatsapp_cloud_api(
     file_name: Optional[str] = None,
     mime_type: Optional[str] = None,
     is_voice_message: Optional[bool] = None,
-    reply_to_message_id: Optional[str] = None
+    reply_to_message_id: Optional[str] = None,
+    buttons: Optional[List[Dict]] = None,
+    order_details: Optional[Dict] = None,
+    **kwargs
 ) -> Tuple[bool, Optional[str]]:
     """
     Envia mensagem via WhatsApp Cloud API (Oficial).
@@ -442,19 +445,15 @@ def send_via_whatsapp_cloud_api(
         # Obter número do destinatário do contato
         contact = conversation.contact
         recipient_number = contact.phone
+        if not canal or not canal.token or not canal.phone_number_id:
+            return False, "Canal WhatsApp Cloud não configurado corretamente"
+
+        recipient_number = conversation.contact.phone.replace('@s.whatsapp.net', '').replace('@c.us', '')
         
-        # Remover caracteres não numéricos
-        recipient_number = ''.join(filter(str.isdigit, recipient_number))
-        
-        # Garantir que comece com código do país (se não tiver, assumir Brasil 55)
-        if not recipient_number.startswith('55') and len(recipient_number) <= 11:
-            recipient_number = '55' + recipient_number
-        
-        # Montar payload baseado no tipo de mensagem
-        payload = {
+        payload: Dict[str, Any] = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
-            "to": recipient_number,
+            "to": recipient_number
         }
         
         # Adicionar reply_to se fornecido
@@ -654,6 +653,107 @@ def send_via_whatsapp_cloud_api(
                 document_data["caption"] = content
             
             payload["document"] = document_data
+        elif message_type == 'order_details' or (message_type == 'interactive' and order_details):
+            payload["type"] = "interactive"
+            payload["interactive"] = {
+                "type": "order_details",
+                "body": {
+                    "text": content
+                },
+                "action": {
+                    "name": "review_and_pay",
+                    "parameters": order_details
+                }
+            }
+            
+            footer_text = kwargs.get('footer')
+            if footer_text:
+                payload["interactive"]["footer"] = {"text": footer_text}
+
+        elif message_type == 'interactive' and (buttons or kwargs.get('rows')):
+            payload["type"] = "interactive"
+            
+            # Extrair metadados para interativos
+            header_text = kwargs.get('header')
+            footer_text = kwargs.get('footer')
+            rows = kwargs.get('rows')
+            button_text = kwargs.get('button_text', 'Ver Opções')
+            section_title = kwargs.get('section_title', 'Selecione uma opção')
+            
+            interactive_payload: Dict[str, Any] = {}
+            
+            body_text = str(content)[:1024]
+            header_val = str(header_text)[:60] if header_text else "MENU"
+            footer_val = str(footer_text)[:1024] if footer_text else ""
+            
+            if rows:
+                # WhatsApp List Message
+                sections_payload: List[Dict[str, Any]] = []
+                rows_payload: List[Dict[str, Any]] = []
+                for row in rows[:10]: # WhatsApp permite no máximo 10 linhas
+                    rows_payload.append({
+                        "id": str(row.get('id', str(hash(row.get('title', ''))))),
+                        "title": str(row.get('title', 'Opção'))[:24], # Máximo 24 caracteres
+                        "description": str(row.get('description', ''))[:72] # Máximo 72 caracteres
+                    })
+                
+                sections_payload.append({
+                    "title": str(section_title)[:24], # Máximo 24 caracteres
+                    "rows": rows_payload
+                })
+                
+                interactive_payload = {
+                    "type": "list",
+                    "header": {
+                        "type": "text",
+                        "text": header_val
+                    },
+                    "body": {
+                        "text": body_text
+                    },
+                    "footer": {
+                        "text": footer_val
+                    },
+                    "action": {
+                        "button": str(button_text)[:20], # Texto do botão que abre a lista
+                        "sections": sections_payload
+                    }
+                }
+            else:
+                # WhatsApp Reply Buttons
+                buttons_payload: List[Dict[str, Any]] = []
+                safe_buttons = buttons or []
+                for btn in safe_buttons[:3]:  # WhatsApp permite no máximo 3 botões
+                    buttons_payload.append({
+                        "type": "reply",
+                        "reply": {
+                            "id": str(btn.get('id', str(hash(btn.get('title', ''))))),
+                            "title": str(btn.get('title', 'Botão'))[:20]  # Limite de 20 caracteres
+                        }
+                    })
+                
+                interactive_payload = {
+                    "type": "button",
+                    "body": {
+                        "text": body_text
+                    },
+                    "action": {
+                        "buttons": buttons_payload
+                    }
+                }
+                
+                if header_text:
+                    interactive_payload["header"] = {
+                        "type": "text",
+                        "text": header_val
+                    }
+                
+                if footer_text:
+                    interactive_payload["footer"] = {
+                        "text": footer_val
+                    }
+            
+            payload["interactive"] = interactive_payload
         else:
             # Fallback para texto
             payload["type"] = "text"

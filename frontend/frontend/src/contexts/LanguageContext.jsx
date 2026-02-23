@@ -11,7 +11,7 @@ export const useLanguage = () => {
     console.warn('useLanguage está sendo usado fora do LanguageProvider. Usando valores padrão.');
     return {
       language: 'pt',
-      changeLanguage: () => {},
+      changeLanguage: () => { },
       t: (key) => key
     };
   }
@@ -35,7 +35,8 @@ const translations = {
     'dados_provedor': 'Dados do Provedor',
     'recuperador': 'Recuperador de conversas (session)',
     'perfil': 'Perfil',
-    
+    'chatbot_builder': 'Chatbot',
+
     // Perfil
     'informacoes_pessoais': 'Informações Pessoais',
     'nome_completo': 'Nome Completo',
@@ -46,7 +47,7 @@ const translations = {
     'salvando': 'Salvando...',
     'perfil_atualizado': 'Perfil atualizado com sucesso!',
     'erro_atualizar': 'Erro ao atualizar perfil. Tente novamente.',
-    
+
     // Notificações
     'notificacoes': 'Notificações',
     'preferencias_notificacao': 'Preferências de Notificação',
@@ -54,7 +55,7 @@ const translations = {
     'som_novas_mensagens': 'Som para novas mensagens',
     'som_novas_conversas': 'Som para novas conversas',
     'reproduzir': 'Reproduzir',
-    
+
     // Segurança
     'seguranca': 'Segurança',
     'configuracoes_seguranca': 'Configurações de Segurança',
@@ -65,7 +66,7 @@ const translations = {
     'alterar': 'Alterar',
     'alterando': 'Alterando...',
     'timeout_sessao': 'Timeout da Sessão (minutos)',
-    
+
     // Atribuição
     'atribuicao': 'Atribuição',
     'mensagem_atribuicao': 'Mensagem de Atribuição',
@@ -86,7 +87,7 @@ const translations = {
     'audit': 'Auditoria',
     'recovery': 'Recuperador de conversas',
     'session': 'session',
-    
+
     // Integrações
     'canais_configurados': 'Canais Configurados',
     'adicionar_canal': 'Adicionar Canal',
@@ -166,7 +167,7 @@ const translations = {
     'dados_provedor': 'Provider Data',
     'recuperador': 'Conversation Recovery (session)',
     'perfil': 'Profile',
-    
+
     // Profile
     'informacoes_pessoais': 'Personal Information',
     'nome_completo': 'Full Name',
@@ -177,7 +178,7 @@ const translations = {
     'salvando': 'Saving...',
     'perfil_atualizado': 'Profile updated successfully!',
     'erro_atualizar': 'Error updating profile. Please try again.',
-    
+
     // Notifications
     'notificacoes': 'Notifications',
     'preferencias_notificacao': 'Notification Preferences',
@@ -185,7 +186,7 @@ const translations = {
     'som_novas_mensagens': 'Sound for new messages',
     'som_novas_conversas': 'Sound for new conversations',
     'reproduzir': 'Play',
-    
+
     // Security
     'seguranca': 'Security',
     'configuracoes_seguranca': 'Security Settings',
@@ -196,7 +197,7 @@ const translations = {
     'alterar': 'Change',
     'alterando': 'Changing...',
     'timeout_sessao': 'Session Timeout (minutes)',
-    
+
     // General actions
     'sair': 'Logout',
     'changelog': 'Changelog',
@@ -211,6 +212,7 @@ const translations = {
     'audit': 'Audit',
     'recovery': 'Conversation Recovery',
     'session': 'session',
+    'chatbot_builder': 'Chatbot',
   },
   es: {
     // Navegación
@@ -227,7 +229,7 @@ const translations = {
     'dados_provedor': 'Datos del Proveedor',
     'recuperador': 'Recuperador de conversaciones (session)',
     'perfil': 'Perfil',
-    
+
     // Perfil
     'informacoes_pessoais': 'Información Personal',
     'nome_completo': 'Nombre Completo',
@@ -238,7 +240,7 @@ const translations = {
     'salvando': 'Guardando...',
     'perfil_atualizado': '¡Perfil actualizado con éxito!',
     'erro_atualizar': 'Error al actualizar el perfil. Intente nuevamente.',
-    
+
     // Notificaciones
     'notificacoes': 'Notificaciones',
     'preferencias_notificacao': 'Preferencias de Notificación',
@@ -246,7 +248,7 @@ const translations = {
     'som_novas_mensagens': 'Sonido para nuevos mensajes',
     'som_novas_conversas': 'Sonido para nuevas conversaciones',
     'reproduzir': 'Reproducir',
-    
+
     // Seguridad
     'seguranca': 'Seguridad',
     'configuracoes_seguranca': 'Configuraciones de Seguridad',
@@ -257,7 +259,7 @@ const translations = {
     'alterar': 'Cambiar',
     'alterando': 'Cambiando...',
     'timeout_sessao': 'Tiempo de Espera de Sesión (minutos)',
-    
+
     // Acciones generales
     'sair': 'Salir',
     'changelog': 'Changelog',
@@ -272,7 +274,7 @@ const translations = {
     'audit': 'Auditoría',
     'recovery': 'Recuperador de conversaciones',
     'session': 'session',
-    
+
     // Integraciones
     'canais_configurados': 'Canales Configurados',
     'adicionar_canal': 'Agregar Canal',
@@ -336,6 +338,7 @@ const translations = {
     'use_whatsapp_organico': 'Use WhatsApp de forma orgánica al principio. Esto genera confianza y evita que su número sea marcado.',
     'digite_codigo_ou_escaneie': 'Ingrese el código o escanee el Código QR en WhatsApp',
     'usuario_nao_autenticado': 'Usuario no autenticado',
+    'chatbot_builder': 'Chatbot',
   },
   fr: {
     // Navigation
@@ -352,7 +355,7 @@ const translations = {
     'dados_provedor': 'Données du fournisseur',
     'recuperador': 'Récupération de conversations (session)',
     'perfil': 'Profil',
-    
+
     // Profil
     'informacoes_pessoais': 'Informations personnelles',
     'nome_completo': 'Nom complet',
@@ -363,7 +366,7 @@ const translations = {
     'salvando': 'Enregistrement...',
     'perfil_atualizado': 'Profil mis à jour avec succès!',
     'erro_atualizar': 'Erreur lors de la mise à jour du profil. Veuillez réessayer.',
-    
+
     // Notifications
     'notificacoes': 'Notifications',
     'preferencias_notificacao': 'Préférences de notification',
@@ -371,7 +374,7 @@ const translations = {
     'som_novas_mensagens': 'Son pour nouveaux messages',
     'som_novas_conversas': 'Son pour nouvelles conversations',
     'reproduzir': 'Lire',
-    
+
     // Sécurité
     'seguranca': 'Sécurité',
     'configuracoes_seguranca': 'Paramètres de sécurité',
@@ -382,7 +385,7 @@ const translations = {
     'alterar': 'Changer',
     'alterando': 'Changement...',
     'timeout_sessao': 'Délai d\'expiration de la session (minutes)',
-    
+
     // Actions générales
     'sair': 'Déconnexion',
     'changelog': 'Changelog',
@@ -397,7 +400,7 @@ const translations = {
     'audit': 'Audit',
     'recovery': 'Récupération de conversations',
     'session': 'session',
-    
+
     // Intégrations
     'canais_configurados': 'Canaux Configurés',
     'adicionar_canal': 'Ajouter un Canal',
@@ -461,6 +464,7 @@ const translations = {
     'use_whatsapp_organico': 'Utilisez WhatsApp de manière organique au début. Cela crée la confiance et évite que votre numéro soit signalé.',
     'digite_codigo_ou_escaneie': 'Entrez le code ou scannez le Code QR sur WhatsApp',
     'usuario_nao_autenticado': 'Utilisateur non authentifié',
+    'chatbot_builder': 'Chatbot',
   },
   de: {
     // Navigation
@@ -477,7 +481,7 @@ const translations = {
     'dados_provedor': 'Anbieterdaten',
     'recuperador': 'Konversationswiederherstellung (session)',
     'perfil': 'Profil',
-    
+
     // Profil
     'informacoes_pessoais': 'Persönliche Informationen',
     'nome_completo': 'Vollständiger Name',
@@ -488,7 +492,7 @@ const translations = {
     'salvando': 'Wird gespeichert...',
     'perfil_atualizado': 'Profil erfolgreich aktualisiert!',
     'erro_atualizar': 'Fehler beim Aktualisieren des Profils. Bitte versuchen Sie es erneut.',
-    
+
     // Benachrichtigungen
     'notificacoes': 'Benachrichtigungen',
     'preferencias_notificacao': 'Benachrichtigungseinstellungen',
@@ -496,7 +500,7 @@ const translations = {
     'som_novas_mensagens': 'Ton für neue Nachrichten',
     'som_novas_conversas': 'Ton für neue Konversationen',
     'reproduzir': 'Abspielen',
-    
+
     // Sicherheit
     'seguranca': 'Sicherheit',
     'configuracoes_seguranca': 'Sicherheitseinstellungen',
@@ -507,7 +511,7 @@ const translations = {
     'alterar': 'Ändern',
     'alterando': 'Wird geändert...',
     'timeout_sessao': 'Sitzungstimeout (Minuten)',
-    
+
     // Allgemeine Aktionen
     'sair': 'Abmelden',
     'changelog': 'Changelog',
@@ -522,7 +526,7 @@ const translations = {
     'audit': 'Audit',
     'recovery': 'Konversationswiederherstellung',
     'session': 'session',
-    
+
     // Integrationen
     'canais_configurados': 'Konfigurierte Kanäle',
     'adicionar_canal': 'Kanal Hinzufügen',
@@ -586,6 +590,7 @@ const translations = {
     'use_whatsapp_organico': 'Verwenden Sie WhatsApp anfangs organisch. Dies schafft Vertrauen und verhindert, dass Ihre Nummer markiert wird.',
     'digite_codigo_ou_escaneie': 'Geben Sie den Code ein oder scannen Sie den QR-Code auf WhatsApp',
     'usuario_nao_autenticado': 'Benutzer nicht authentifiziert',
+    'chatbot_builder': 'Chatbot',
   },
   it: {
     // Navigazione
@@ -602,7 +607,7 @@ const translations = {
     'dados_provedor': 'Dati del fornitore',
     'recuperador': 'Recupero conversazioni (session)',
     'perfil': 'Profilo',
-    
+
     // Profilo
     'informacoes_pessoais': 'Informazioni personali',
     'nome_completo': 'Nome completo',
@@ -613,7 +618,7 @@ const translations = {
     'salvando': 'Salvataggio...',
     'perfil_atualizado': 'Profilo aggiornato con successo!',
     'erro_atualizar': 'Errore durante l\'aggiornamento del profilo. Riprova.',
-    
+
     // Notifiche
     'notificacoes': 'Notifiche',
     'preferencias_notificacao': 'Preferenze di notifica',
@@ -621,7 +626,7 @@ const translations = {
     'som_novas_mensagens': 'Suono per nuovi messaggi',
     'som_novas_conversas': 'Suono per nuove conversazioni',
     'reproduzir': 'Riproduci',
-    
+
     // Sicurezza
     'seguranca': 'Sicurezza',
     'configuracoes_seguranca': 'Impostazioni di sicurezza',
@@ -632,7 +637,7 @@ const translations = {
     'alterar': 'Cambia',
     'alterando': 'Cambiamento...',
     'timeout_sessao': 'Timeout sessione (minuti)',
-    
+
     // Azioni generali
     'sair': 'Esci',
     'changelog': 'Changelog',
@@ -647,7 +652,7 @@ const translations = {
     'audit': 'Audit',
     'recovery': 'Recupero conversazioni',
     'session': 'session',
-    
+
     // Integrazioni
     'canais_configurados': 'Canali Configurati',
     'adicionar_canal': 'Aggiungi Canale',
@@ -711,36 +716,37 @@ const translations = {
     'use_whatsapp_organico': 'Usa WhatsApp in modo organico all\'inizio. Questo crea fiducia ed evita che il tuo numero venga segnalato.',
     'digite_codigo_ou_escaneie': 'Inserisci il codice o scansiona il Codice QR su WhatsApp',
     'usuario_nao_autenticado': 'Utente non autenticato',
+    'chatbot_builder': 'Chatbot',
   },
 };
 
 export const LanguageProvider = ({ children }) => {
-  const [language, setLanguage] = React.useState(() => {
+  const [language, setLanguage] = useState(() => {
     // Tentar carregar do localStorage
     const savedLanguage = localStorage.getItem('user_language');
     if (savedLanguage) return savedLanguage;
-    
+
     // Tentar carregar do backend
     const token = localStorage.getItem('token');
     if (token) {
       // Será carregado no useEffect
       return 'pt';
     }
-    
+
     return 'pt';
   });
 
   // Carregar idioma do usuário ao montar
-  React.useEffect(() => {
+  useEffect(() => {
     const loadUserLanguage = async () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        
+
         const response = await axios.get('/api/auth/me/', {
           headers: { Authorization: `Token ${token}` }
         });
-        
+
         if (response.data.language) {
           setLanguage(response.data.language);
           localStorage.setItem('user_language', response.data.language);
@@ -749,14 +755,14 @@ export const LanguageProvider = ({ children }) => {
         console.error('Erro ao carregar idioma do usuário:', error);
       }
     };
-    
+
     loadUserLanguage();
   }, []);
 
   const changeLanguage = async (newLanguage) => {
     setLanguage(newLanguage);
     localStorage.setItem('user_language', newLanguage);
-    
+
     // Atualizar no backend
     try {
       const token = localStorage.getItem('token');

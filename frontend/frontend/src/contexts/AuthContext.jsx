@@ -26,28 +26,28 @@ const debugLog = (location, message, data, hypothesisId) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(logEntry)
-    }).catch(() => {});
-  } catch (e) {}
+    }).catch(() => { });
+  } catch (e) { }
 };
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const booted = React.useRef(false);
-  const refreshing = React.useRef(false);
-  const refreshQueue = React.useRef([]);
-  const loginInProgress = React.useRef(false);
+  const booted = useRef(false);
+  const refreshing = useRef(false);
+  const refreshQueue = useRef([]);
+  const loginInProgress = useRef(false);
 
-  const logout = React.useCallback(async () => {
+  const logout = useCallback(async () => {
     // #region agent log
     const tokenBefore = localStorage.getItem('auth_token');
     debugLog('AuthContext.jsx:18', 'logout iniciado', { tokenExists: !!tokenBefore, tokenPrefix: tokenBefore?.substring(0, 10) }, 'A');
     // #endregion
     try {
       await axios.post('/api/auth/logout/');
-    } catch {}
-    
+    } catch { }
+
     // ÚNICO lugar onde token é removido
     localStorage.removeItem('auth_token');
     localStorage.removeItem('token'); // Limpar fallback se existir
@@ -77,7 +77,7 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await axios.post('/api/auth/refresh/');
       if (!data?.token) throw new Error('Token de refresh ausente');
-      
+
       // ÚNICO lugar onde token é atualizado
       const tokenBeforeSet = localStorage.getItem('auth_token');
       localStorage.setItem('auth_token', data.token);
@@ -85,11 +85,11 @@ export function AuthProvider({ children }) {
       const tokenAfterSet = localStorage.getItem('auth_token');
       debugLog('AuthContext.jsx:46', 'refreshToken salvou token', { tokenSaved: tokenAfterSet === data.token, tokenBeforePrefix: tokenBeforeSet?.substring(0, 10), tokenAfterPrefix: tokenAfterSet?.substring(0, 10) }, 'D');
       // #endregion
-      
+
       // Resolver todas as promessas na fila
       refreshQueue.current.forEach(p => p.resolve(data.token));
       refreshQueue.current = [];
-      
+
       return data.token;
     } catch (err) {
       // Refresh falhou - limpar sessão
@@ -112,10 +112,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Request interceptor (PASSIVO - apenas adiciona token se existir, SEM warnings/logs)
-  React.useEffect(() => {
+  useEffect(() => {
     const req = axios.interceptors.request.use(config => {
       const token = localStorage.getItem('auth_token');
-      
+
       // Se há token, adicionar ao header. Se não há, deixar passar sem token (passivo)
       if (token) {
         config.headers = config.headers || {};
@@ -123,45 +123,45 @@ export function AuthProvider({ children }) {
       }
       // Se não há token, não fazer nada - deixar a request seguir sem Authorization
       // O backend responderá 401 se necessário, e isso é comportamento esperado
-      
+
       return config;
     });
     return () => axios.interceptors.request.eject(req);
   }, []);
 
   // Response interceptor (PASSIVO - só tenta refresh se houver token e for 401)
-  React.useEffect(() => {
+  useEffect(() => {
     const res = axios.interceptors.response.use(
       r => r,
       async error => {
         const original = error.config;
         const status = error.response?.status;
-        
+
         // PRIMEIRO: Verificar se há token antes de tentar qualquer ação
         const token = localStorage.getItem('auth_token');
-        
+
         // Se não há token, não fazer nada - deixar o erro propagar naturalmente
         // Isso evita tentativas de refresh quando não há sessão válida
         if (!token) {
           return Promise.reject(error);
         }
-        
+
         // Ignorar refresh se:
         // - Não é 401
         // - Já tentou refresh antes
         // - É a requisição de refresh em si
         // - É login/logout (não deve fazer refresh)
-        const isAuthEndpoint = original.url?.includes('/api/auth/login/') || 
-                              original.url?.includes('/api/auth/logout/') ||
-                              original.url?.includes('/api/auth/refresh/');
-        
+        const isAuthEndpoint = original.url?.includes('/api/auth/login/') ||
+          original.url?.includes('/api/auth/logout/') ||
+          original.url?.includes('/api/auth/refresh/');
+
         if (status !== 401 || original._retry || isAuthEndpoint) {
           return Promise.reject(error);
         }
 
         // Só chega aqui se: há token, é 401, não é endpoint de auth, e não tentou refresh ainda
         original._retry = true;
-        
+
         try {
           const newToken = await refreshToken();
           original.headers.Authorization = `Token ${newToken}`;
@@ -176,9 +176,9 @@ export function AuthProvider({ children }) {
     return () => axios.interceptors.response.eject(res);
   }, [refreshToken]);
 
-  const bootstrap = React.useCallback(async () => {
+  const bootstrap = useCallback(async () => {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.jsx:133',message:'bootstrap iniciado',data:{alreadyBooted:booted.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'AuthContext.jsx:133', message: 'bootstrap iniciado', data: { alreadyBooted: booted.current }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
     // #endregion
     if (booted.current) {
       console.debug('[AUTH] Bootstrap já executado, ignorando');
@@ -197,7 +197,7 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
-    
+
     // Validar que o token não está vazio ou apenas espaços
     if (!token.trim()) {
       console.debug('[AUTH] Bootstrap: Token vazio encontrado - limpando');
@@ -205,21 +205,21 @@ export function AuthProvider({ children }) {
       localStorage.removeItem('auth_token');
       // #region agent log
       const tokenAfterRemove = localStorage.getItem('auth_token');
-      fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.jsx:152',message:'bootstrap removeu token vazio',data:{tokenRemoved:!tokenAfterRemove,hadToken:!!tokenBeforeRemove},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'AuthContext.jsx:152', message: 'bootstrap removeu token vazio', data: { tokenRemoved: !tokenAfterRemove, hadToken: !!tokenBeforeRemove }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
       // #endregion
       setLoading(false);
       return;
     }
 
-    console.debug('[AUTH] Bootstrap: Token encontrado', { 
+    console.debug('[AUTH] Bootstrap: Token encontrado', {
       tokenPrefix: token.substring(0, 10),
-      tokenLength: token.length 
+      tokenLength: token.length
     });
 
     // Tentar validar o token com retry para lidar com race conditions
     let retries = 0;
     const maxRetries = 2;
-    
+
     while (retries <= maxRetries) {
       try {
         console.debug(`[AUTH] Bootstrap: Validando token via /api/auth/me/ (tentativa ${retries + 1})`);
@@ -239,7 +239,7 @@ export function AuthProvider({ children }) {
           statusText: err.response?.statusText,
           error: err.response?.data
         });
-        
+
         // Se for 401, tentar refresh token antes de desistir
         if (status === 401 && retries < maxRetries) {
           console.debug('[AUTH] Bootstrap: 401 recebido, tentando refresh token');
@@ -272,7 +272,7 @@ export function AuthProvider({ children }) {
           });
           // #region agent log
           const tokenBeforeLogout = localStorage.getItem('auth_token');
-          fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.jsx:212',message:'bootstrap chamando logout após token inválido',data:{tokenExists:!!tokenBeforeLogout,status,retries},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'AuthContext.jsx:212', message: 'bootstrap chamando logout após token inválido', data: { tokenExists: !!tokenBeforeLogout, status, retries }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
           // #endregion
           await logout();
           setLoading(false);
@@ -282,7 +282,7 @@ export function AuthProvider({ children }) {
     }
   }, [logout, refreshToken]);
 
-  const login = React.useCallback(async (username, password) => {
+  const login = useCallback(async (username, password) => {
     // #region agent log
     const tokenBeforeLogin = localStorage.getItem('auth_token');
     const alreadyInProgress = loginInProgress.current;
@@ -295,34 +295,34 @@ export function AuthProvider({ children }) {
       throw new Error('Login já em progresso');
     }
     loginInProgress.current = true;
-    
+
     try {
       console.debug('[AUTH] Login iniciado', { username });
-      
+
       const { data } = await axios.post('/api/auth/login/', { username, password });
       if (!data?.token) {
         console.error('[AUTH] Login falhou: Token ausente na resposta');
         throw new Error('Token ausente');
       }
-      
-      console.debug('[AUTH] Token recebido do servidor', { 
+
+      console.debug('[AUTH] Token recebido do servidor', {
         tokenPrefix: data.token.substring(0, 10),
-        tokenLength: data.token.length 
+        tokenLength: data.token.length
       });
-      
+
       // ÚNICO lugar onde token é salvo
       const tokenBeforeSet = localStorage.getItem('auth_token');
       localStorage.setItem('auth_token', data.token);
       const savedToken = localStorage.getItem('auth_token');
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.jsx:235',message:'login salvou token',data:{tokenSaved:savedToken===data.token,tokenBeforePrefix:tokenBeforeSet?.substring(0,10),tokenAfterPrefix:savedToken?.substring(0,10),originalPrefix:data.token.substring(0,10)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'AuthContext.jsx:235', message: 'login salvou token', data: { tokenSaved: savedToken === data.token, tokenBeforePrefix: tokenBeforeSet?.substring(0, 10), tokenAfterPrefix: savedToken?.substring(0, 10), originalPrefix: data.token.substring(0, 10) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
       // #endregion
-      console.debug('[AUTH] Token salvo no localStorage', { 
+      console.debug('[AUTH] Token salvo no localStorage', {
         saved: savedToken === data.token,
         savedPrefix: savedToken?.substring(0, 10),
         originalPrefix: data.token.substring(0, 10)
       });
-      
+
       // Buscar dados do usuário
       try {
         console.debug('[AUTH] Buscando dados do usuário via /api/auth/me/');
@@ -330,22 +330,22 @@ export function AuthProvider({ children }) {
         // #region agent log
         debugLog('AuthContext.jsx:246', 'login antes de chamar /me', { tokenExists: !!tokenBeforeRequest, tokenPrefix: tokenBeforeRequest?.substring(0, 10) }, 'A');
         // #endregion
-        console.debug('[AUTH] Token antes da requisição /me:', { 
+        console.debug('[AUTH] Token antes da requisição /me:', {
           exists: !!tokenBeforeRequest,
           prefix: tokenBeforeRequest?.substring(0, 10)
         });
-        
+
         const { data: userData } = await axios.get('/api/auth/me/');
         // #region agent log
         const tokenAfterMe = localStorage.getItem('auth_token');
-        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.jsx:252',message:'login /me sucesso',data:{userId:userData.id,tokenExists:!!tokenAfterMe,tokenPrefix:tokenAfterMe?.substring(0,10)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'AuthContext.jsx:252', message: 'login /me sucesso', data: { userId: userData.id, tokenExists: !!tokenAfterMe, tokenPrefix: tokenAfterMe?.substring(0, 10) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
         // #endregion
-        console.debug('[AUTH] Dados do usuário recebidos', { 
+        console.debug('[AUTH] Dados do usuário recebidos', {
           userId: userData.id,
           username: userData.username,
-          userType: userData.user_type 
+          userType: userData.user_type
         });
-        
+
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
         return userData;
@@ -371,7 +371,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Bootstrap executa UMA ÚNICA VEZ
-  React.useEffect(() => {
+  useEffect(() => {
     bootstrap();
   }, [bootstrap]);
 

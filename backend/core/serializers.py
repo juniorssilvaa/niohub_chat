@@ -2,7 +2,7 @@ import requests
 import logging
 from django.conf import settings
 from rest_framework import serializers
-from .models import Canal, Provedor, Label, User, AuditLog, SystemConfig, Company, CompanyUser, MensagemSistema
+from .models import Canal, Provedor, Label, User, AuditLog, SystemConfig, Company, CompanyUser, MensagemSistema, ChatbotFlow
 
 logger = logging.getLogger(__name__)
 
@@ -1276,3 +1276,9 @@ class MensagemSistemaSerializer(serializers.ModelSerializer):
         provedores = validated_data.get('provedores', [])
         validated_data['provedores_count'] = len(provedores)
         return super().create(validated_data)
+
+class ChatbotFlowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatbotFlow
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at']

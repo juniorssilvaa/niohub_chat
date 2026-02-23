@@ -19,6 +19,7 @@ import AppearancePage from './AppearancePage';
 import ProviderDataForm from './ProviderDataForm';
 import ProviderScheduleForm from './ProviderScheduleForm';
 import Changelog from './Changelog';
+import ChatbotBuilder from './ChatbotBuilder';
 
 export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWhatsappDisconnected }) {
   const { provedorId } = useParams();
@@ -95,20 +96,20 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
 
   return (
     <div className="h-screen bg-background text-foreground flex overflow-hidden w-full">
-      <Sidebar 
-        userRole={userRole} 
-        userPermissions={user?.permissions || []} 
-        provedorId={provedorId} 
-        mobileOpen={sidebarOpen} 
+      <Sidebar
+        userRole={userRole}
+        userPermissions={user?.permissions || []}
+        provedorId={provedorId}
+        mobileOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onCollapseChange={setSidebarCollapsed}
       />
       <div className="flex-1 flex flex-col overflow-hidden transition-all duration-300 min-w-0 w-full">
-        <Topbar 
-          onLogout={handleLogout} 
-          onChangelog={handleChangelog} 
-          onNotifications={handleNotifications} 
-          onMenuClick={() => setSidebarOpen(true)} 
+        <Topbar
+          onLogout={handleLogout}
+          onChangelog={handleChangelog}
+          onNotifications={handleNotifications}
+          onMenuClick={() => setSidebarOpen(true)}
         />
         <div className="flex-1 overflow-y-auto w-full overflow-x-hidden">
           <div className="w-full h-full">
@@ -118,7 +119,7 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
               <Route path="conversas-dashboard" element={<ConversasDashboard provedorId={provedorId} />} />
               <Route path="contacts" element={<Contacts provedorId={provedorId} />} />
               <Route path="conversations" element={
-                <ConversationsPage 
+                <ConversationsPage
                   selectedConversation={selectedConversation}
                   setSelectedConversation={setSelectedConversation}
                   provedorId={provedorId}
@@ -133,6 +134,7 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
               <Route path="recovery" element={<ConversationRecovery provedorId={provedorId} />} />
               <Route path="companies" element={<CompanyManagement provedorId={provedorId} />} />
               <Route path="csat" element={<CSATDashboard provedorId={provedorId} />} />
+              <Route path="chatbot-builder" element={<ChatbotBuilder />} />
               <Route path="integracoes" element={<Integrations provedorId={provedorId} />} />
               <Route path="perfil" element={<ProfilePage provedorId={provedorId} />} />
               <Route path="aparencia" element={<AppearancePage provedorId={provedorId} />} />

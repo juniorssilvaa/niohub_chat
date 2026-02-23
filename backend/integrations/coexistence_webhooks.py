@@ -30,6 +30,7 @@ import requests
 from conversations.models import Message, Conversation, Contact
 from conversations.services import ConversationNotificationService
 from core.models import Provedor, Canal
+from core.chatbot_engine import ChatbotEngine
 from integrations.models import WhatsAppIntegration
 
 # Importar handlers modulares
@@ -1093,6 +1094,28 @@ def process_incoming_messages(waba_id: str, value: dict):
                 content = doc_data.get("caption", "")
                 file_url = doc_data.get("id")
                 file_name = doc_data.get("filename", "document")
+            elif message_type == "interactive":
+                interactive_data = msg.get("interactive", {})
+                interactive_type = interactive_data.get("type")
+                if interactive_type == "button_reply":
+                    reply = interactive_data.get("button_reply", {})
+                    button_id = reply.get("id")
+                    button_title = reply.get("title")
+                    content = button_title
+                    additional_attrs["button_id"] = button_id
+                    additional_attrs["is_interactive_reply"] = True
+                    logger.info(f"[WhatsAppWebhook] Resposta de botão interativo: {button_title} ({button_id})")
+                elif interactive_type == "list_reply":
+                    reply = interactive_data.get("list_reply", {})
+                    button_id = reply.get("id")
+                    button_title = reply.get("title")
+                    content = button_title
+                    additional_attrs["button_id"] = button_id
+                    additional_attrs["is_interactive_reply"] = True
+                    logger.info(f"[WhatsAppWebhook] Resposta de lista interativa: {button_title} ({button_id})")
+            
+            logger.info(f"[WhatsAppWebhook] RAW MSG: {json.dumps(msg)}")
+            logger.info(f"[WhatsAppWebhook] Mensagem processada: type={message_type}, content='{content}', button_id={additional_attrs.get('button_id')}")
             
             existing_message = Message.objects.filter(
                 external_id=message_id,
@@ -1294,12 +1317,45 @@ def process_incoming_messages(waba_id: str, value: dict):
                 pass
             
             # ==========================================================
+            # CHATBOT ENGINE / ROUTING LOGIC (UPDATED)
+            # ==========================================================
+            # Verificar o modo de atendimento do provedor
+            bot_mode = getattr(provedor, 'bot_mode', 'ia')
+            chatbot_handled = False
+            
+            if is_customer_message:
+                if bot_mode == 'chatbot':
+                    logger.info(f"[WhatsAppWebhook] Provador {provedor.id} em modo CHATBOT. Invocando ChatbotEngine.")
+                    try:
+                        from asgiref.sync import async_to_sync
+                        async def run_chatbot_engine():
+                            return await ChatbotEngine.process_message(
+                                provedor_id=provedor.id,
+                                conversation_id=conversation.id,
+                                message_content=content or "",
+                                button_id=additional_attrs.get("button_id")
+                            )
+                        
+                        # Sempre tenta processar pelo chatbot se estiver no modo chatbot
+                        result = async_to_sync(run_chatbot_engine)()
+                        chatbot_handled = result[0] if isinstance(result, tuple) else result
+                        if chatbot_handled:
+                            logger.info(f"[WhatsAppWebhook] Mensagem processada pelo Chatbot Engine na conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
+                        else:
+                            logger.warning(f"[WhatsAppWebhook] Provedor em modo CHATBOT mas nenhum nó foi executado para a conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
+                    except Exception as chatbot_err:
+                        logger.error(f"[WhatsAppWebhook] Erro ao invocar Chatbot Engine: {chatbot_err}", exc_info=True)
+                else:
+                    # Se estiver em modo IA, ainda podemos tentar o chatbot como fallback ou se já houver um fluxo iniciado?
+                    # Por simplicidade e seguindo a solicitação de "bot_mode", se for IA, pulamos o chatbot aqui.
+                    logger.debug(f"[WhatsAppWebhook] Provedor {provedor.id} em modo IA. Pulando ChatbotEngine.")
+
+            # ==========================================================
             # VERIFICAR CSAT ANTES DE CHAMAR IA (WhatsApp Official)
             # ==========================================================
-            # IMPORTANTE: Se houver CSATRequest pendente, processar como resposta CSAT
-            # A IA NÃO deve responder quando o cliente está respondendo à pesquisa de satisfação
-            csat_processed = False
-            if content and message_type == "text" and message_obj.is_from_customer:
+            # IMPORTANTE: Se o chatbot tratou OU se estamos em modo chatbot, não chamamos IA
+            csat_processed = chatbot_handled or (bot_mode == 'chatbot')
+            if not csat_processed and content and message_type == "text" and message_obj.is_from_customer:
                 try:
                     from conversations.models import CSATRequest
                     from conversations.csat_automation import CSATAutomationService
@@ -1408,7 +1464,10 @@ def process_incoming_messages(waba_id: str, value: dict):
                 thread.start()
                 logger.info(f"[WhatsAppWebhook] Thread da IA iniciada para conversa {conversation.id}")
             elif csat_processed:
-                logger.info(f"[WhatsAppWebhook] IA não será chamada - CSAT foi processado para conversa {conversation.id}")
+                if bot_mode == 'chatbot':
+                    logger.info(f"[WhatsAppWebhook] IA não será chamada - Modo Chatbot está ativo para conversa {conversation.id}")
+                else:
+                    logger.info(f"[WhatsAppWebhook] IA não será chamada - CSAT foi processado para conversa {conversation.id}")
             else:
                 logger.info(f"[WhatsAppWebhook] IA não será chamada - content={bool(content)}, message_type={message_type}, is_from_customer={message_obj.is_from_customer}")
     

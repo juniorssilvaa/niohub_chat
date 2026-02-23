@@ -1,10 +1,10 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { 
-  MessageCircle, 
-  Users, 
-  Shield, 
-  Settings, 
+import {
+  MessageCircle,
+  Users,
+  Shield,
+  Settings,
   Crown,
   LayoutGrid,
   Clock,
@@ -17,6 +17,7 @@ import {
   Smile, // Ícone para CSAT
   PlugZap, // Ícone para Integrações
   ScrollText, // Ícone para Auditoria
+  Bot, // Ícone para Construtor de Chatbot
   ChevronsLeft,
   ChevronsRight
 } from 'lucide-react';
@@ -26,7 +27,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 // Context para compartilhar estado do sidebar
 const SidebarContext = createContext({
   isCollapsed: false,
-  setIsCollapsed: () => {}
+  setIsCollapsed: () => { }
 });
 
 export const useSidebarContext = () => useContext(SidebarContext);
@@ -63,6 +64,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
     { id: 'users', icon: Users, label: t('users'), path: `/app/accounts/${provedorId}/users` },
     { id: 'teams', icon: UserCog, label: t('equipes'), path: `/app/accounts/${provedorId}/equipes` },
     { id: 'audit', icon: ScrollText, label: t('audit'), path: `/app/accounts/${provedorId}/audit` },
+    { id: 'chatbot-builder', icon: Bot, label: t('chatbot_builder'), path: `/app/accounts/${provedorId}/chatbot-builder` },
     { id: 'csat', icon: Smile, label: t('csat'), path: `/app/accounts/${provedorId}/csat` },
   ];
 
@@ -157,7 +159,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
             <img src={logo} alt="Logo" className="w-8 h-8 rounded-lg" />
             <div className="text-xl font-bold tracking-tight">Nio Chat</div>
             <button className="ml-auto p-2" onClick={onClose} aria-label="Fechar menu">
-              <span style={{fontSize: 24, fontWeight: 'bold'}}>&times;</span>
+              <span style={{ fontSize: 24, fontWeight: 'bold' }}>&times;</span>
             </button>
           </div>
           <nav className="niochat-sidebar-nav">
@@ -193,15 +195,15 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
           {/* TOPO FIXO - Logo e Botão */}
           <div className={`p-4 border-b border-border flex items-center flex-shrink-0 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
             <img src={logo} alt="NioChat" className={`h-8 transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'block'}`} />
-            <button 
-              onClick={() => setIsCollapsed(!isCollapsed)} 
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
               className="p-2 rounded-lg hover:bg-sidebar-accent transition-colors"
               aria-label={isCollapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
             >
               {isCollapsed ? <ChevronsRight className="w-5 h-5" /> : <ChevronsLeft className="w-5 h-5" />}
             </button>
           </div>
-          
+
           {/* CENTRO FLEXÍVEL - Menu Items com scroll */}
           <div className="flex-1 flex flex-col min-h-0">
             <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2">
@@ -212,11 +214,10 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${
-                        isActive(item.path)
+                      className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item.path)
                           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                           : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                      }`}
+                        }`}
                       title={isCollapsed ? item.label : ''}
                     >
                       <Icon className="w-5 h-5 flex-shrink-0" />
@@ -227,7 +228,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
               </div>
             </nav>
           </div>
-          
+
           {/* RODAPÉ FIXO - Fixed Items */}
           <div className="p-2 border-t border-border flex-shrink-0">
             <div className={isCollapsed ? 'space-y-3' : 'space-y-1'}>
@@ -237,11 +238,10 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${
-                      isActive(item.path)
+                    className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item.path)
                         ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                    }`}
+                      }`}
                     title={isCollapsed ? item.label : ''}
                   >
                     <Icon className="w-5 h-5 flex-shrink-0" />

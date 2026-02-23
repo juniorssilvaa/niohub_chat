@@ -24,8 +24,18 @@ export default function SuperadminProvedores() {
     prazo_instalacao: '',
     documentos_necessarios: '',
     observacoes: '',
+    bot_mode: 'ia',
   });
-  const [loadingAdd, setLoadingAdd] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editProvedorForm, setEditProvedorForm] = useState({
+    id: null,
+    nome: '',
+    site_oficial: '',
+    endereco: '',
+    email_contato: '',
+    bot_mode: 'ia',
+  });
+  const [loadingEdit, setLoadingEdit] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [provedoresState, setProvedoresState] = useState([]);
   const [menuId, setMenuId] = useState(null);
@@ -37,7 +47,7 @@ export default function SuperadminProvedores() {
     totalUsuarios: 0,
     totalConversas: 0
   });
-  
+
   // Estados para modais de limpeza
   const [showLimpezaModal, setShowLimpezaModal] = useState(false);
   const [provedorLimpeza, setProvedorLimpeza] = useState(null);
@@ -53,24 +63,24 @@ export default function SuperadminProvedores() {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      
+
       // Buscar provedores
       const provedoresRes = await axios.get('/api/provedores/', {
         headers: { Authorization: `Token ${token}` }
       });
       const provedores = provedoresRes.data.results || provedoresRes.data;
-      
+
       // Calcular totais dos provedores
       const totalUsuarios = provedores.reduce((sum, p) => sum + (p.users_count || 0), 0);
       const totalConversas = provedores.reduce((sum, p) => sum + (p.conversations_count || 0), 0);
-      
+
       setStatsData({
         totalProvedores: provedores.length,
         receitaMensal: 'R$ 0,00', // Placeholder - pode ser calculado baseado em planos
         totalUsuarios: totalUsuarios,
         totalConversas: totalConversas
       });
-      
+
     } catch (err) {
       console.error('Erro ao buscar estatísticas:', err);
     }
@@ -90,7 +100,7 @@ export default function SuperadminProvedores() {
         setProvedoresState([]);
       }
     };
-    
+
     fetchProvedores();
     fetchStats();
   }, []);
@@ -107,26 +117,26 @@ export default function SuperadminProvedores() {
     e.preventDefault();
     setLoadingAdd(true);
     setErrorMsg('');
-    
+
     try {
       const token = localStorage.getItem('token');
       console.log('[DEBUG SuperadminProvedores] Criando novo provedor:', addProvedorForm);
-      
+
       const response = await axios.post('/api/provedores/', addProvedorForm, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       console.log('[DEBUG SuperadminProvedores] Resposta da API:', response.data);
-      
+
       // Atualizar lista após criar
       const res = await axios.get('/api/provedores/', {
         headers: { Authorization: `Token ${token}` }
       });
       setProvedoresState(res.data.results || res.data);
-      
+
       // Atualizar estatísticas
       await fetchStats();
-      
+
       setShowAddModal(false);
       setAddProvedorForm({
         nome: '',
@@ -146,6 +156,7 @@ export default function SuperadminProvedores() {
         prazo_instalacao: '',
         documentos_necessarios: '',
         observacoes: '',
+        bot_mode: 'ia',
       });
     } catch (err) {
       console.error('[DEBUG SuperadminProvedores] Erro ao criar provedor:', err);
@@ -156,8 +167,43 @@ export default function SuperadminProvedores() {
   };
 
   const handleEditProvedor = (provedor) => {
-    // Redirecionar para a página de edição do provedor
-    window.location.href = `/app/accounts/${provedor.id}/dados-provedor`;
+    setEditProvedorForm({
+      id: provedor.id,
+      nome: provedor.nome || '',
+      site_oficial: provedor.site_oficial || '',
+      endereco: provedor.endereco || '',
+      email_contato: provedor.email_contato || '',
+      bot_mode: provedor.bot_mode || 'ia',
+    });
+    setShowEditModal(true);
+    setMenuId(null);
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    setLoadingEdit(true);
+    setErrorMsg('');
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`/api/provedores/${editProvedorForm.id}/`, editProvedorForm, {
+        headers: { Authorization: `Token ${token}` }
+      });
+
+      // Atualizar lista
+      const res = await axios.get('/api/provedores/', {
+        headers: { Authorization: `Token ${token}` }
+      });
+      setProvedoresState(res.data.results || res.data);
+
+      setShowEditModal(false);
+      alert('Provedor atualizado com sucesso!');
+    } catch (err) {
+      console.error('Erro ao editar provedor:', err);
+      setErrorMsg('Erro ao atualizar provedor. Verifique os dados.');
+    } finally {
+      setLoadingEdit(false);
+    }
   };
 
   const handleAlterarStatus = async (provedorId, novoStatus) => {
@@ -165,9 +211,9 @@ export default function SuperadminProvedores() {
       'ativo': 'Ativo',
       'suspenso': 'Suspenso'
     };
-    
+
     if (!window.confirm(`Tem certeza que deseja alterar o status para "${statusLabels[novoStatus]}"?`)) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       await axios.patch(`/api/provedores/${provedorId}/`, {
@@ -175,14 +221,14 @@ export default function SuperadminProvedores() {
       }, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Atualizar lista
-      setProvedoresState(prev => prev.map(p => 
+      setProvedoresState(prev => prev.map(p =>
         p.id === provedorId ? { ...p, status: novoStatus } : p
       ));
-      
+
       alert(`Status alterado para "${statusLabels[novoStatus]}" com sucesso!`);
-      
+
     } catch (err) {
       alert('Erro ao alterar status do provedor!');
     }
@@ -190,40 +236,40 @@ export default function SuperadminProvedores() {
 
   const handleDeleteProvedor = async (id) => {
     if (!confirm('Tem certeza que deseja excluir este provedor?')) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`/api/provedores/${id}/`, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Atualizar lista após excluir
       const res = await axios.get('/api/provedores/', {
         headers: { Authorization: `Token ${token}` }
       });
       setProvedoresState(res.data.results || res.data);
-      
+
       // Atualizar estatísticas
       await fetchStats();
     } catch (err) {
       alert('Erro ao excluir provedor!');
     }
   };
-  
+
   // Função para abrir modal de limpeza
   const handleOpenLimpezaModal = (provedor) => {
     setProvedorLimpeza(provedor);
     setShowLimpezaModal(true);
     setMenuId(null); // Fechar menu de ações
   };
-  
+
   // Função para executar limpeza
   const handleExecutarLimpeza = async (tipo) => {
     if (!provedorLimpeza) return;
-    
+
     let confirmacao = '';
     let endpoint = '';
-    
+
     if (tipo === 'banco') {
       confirmacao = `Tem certeza que deseja LIMPAR COMPLETAMENTE o banco de dados do provedor "${provedorLimpeza.nome}"?\n\n⚠️ ATENÇÃO: Esta ação removerá TODAS as conversas, mensagens e contatos deste provedor e NÃO PODE SER DESFEITA!`;
       endpoint = `/api/provedores/${provedorLimpeza.id}/limpar_banco_dados/`;
@@ -234,28 +280,28 @@ export default function SuperadminProvedores() {
       confirmacao = `Tem certeza que deseja limpar TODOS os logs de auditoria (core_auditlog) do provedor "${provedorLimpeza.nome}"?\n\n⚠️ ATENÇÃO: Esta ação removerá TODOS os registros de auditoria deste provedor e NÃO PODE SER DESFEITA!`;
       endpoint = `/api/provedores/${provedorLimpeza.id}/limpar_auditlog/`;
     }
-    
+
     if (!window.confirm(confirmacao)) return;
-    
+
     setLoadingLimpeza(true);
     setLimpezaResult(null);
-    
+
     try {
       const token = localStorage.getItem('token');
-      
+
       const response = await axios.post(endpoint, {}, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       setLimpezaResult({
         success: true,
         message: response.data.message,
         details: response.data
       });
-      
+
       // Atualizar estatísticas após limpeza
       fetchStats();
-      
+
     } catch (error) {
       setLimpezaResult({
         success: false,
@@ -282,13 +328,13 @@ export default function SuperadminProvedores() {
     e.stopPropagation();
     const button = e.currentTarget;
     const rect = button.getBoundingClientRect();
-    
+
     // Calcular se o modal vai caber na tela
     const modalHeight = 200; // Altura estimada do modal
     const windowHeight = window.innerHeight;
     const spaceBelow = windowHeight - rect.bottom;
     const spaceAbove = rect.top;
-    
+
     let topPosition;
     if (spaceBelow < modalHeight && spaceAbove > modalHeight) {
       // Se não cabe embaixo, posiciona acima do botão
@@ -297,7 +343,7 @@ export default function SuperadminProvedores() {
       // Posiciona abaixo, mas mais para cima
       topPosition = rect.bottom + window.scrollY - 80;
     }
-    
+
     setMenuPosition({
       top: topPosition,
       left: rect.left + window.scrollX - 200 // Move 200px para a esquerda
@@ -338,8 +384,8 @@ export default function SuperadminProvedores() {
               className="w-full pl-10 pr-4 py-3 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
             />
           </div>
-          <button 
-            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-lg" 
+          <button
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-lg"
             onClick={() => setShowAddModal(true)}
           >
             <Plus className="w-4 h-4" /> Adicionar Provedor
@@ -356,44 +402,58 @@ export default function SuperadminProvedores() {
             <form onSubmit={handleAddProvedor} className="space-y-5">
               <div>
                 <label className="block font-medium mb-1 text-gray-200">Nome do Provedor *</label>
-                <input 
-                  type="text" 
-                  name="nome" 
-                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                  value={addProvedorForm.nome} 
-                  onChange={handleAddProvedorChange} 
-                  required 
+                <input
+                  type="text"
+                  name="nome"
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                  value={addProvedorForm.nome}
+                  onChange={handleAddProvedorChange}
+                  required
                 />
               </div>
               <div>
                 <label className="block font-medium mb-1 text-gray-200">Site Oficial</label>
-                <input 
-                  type="url" 
-                  name="site_oficial" 
-                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                  value={addProvedorForm.site_oficial} 
-                  onChange={handleAddProvedorChange} 
+                <input
+                  type="url"
+                  name="site_oficial"
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                  value={addProvedorForm.site_oficial}
+                  onChange={handleAddProvedorChange}
                 />
               </div>
               <div>
                 <label className="block font-medium mb-1 text-gray-200">Endereço</label>
-                <input 
-                  type="text" 
-                  name="endereco" 
-                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                  value={addProvedorForm.endereco} 
-                  onChange={handleAddProvedorChange} 
+                <input
+                  type="text"
+                  name="endereco"
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                  value={addProvedorForm.endereco}
+                  onChange={handleAddProvedorChange}
                 />
               </div>
               <div>
                 <label className="block font-medium mb-1 text-gray-200">E-mail de Contato</label>
-                <input 
-                  type="email" 
-                  name="email_contato" 
-                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                  value={addProvedorForm.email_contato} 
-                  onChange={handleAddProvedorChange} 
+                <input
+                  type="email"
+                  name="email_contato"
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                  value={addProvedorForm.email_contato}
+                  onChange={handleAddProvedorChange}
                 />
+              </div>
+              <div>
+                <label className="block font-medium mb-1 text-gray-200">Modo de Atendimento *</label>
+                <select
+                  name="bot_mode"
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                  value={addProvedorForm.bot_mode}
+                  onChange={handleAddProvedorChange}
+                  required
+                >
+                  <option value="ia">Inteligência Artificial (IA)</option>
+                  <option value="chatbot">Fluxo de Chatbot</option>
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">Define se o atendimento inicial será por IA ou por um fluxo pré-definido.</p>
               </div>
               {errorMsg && <div className="text-red-400 text-sm mb-2">{errorMsg}</div>}
               <button
@@ -403,6 +463,75 @@ export default function SuperadminProvedores() {
               >
                 {loadingAdd ? 'Adicionando...' : 'Adicionar Provedor'}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de editar provedor */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-[#23272f] rounded-xl shadow-2xl p-8 w-full max-w-md relative border border-border">
+            <button className="absolute top-2 right-2 text-gray-400 hover:text-white text-2xl" onClick={() => setShowEditModal(false)}>&times;</button>
+            <h2 className="text-2xl font-bold mb-6 text-white text-center">Editar Provedor</h2>
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Nome do Provedor *</label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border focus:border-primary outline-none"
+                  value={editProvedorForm.nome}
+                  onChange={e => setEditProvedorForm({ ...editProvedorForm, nome: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Site Oficial</label>
+                <input
+                  type="url"
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border focus:border-primary outline-none"
+                  value={editProvedorForm.site_oficial}
+                  onChange={e => setEditProvedorForm({ ...editProvedorForm, site_oficial: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">E-mail de Contato</label>
+                <input
+                  type="email"
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border focus:border-primary outline-none"
+                  value={editProvedorForm.email_contato}
+                  onChange={e => setEditProvedorForm({ ...editProvedorForm, email_contato: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Modo de Atendimento *</label>
+                <select
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border focus:border-primary outline-none"
+                  value={editProvedorForm.bot_mode}
+                  onChange={e => setEditProvedorForm({ ...editProvedorForm, bot_mode: e.target.value })}
+                  required
+                >
+                  <option value="ia">Inteligência Artificial (IA)</option>
+                  <option value="chatbot">Fluxo de Chatbot</option>
+                </select>
+              </div>
+              {errorMsg && <div className="text-red-400 text-xs py-2">{errorMsg}</div>}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 px-4 py-2 rounded font-bold text-gray-400 hover:bg-white/5 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-primary text-white py-2 rounded font-bold hover:bg-primary/80 transition shadow-lg disabled:opacity-50"
+                  disabled={loadingEdit}
+                >
+                  {loadingEdit ? 'Salvando...' : 'Salvar Alterações'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -425,74 +554,80 @@ export default function SuperadminProvedores() {
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">CANAL</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">USUÁRIOS</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">CONVERSAS</th>
+                <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">MODO</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">STATUS</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">AÇÕES</th>
               </tr>
             </thead>
-          <tbody className="divide-y divide-border">
-            {filteredProvedores.map(provedor => (
-              <tr key={provedor.id} className="hover:bg-muted/50">
-                <td className="px-6 py-4 text-center align-middle">
-                  <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
-                    {provedor.id}
-                  </span>
-                </td>
-                <td className="px-6 py-4 min-w-[220px] align-middle">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-900 flex items-center justify-center">
-                      <Wifi className="w-5 h-5 text-white" />
+            <tbody className="divide-y divide-border">
+              {filteredProvedores.map(provedor => (
+                <tr key={provedor.id} className="hover:bg-muted/50">
+                  <td className="px-6 py-4 text-center align-middle">
+                    <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+                      {provedor.id}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 min-w-[220px] align-middle">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-900 flex items-center justify-center">
+                        <Wifi className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <div className="font-semibold text-card-foreground">{provedor.nome}</div>
+                        <div className="text-xs text-muted-foreground">{provedor.site_oficial || provedor.email_contato}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-semibold text-card-foreground">{provedor.nome}</div>
-                      <div className="text-xs text-muted-foreground">{provedor.site_oficial || provedor.email_contato}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-center align-middle">
-                  {provedor.channels_count || 0}
-                </td>
-                <td className="px-6 py-4 text-center align-middle">
-                  {provedor.users_count || 0}
-                </td>
-                <td className="px-6 py-4 text-center align-middle">
-                  <span className="inline-flex items-center gap-1 justify-center w-full">
-                    <MessageCircle className="w-4 h-4 text-muted-foreground" />
-                    {provedor.conversations_count?.toLocaleString('pt-BR') || 0}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-center align-middle">
-                  <button
-                    className={`px-3 py-1 rounded-full text-xs font-semibold focus:outline-none transition-colors duration-200 ${provedor.is_active !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
-                    style={{ cursor: 'pointer' }}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        const token = localStorage.getItem('token');
-                        await axios.patch(`/api/provedores/${provedor.id}/`, { is_active: !provedor.is_active }, {
-                          headers: { Authorization: `Token ${token}` }
-                        });
-                        // Atualizar lista após toggle
-                        const res = await axios.get('/api/provedores/', {
-                          headers: { Authorization: `Token ${token}` }
-                        });
-                        setProvedoresState(res.data.results || res.data);
-                      } catch (err) {
-                        alert('Erro ao alterar status do provedor!');
-                      }
-                    }}
-                  >
-                    {provedor.is_active !== false ? 'Ativo' : 'Suspenso'}
-                  </button>
-                </td>
-                <td className="px-6 py-4 text-center align-middle relative" style={{overflow: 'visible'}}>
-                  <button ref={el => (menuBtnRefs.current[provedor.id] = el)} className="p-1 hover:bg-muted rounded" onClick={handleOpenMenu(provedor.id)}>
-                    <MoreVertical className="w-5 h-5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  </td>
+                  <td className="px-6 py-4 text-center align-middle">
+                    {provedor.channels_count || 0}
+                  </td>
+                  <td className="px-6 py-4 text-center align-middle">
+                    {provedor.users_count || 0}
+                  </td>
+                  <td className="px-6 py-4 text-center align-middle">
+                    <span className="inline-flex items-center gap-1 justify-center w-full">
+                      <MessageCircle className="w-4 h-4 text-muted-foreground" />
+                      {provedor.conversations_count?.toLocaleString('pt-BR') || 0}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center align-middle">
+                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${provedor.bot_mode === 'ia' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {provedor.bot_mode === 'ia' ? 'IA' : 'Chatbot'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center align-middle">
+                    <button
+                      className={`px-3 py-1 rounded-full text-xs font-semibold focus:outline-none transition-colors duration-200 ${provedor.is_active !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          const token = localStorage.getItem('token');
+                          await axios.patch(`/api/provedores/${provedor.id}/`, { is_active: !provedor.is_active }, {
+                            headers: { Authorization: `Token ${token}` }
+                          });
+                          // Atualizar lista após toggle
+                          const res = await axios.get('/api/provedores/', {
+                            headers: { Authorization: `Token ${token}` }
+                          });
+                          setProvedoresState(res.data.results || res.data);
+                        } catch (err) {
+                          alert('Erro ao alterar status do provedor!');
+                        }
+                      }}
+                    >
+                      {provedor.is_active !== false ? 'Ativo' : 'Suspenso'}
+                    </button>
+                  </td>
+                  <td className="px-6 py-4 text-center align-middle relative" style={{ overflow: 'visible' }}>
+                    <button ref={el => (menuBtnRefs.current[provedor.id] = el)} className="p-1 hover:bg-muted rounded" onClick={handleOpenMenu(provedor.id)}>
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -518,25 +653,25 @@ export default function SuperadminProvedores() {
         </div>,
         document.body
       )}
-      
+
       {/* Modal de Limpeza de Dados */}
       {showLimpezaModal && provedorLimpeza && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-[#23272f] rounded-xl shadow-2xl p-8 w-full max-w-lg relative border border-border">
             <button className="absolute top-2 right-2 text-gray-400 hover:text-white text-2xl" onClick={() => { setShowLimpezaModal(false); setProvedorLimpeza(null); setLimpezaResult(null); }}>&times;</button>
-            
+
             <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-3">
               <Database className="w-6 h-6 text-orange-500" />
               Limpeza de Dados - {provedorLimpeza.nome}
             </h2>
-            
+
             <div className="space-y-6">
               <div className="bg-orange-900/20 border border-orange-500/30 rounded-lg p-4">
                 <p className="text-orange-200 text-sm">
                   ⚠️ <strong>ATENÇÃO:</strong> As ações de limpeza são irreversíveis e podem afetar o funcionamento do sistema.
                 </p>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Limpeza do Banco de Dados */}
                 <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
@@ -555,7 +690,7 @@ export default function SuperadminProvedores() {
                     {loadingLimpeza ? 'Executando...' : 'Limpar Banco de Dados'}
                   </button>
                 </div>
-                
+
                 {/* Limpeza do Redis */}
                 <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
                   <h3 className="font-semibold text-yellow-200 mb-2 flex items-center gap-2">
@@ -573,7 +708,7 @@ export default function SuperadminProvedores() {
                     {loadingLimpeza ? 'Executando...' : 'Limpar Redis'}
                   </button>
                 </div>
-                
+
                 {/* Limpeza de Logs de Auditoria */}
                 <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
                   <h3 className="font-semibold text-purple-200 mb-2 flex items-center gap-2">
@@ -592,14 +727,13 @@ export default function SuperadminProvedores() {
                   </button>
                 </div>
               </div>
-              
+
               {/* Resultado da operação */}
               {limpezaResult && (
-                <div className={`rounded-lg p-4 border ${
-                  limpezaResult.success 
-                    ? 'bg-green-900/20 border-green-500/30 text-green-200' 
-                    : 'bg-red-900/20 border-red-500/30 text-red-200'
-                }`}>
+                <div className={`rounded-lg p-4 border ${limpezaResult.success
+                  ? 'bg-green-900/20 border-green-500/30 text-green-200'
+                  : 'bg-red-900/20 border-red-500/30 text-red-200'
+                  }`}>
                   <h4 className="font-semibold mb-2">
                     {limpezaResult.success ? '✅ Sucesso!' : '❌ Erro!'}
                   </h4>

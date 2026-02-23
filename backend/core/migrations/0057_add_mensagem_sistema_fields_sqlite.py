@@ -102,7 +102,7 @@ def reverse_add_fields(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0053_remove_user_assignment_message_and_more'),
+        ('core', '0056_remove_systemconfig_openai_api_key_and_more'),
     ]
 
     operations = [

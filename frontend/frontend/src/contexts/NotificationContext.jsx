@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
 import axios from 'axios';
 import { useAuth } from './AuthContext';
@@ -16,32 +16,32 @@ export const useNotifications = () => {
 export const NotificationProvider = ({ children }) => {
   // ✅ Usar usuário do AuthContext ao invés de buscar novamente
   const { user: authUser } = useAuth();
-  const [unreadCount, setUnreadCount] = React.useState(0);
-  const [hasNewMessages, setHasNewMessages] = React.useState(false);
-  const [currentUser, setCurrentUser] = React.useState(null);
-  const websocketRef = React.useRef(null);
-  const reconnectTimeoutRef = React.useRef(null);
-  const [isConnected, setIsConnected] = React.useState(false);
-  const [painelWsConnected, setPainelWsConnected] = React.useState(false);
-  const [unreadMessagesByUser, setUnreadMessagesByUser] = React.useState({});
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const websocketRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [painelWsConnected, setPainelWsConnected] = useState(false);
+  const [unreadMessagesByUser, setUnreadMessagesByUser] = useState({});
 
-  const internalChatWsRef = React.useRef(null);
-  const [internalChatUnreadCount, setInternalChatUnreadCount] = React.useState(0);
-  const [internalChatUnreadByUser, setInternalChatUnreadByUser] = React.useState({});
-  const initializingRef = React.useRef(false);
-  const painelWsRef = React.useRef(null);
-  const painelReconnectRef = React.useRef(null);
-  const connectionFailuresRef = React.useRef({ internalChat: 0, privateChat: 0 });
-  const soundEnabledRef = React.useRef(false);
-  const newMsgSoundRef = React.useRef('mixkit-bell-notification-933.wav');
-  const newConvSoundRef = React.useRef('mixkit-digital-quick-tone-2866.wav');
-  const audioRef = React.useRef(null);
-  const faviconTimerRef = React.useRef(null);
-  const isFaviconBlinkingRef = React.useRef(false);
+  const internalChatWsRef = useRef(null);
+  const [internalChatUnreadCount, setInternalChatUnreadCount] = useState(0);
+  const [internalChatUnreadByUser, setInternalChatUnreadByUser] = useState({});
+  const initializingRef = useRef(false);
+  const painelWsRef = useRef(null);
+  const painelReconnectRef = useRef(null);
+  const connectionFailuresRef = useRef({ internalChat: 0, privateChat: 0 });
+  const soundEnabledRef = useRef(false);
+  const newMsgSoundRef = useRef('mixkit-bell-notification-933.wav');
+  const newConvSoundRef = useRef('mixkit-digital-quick-tone-2866.wav');
+  const audioRef = useRef(null);
+  const faviconTimerRef = useRef(null);
+  const isFaviconBlinkingRef = useRef(false);
 
   // ✅ Sincronizar usuário do AuthContext com currentUser local
   // Isso evita chamadas desnecessárias de /me
-  React.useEffect(() => {
+  useEffect(() => {
     if (authUser) {
       setCurrentUser(authUser);
       soundEnabledRef.current = !!authUser.sound_notifications_enabled;
@@ -168,14 +168,14 @@ export const NotificationProvider = ({ children }) => {
         if (event.wasClean || event.code === 1000) {
           return;
         }
-        
+
         // Limitar tentativas de reconexão para evitar spam de erros
         connectionFailuresRef.current.internalChat++;
         if (connectionFailuresRef.current.internalChat > 3) {
           // Parar de tentar reconectar após 3 falhas consecutivas
           return;
         }
-        
+
         setTimeout(() => {
           if (currentUser?.id) {
             connectInternalChatWebSocket();
@@ -261,19 +261,19 @@ export const NotificationProvider = ({ children }) => {
 
       websocketRef.current.onclose = (event) => {
         setIsConnected(false);
-        
+
         // Não tentar reconectar se foi fechado intencionalmente
         if (event.wasClean || event.code === 1000) {
           return;
         }
-        
+
         // Limitar tentativas de reconexão para evitar spam de erros
         connectionFailuresRef.current.privateChat++;
         if (connectionFailuresRef.current.privateChat > 3) {
           // Parar de tentar reconectar após 3 falhas consecutivas
           return;
         }
-        
+
         reconnectTimeoutRef.current = setTimeout(() => {
           if (currentUser?.id) {
             connectWebSocket();
@@ -306,7 +306,7 @@ export const NotificationProvider = ({ children }) => {
       }
       const ws = new WebSocket(wsUrl);
       painelWsRef.current = ws;
-      
+
       ws.onopen = () => {
         setPainelWsConnected(true);
       };
@@ -322,24 +322,24 @@ export const NotificationProvider = ({ children }) => {
             playSound(newConvSoundRef.current);
             startBlinkingFavicon();
           }
-        } catch (_) {}
+        } catch (_) { }
       };
       ws.onclose = (event) => {
         setPainelWsConnected(false);
         // Códigos que indicam erro permanente (não tentar reconectar)
         // 4001 = Unauthorized, 4003 = Forbidden
         const permanentErrorCodes = [4001, 4003];
-        
+
         if (permanentErrorCodes.includes(event.code)) {
           // Erro de permissão ou autenticação - não tentar reconectar
           return;
         }
-        
+
         // Apenas reconectar se não foi erro permanente
         painelReconnectRef.current = setTimeout(connectPainelWebSocket, 3000);
       };
       ws.onerror = () => {
-        try { ws.close(); } catch (_) {}
+        try { ws.close(); } catch (_) { }
       };
     } catch (e) {
       // CORREÇÃO DE SEGURANÇA: Não expor detalhes do erro que podem conter token
@@ -358,8 +358,8 @@ export const NotificationProvider = ({ children }) => {
         audioRef.current.src = src;
       }
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
-    } catch (_) {}
+      audioRef.current.play().catch(() => { });
+    } catch (_) { }
   };
 
   const setFavicon = (hrefBase) => {
@@ -374,7 +374,7 @@ export const NotificationProvider = ({ children }) => {
         const l2 = document.createElement('link');
         l2.rel = 'shortcut icon'; l2.type = 'image/x-icon'; l2.href = href; document.head.appendChild(l2);
       }
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const startBlinkingFavicon = () => {

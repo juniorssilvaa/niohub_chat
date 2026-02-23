@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0052_alter_provedor_redes_sociais_default'),
+        ('core', '0055_1_alter_provedor_redes_sociais_default'),
     ]
 
     operations = [
