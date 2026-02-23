@@ -59,7 +59,7 @@ def reverse_remove_openai_add_google(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0055_2_remove_user_assignment_message_and_more'),
+        ('core', '0055_add_more'),
     ]
 
     operations = [
