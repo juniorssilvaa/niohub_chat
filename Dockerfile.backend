@@ -78,6 +78,9 @@ missing = [
     ('core', '0055_add_more'),
     ('core', '0057_add_mensagem_sistema_fields_sqlite'),
     ('core', '0058_add_openai_transcription_api_key'),
+    ('core', '0061_canal_ia_ativa'),
+    ('core', '0062_chatbotflow'),
+    ('core', '0063_add_bot_mode_to_provedor'),
 ]
 
 with connection.cursor() as cursor:
