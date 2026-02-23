@@ -78,18 +78,21 @@ missing = [
     ('core', '0055_add_more'),
     ('core', '0057_add_mensagem_sistema_fields_sqlite'),
     ('core', '0058_add_openai_transcription_api_key'),
+    ('core', '0059_add_assignment_message'),
+    ('core', '0060_add_systemconfig_key_field'),
     ('core', '0061_canal_ia_ativa'),
     ('core', '0062_chatbotflow'),
     ('core', '0063_add_bot_mode_to_provedor'),
 ]
 
 with connection.cursor() as cursor:
+    print(f'--- Verificando {len(missing)} migrações críticas ---')
     for app, name in missing:
         cursor.execute(
             'INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)',
             [app, name, app, name]
         )
-        print(f'Migration {app}.{name} garantida no historico.')
+        print(f'[MIGRATE-FIX] {app}.{name} verificada/inserida.')
 "
 python manage.py migrate --noinput
 
