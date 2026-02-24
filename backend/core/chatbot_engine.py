@@ -28,8 +28,24 @@ def _formatar_endereco(contrato: dict) -> str:
     partes = [str(c).strip() for c in campos if c and str(c).strip().lower() not in ('none', 'null', '')]
     if partes:
         return ' '.join(partes)
-    # Fallback: usar popNome se não tiver campos de endereço
-    return contrato.get('popNome', '') or 'Endereço não informado'
+    return ''
+
+def _formatar_data_br(data_str: str) -> str:
+    """Converte YYYY-MM-DD para DD.MM.YYYY ou retorna como está."""
+    if not data_str or not isinstance(data_str, str):
+        return data_str
+    try:
+        # Tentar converter de YYYY-MM-DD
+        if '-' in data_str and len(data_str) == 10:
+            dt = datetime.strptime(data_str, '%Y-%m-%d')
+            return dt.strftime('%d.%m.%Y')
+        # Tentar converter de DD/MM/YYYY
+        if '/' in data_str and len(data_str) == 10:
+            dt = datetime.strptime(data_str, '%d/%m/%Y')
+            return dt.strftime('%d.%m.%Y')
+    except:
+        pass
+    return data_str
 
 
 class ChatbotEngine:
@@ -111,7 +127,7 @@ class ChatbotEngine:
 
                 if button_id and button_id.startswith('sgp_contrato_'):
                     num_sel = button_id[len('sgp_contrato_'):]
-                    selected_contrato = next((c for c in contratos_pendentes if str(c.get('contrato', '')) == num_sel), None)
+                    selected_contrato = next((c for c in contratos_pendentes if str(c.get('contratoId') or c.get('contrato_id') or c.get('contrato', '')) == num_sel), None)
                 elif message_content and message_content.strip().isdigit():
                     idx = int(message_content.strip()) - 1
                     if 0 <= idx < len(contratos_pendentes):
@@ -502,23 +518,25 @@ class ChatbotEngine:
                         elif len(contratos) == 1:
                             c = contratos[0]
                             num = c.get('contratoId') or c.get('contrato_id') or c.get('contrato', '')
+                            status = str(c.get('contratoStatusDisplay', '') or c.get('contratoStatus', '')).upper()
                             end = _formatar_endereco(c)
-                            texto = f"*{nome_upper}*, contrato localizado:\n\n1 - Contrato ({num}): *{end}*"
+                            texto = f"*{nome_upper}*, contrato localizado:\n\n1 - Contrato ({num}) - *{status}*\nEndereço: {end}"
                             await ChatbotEngine.send_message_agnostic(conv=conversation, text=texto)
 
                         else:
-                            linhas = [f"*{nome_upper}*, encontramos mais de um contrato. Escolha o contrato desejado:\n"]
+                            linhas = [f"*{nome_upper}*, encontramos mais de um contrato. Escolha o contrato desejado:"]
                             rows = []
                             for i, c in enumerate(contratos, 1):
                                 num = c.get('contratoId') or c.get('contrato_id') or c.get('contrato', '')
+                                status = str(c.get('contratoStatusDisplay', '') or c.get('contratoStatus', '')).upper()
                                 end = _formatar_endereco(c)
-                                linhas.append(f"{i} - Contrato ({num}): {end}")
+                                linhas.append(f"{i} - Contrato ({num}) - *{status}*\nEndereço: {end}")
                                 rows.append({
                                     'id': f'sgp_contrato_{num}',
                                     'title': f'Contrato {num}',
-                                    'description': end[:72]
+                                    'description': f"{status} - {end}"[:72]
                                 })
-                            await ChatbotEngine.send_message_agnostic(conv=conversation, text="\n".join(linhas))
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text="\n\n".join(linhas))
                             import asyncio
                             await asyncio.sleep(0.8)
                             await ChatbotEngine.send_message_agnostic(
@@ -577,177 +595,105 @@ class ChatbotEngine:
                         result_context = {'link_fatura': link, 'sgp_fatura': result}
 
                 elif sgp_action == 'listar_titulos':
-                    # Determinar se buscamos por CPF ou por Contrato (se disponível no contexto)
+                    # Lógica Unificada de Faturas (Prioridade: Mais antiga primeiro)
+                    from .fatura_service import FaturaService
+                    fs = FaturaService()
+                    
                     contrato_id_ctx = flow_context.get('contrato') or flow_context.get('contrato_id')
                     cpf_ctx = flow_context.get('cpf') or flow_context.get('cpfcnpj') or input_value
                     
-                    if contrato_id_ctx:
-                        # Se contrato parece CPF, usar como CPF
-                        is_cpf_contract = len(str(contrato_id_ctx)) in [11, 14]
-                        if is_cpf_contract:
-                            result = await sync_to_async(sgp.listar_titulos)(cpf_cnpj=contrato_id_ctx)
-                        else:
-                            result = await sync_to_async(sgp.listar_titulos)(contrato=contrato_id_ctx)
-                    else:
-                        result = await sync_to_async(sgp.listar_titulos)(cpf_cnpj=cpf_ctx)
+                    # Buscar fatura usando o serviço unificado
+                    dados_fatura = await sync_to_async(fs.buscar_fatura_sgp)(provedor, cpf_ctx, contrato_id_ctx)
                     
-                    if isinstance(result, dict):
-                        logger.info(f"[ChatbotEngine][V2.1] listar_titulos response keys: {list(result.keys())}")
-                        # SGP Raw response uses 'titulos' key, not 'links'
-                        faturas_raw = result.get('titulos', [])
-                        faturas_vencidas = []
-                        faturas_abertas = []
+                    if dados_fatura and dados_fatura.get('status') == 1:
+                        f = dados_fatura['links'][0]
+                        vencimento = f.get('vencimento', '')
+                        valor = float(f.get('valor', 0.0))
+                        f_id = f.get('fatura', 'N/A')
                         
-                        hoje = date.today()
+                        # Detectar se é atrasada ou aberta para a mensagem
+                        hoje = datetime.now().date()
+                        try:
+                            venc_orig = f.get('vencimento_original') or f.get('data_vencimento')
+                            if not venc_orig and '-' in str(vencimento):
+                                # Tentar converter DD/MM/YYYY para YYYY-MM-DD se necessário
+                                pts = vencimento.split('/')
+                                if len(pts) == 3:
+                                    venc_orig = f"{pts[2]}-{pts[1]}-{pts[0]}"
+                            
+                            dt_venc = datetime.strptime(venc_orig or '', '%Y-%m-%d').date()
+                            is_atrasada = dt_venc < hoje
+                        except:
+                            is_atrasada = False
+                            
+                        tipo_str = "VENCIDA" if is_atrasada else "EM ABERTO"
+                        venc_br = _formatar_data_br(vencimento)
+                        msg = f"\n💳 *Sua fatura {tipo_str}:*\n\nFatura ID: {f_id}\nVencimento: {venc_br}\nValor: R$ {valor:.2f}\n\nSegue abaixo as opções para pagamento."
                         
-                        for f in faturas_raw:
-                            if not isinstance(f, dict):
-                                continue
-                            
-                            # Mapeamento de campos SGP Raw (conforme fatura_service.py)
-                            # f.get('status') pode vir como 'aberto' mesmo vencido
-                            status = str(f.get('status', '')).lower()
-                            venc_str = f.get('dataVencimento', '')
-                            is_vencida = status == 'vencida'
-                            
-                            try:
-                                if venc_str and status == 'aberto':
-                                    venc_dt = datetime.strptime(venc_str, '%Y-%m-%d').date()
-                                    if venc_dt < hoje:
-                                        is_vencida = True
-                            except:
-                                pass
+                        # Enviar PDF se link existir
+                        link_fatura = f.get('link')
+                        if link_fatura:
+                            await ChatbotEngine.send_message_agnostic_document(
+                                conv=conversation, 
+                                text=f"📄 Aqui está o PDF da sua fatura {f_id}:",
+                                file_url=link_fatura,
+                                file_name=f"fatura_{f_id}.pdf"
+                            )
 
-                            if is_vencida:
-                                faturas_vencidas.append(f)
-                            elif status == 'aberto':
-                                faturas_abertas.append(f)
+                        pix_code = f.get('codigopix')
+                        boleto_code = f.get('linhadigitavel')
                         
-                        # Prioridade 1: Múltiplas faturas vencidas -> Transferir Financeiro
-                        if len(faturas_vencidas) > 1:
-                            text_alert = "Detectamos que você possui múltiplas faturas vencidas. Para garantir um melhor atendimento, estamos transferindo você para o setor financeiro."
-                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=text_alert)
-                            # TODO: Implementar transferToSector se houver suporte no motor
-                            result_context = {'status_faturas': 'multiplas_vencidas', 'transferir': 'financeiro'}
-                        
-                        # Prioridade 2: Uma fatura vencida -> Enviar Pix Formatado
-                        elif len(faturas_vencidas) == 1:
-                            f = faturas_vencidas[0]
-                            vencimento = f.get('dataVencimento', '')
-                            # Formatar data YYYY-MM-DD -> DD/MM/YYYY
-                            if '-' in vencimento:
-                                d_pts = vencimento.split('-')
-                                if len(d_pts) == 3:
-                                    vencimento = f"{d_pts[2]}/{d_pts[1]}/{d_pts[0]}"
-                            
-                            valor = float(f.get('valorCorrigido') or f.get('valor') or 0.0)
-                            f_id = f.get('numeroDocumento') or f.get('id') or f.get('fatura')
-                            msg = f"\n💳 *Sua fatura vencida:*\n\nFatura ID: {f_id}\nVencimento: {vencimento}\nValor: R$ {valor:.2f}\n\nSegue abaixo as opções para pagamento."
-                            
-                            pix_code = f.get('codigoPix') or f.get('codigopix')
-                            if pix_code:
-                                items = [{
-                                    "retailer_id": str(f_id),
-                                    "name": f"Fatura Internet - {vencimento}",
-                                    "amount": {"value": int(valor * 100), "offset": 100},
-                                    "quantity": 1
-                                }]
-                                # merchant_name e key vêm das configurações do provedor/SGP se disponíveis
-                                merchant = sgp_config.get('pix_merchant_name', provedor.nome)
-                                pix_key = sgp_config.get('pix_key')
-                                pix_key_type = "CNPJ" # Fallback padrão
+                        if pix_code or boleto_code:
+                            items = [{
+                                "retailer_id": str(f_id),
+                                "name": f"Fatura Internet - {venc_br}",
+                                "amount": {"value": int(valor * 100), "offset": 100},
+                                "quantity": 1
+                            }]
+                            merchant = (provedor.integracoes_externas or {}).get('pix_merchant_name', provedor.nome)
 
-                                if not pix_key:
-                                    # Tentar extrair da chave PIX bruta
-                                    pix_key, pix_key_type = ChatbotEngine._extract_pix_info(pix_code)
-                                
-                                await ChatbotEngine.send_order_details_pix(
-                                    conv=conversation,
-                                    content=msg,
-                                    pix_code=pix_code,
-                                    merchant_name=merchant,
-                                    key=pix_key,
-                                    key_type=pix_key_type,
-                                    amount_value=valor,
-                                    reference_id=str(f_id),
-                                    items_list=items
-                                )
-                            else:
-                                await ChatbotEngine.send_message_agnostic(conv=conversation, text=msg)
-                            
-                            result_context = {'status_faturas': 'vencida_unica', 'fatura_ativa': f}
-                        
-                        # Prioridade 3: Fatura em aberto -> Enviar a mais recente
-                        elif faturas_abertas:
-                            f = faturas_abertas[0] # Geralmente a primeira é a mais próxima / recente
-                            vencimento = f.get('dataVencimento', '')
-                            if '-' in vencimento:
-                                d_pts = vencimento.split('-')
-                                if len(d_pts) == 3:
-                                    vencimento = f"{d_pts[2]}/{d_pts[1]}/{d_pts[0]}"
-                            
-                            valor = float(f.get('valorCorrigido') or f.get('valor') or 0.0)
-                            f_id = f.get('numeroDocumento') or f.get('id') or f.get('fatura')
-                            msg = f"\n💳 *Sua fatura em aberto:*\n\nFatura ID: {f_id}\nVencimento: {vencimento}\nValor: R$ {valor:.2f}\n\nSegue abaixo as opções para pagamento."
-                            
-                            pix_code = f.get('codigoPix') or f.get('codigopix')
-                            if pix_code:
-                                items = [{
-                                    "retailer_id": str(f_id),
-                                    "name": f"Fatura Internet - {vencimento}",
-                                    "amount": {"value": int(valor * 100), "offset": 100},
-                                    "quantity": 1
-                                }]
-                                merchant = sgp_config.get('pix_merchant_name', provedor.nome)
-                                pix_key = sgp_config.get('pix_key')
-                                pix_key_type = "CNPJ"
-
-                                if not pix_key:
-                                    pix_key, pix_key_type = ChatbotEngine._extract_pix_info(pix_code)
-
-                                await ChatbotEngine.send_order_details_pix(
-                                    conv=conversation,
-                                    content=msg,
-                                    pix_code=pix_code,
-                                    merchant_name=merchant,
-                                    key=pix_key,
-                                    key_type=pix_key_type,
-                                    amount_value=valor,
-                                    reference_id=str(f_id),
-                                    items_list=items
-                                )
-                            else:
-                                await ChatbotEngine.send_message_agnostic(conv=conversation, text=msg)
-                            
-                            result_context = {'status_faturas': 'aberta', 'fatura_ativa': f}
-                        
-                        # Prioridade 4: Nenhuma fatura -> Parabéns
+                            await ChatbotEngine.send_order_details_payment(
+                                conv=conversation,
+                                content=msg,
+                                pix_code=pix_code,
+                                boleto_code=boleto_code,
+                                merchant_name=merchant,
+                                amount_value=valor,
+                                reference_id=str(f_id),
+                                items_list=items
+                            )
                         else:
-                            await ChatbotEngine.send_message_agnostic(conv=conversation, text="Parabéns, você não possui faturas vencidas ou em aberto no momento. 😊")
-                            result_context = {'status_faturas': 'em_dia'}
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=msg)
                         
-                        result_context['sgp_titulos'] = result
-
-                        # Lógica de Encerramento Customizado (Solicitado pelo usuário)
-                        if sgp_action == 'listar_titulos':
-                            success_msg = node_data.get('successMessage')
-                            auto_close = node_data.get('autoClose', False)
-                            
-                            # Condição: Só envia se não for erro
-                            if result_context.get('status_faturas') != 'error':
-                                if success_msg and str(success_msg).strip() != "":
-                                    await ChatbotEngine.send_message_agnostic(conv=conversation, text=success_msg)
-                                    logger.info(f"[ChatbotEngine][SGP] Mensagem de sucesso enviada: {success_msg[:30]}...")
-                                
-                                if auto_close:
-                                    closing_msg = node_data.get('closingMessage')
-                                    if closing_msg and str(closing_msg).strip():
-                                        await ChatbotEngine.send_message_agnostic(conv=conversation, text=str(closing_msg))
-                                        logger.info(f"[ChatbotEngine][SGP] Mensagem de encerramento enviada para conv {conversation_id}")
-                                    await sync_to_async(closing_service.request_closing)(conversation)
-                                    logger.info(f"[ChatbotEngine][SGP] Encerramento solicitado para conv {conversation_id}")
+                        result_context = {
+                            'status_faturas': 'atrasada' if is_atrasada else 'aberta', 
+                            'fatura_ativa': f,
+                            'link_fatura': f.get('link')
+                        }
+                    elif dados_fatura and dados_fatura.get('mensagem_positiva'):
+                        await ChatbotEngine.send_message_agnostic(conv=conversation, text=dados_fatura.get('mensagem'))
+                        result_context = {'status_faturas': 'em_dia'}
                     else:
-                         result_context = {'status_faturas': 'error', 'msg': 'Não conseguimos acessar suas faturas no momento.'}
+                        result_context = {'status_faturas': 'error', 'msg': 'Não conseguimos acessar suas faturas no momento.'}
+                    
+                    result_context['sgp_titulos'] = dados_fatura
+
+                    # Lógica de Encerramento Customizado (Solicitado pelo usuário)
+                    success_msg = node_data.get('successMessage')
+                    auto_close = node_data.get('autoClose', False)
+                    
+                    if result_context.get('status_faturas') != 'error':
+                        if success_msg and str(success_msg).strip() != "":
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=success_msg)
+                            logger.info(f"[ChatbotEngine][SGP] Mensagem de sucesso enviada: {success_msg[:30]}...")
+                        
+                        if auto_close:
+                            closing_msg = node_data.get('closingMessage')
+                            if closing_msg and str(closing_msg).strip():
+                                await ChatbotEngine.send_message_agnostic(conv=conversation, text=str(closing_msg))
+                                logger.info(f"[ChatbotEngine][SGP] Mensagem de encerramento enviada para conv {conversation_id}")
+                            await sync_to_async(closing_service.request_closing)(conversation)
+                            logger.info(f"[ChatbotEngine][SGP] Encerramento solicitado para conv {conversation_id}")
 
                 elif sgp_action == 'gerar_pix':
                     result = await sync_to_async(sgp.gerar_pix)(input_value)
@@ -775,6 +721,54 @@ class ChatbotEngine:
                             logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF na liberação: {e}")
                     
                     result = await sync_to_async(sgp.liberar_por_confianca)(contrato_final, cpf_cnpj=cpf_ctx)
+                    result_context = {'sgp_liberacao': result}
+
+                elif sgp_action == 'enviar_pagamento':
+                    # Envia apenas o método de pagamento escolhido ou ambos se não especificado
+                    from .fatura_service import FaturaService
+                    fs = FaturaService()
+                    
+                    metodo = node_data.get('paymentMethod') or flow_context.get('metodo_pagamento') or 'ambos'
+                    fatura_ativa = flow_context.get('fatura_ativa')
+                    
+                    if not fatura_ativa:
+                        # Se não tem fatura no contexto, buscar a mais recente
+                        contrato_id_ctx = flow_context.get('contrato') or flow_context.get('contrato_id')
+                        cpf_ctx = flow_context.get('cpf') or flow_context.get('cpfcnpj')
+                        dados_fatura = await sync_to_async(fs.buscar_fatura_sgp)(provedor, cpf_ctx, contrato_id_ctx)
+                        if dados_fatura and dados_fatura.get('links'):
+                            fatura_ativa = dados_fatura['links'][0]
+
+                    if fatura_ativa:
+                        f_id = fatura_ativa.get('fatura') or fatura_ativa.get('id')
+                        valor = float(fatura_ativa.get('valor', 0))
+                        venc_br = _formatar_data_br(fatura_ativa.get('vencimento'))
+                        
+                        pix_code = fatura_ativa.get('codigopix') if metodo in ('pix', 'ambos') else None
+                        boleto_code = fatura_ativa.get('linhadigitavel') if metodo in ('boleto', 'ambos') else None
+                        
+                        msg = f"💳 *Pagamento Fatura {f_id}*\nVencimento: {venc_br}\nValor: R$ {valor:.2f}"
+                        items = [{
+                            "retailer_id": str(f_id),
+                            "name": f"Fatura {f_id} - {venc_br}",
+                            "amount": {"value": int(valor * 100), "offset": 100},
+                            "quantity": 1
+                        }]
+                        merchant = (provedor.integracoes_externas or {}).get('pix_merchant_name', provedor.nome)
+                        
+                        await ChatbotEngine.send_order_details_payment(
+                            conv=conversation,
+                            content=msg,
+                            pix_code=pix_code,
+                            boleto_code=boleto_code,
+                            merchant_name=merchant,
+                            amount_value=valor,
+                            reference_id=str(f_id),
+                            items_list=items
+                        )
+                        result_context = {'status_envio_pagamento': 'success'}
+                    else:
+                        result_context = {'status_envio_pagamento': 'no_invoice'}
                     if result:
                         sucesso = result.get('status') == 1 or result.get('liberado') == True
                         protocolo = result.get('protocolo', '')
@@ -982,6 +976,26 @@ class ChatbotEngine:
             except Exception as e:
                 logger.error(f"[ChatbotEngine][Transfer] Erro ao executar nó de transferência: {e}", exc_info=True)
 
+        elif node_type == 'close':
+            try:
+                content = node_data.get('content', 'Atendimento encerrado. Obrigado!')
+                from conversations.models import Conversation
+                conversation = await sync_to_async(Conversation.objects.select_related('inbox', 'inbox__provedor', 'contact').get)(id=conversation_id)
+                
+                # 1. Enviar mensagem de despedida
+                if content:
+                    await ChatbotEngine.send_message_agnostic(conv=conversation, text=content)
+                
+                # 2. Encerrar conversa usando o closing_service
+                await sync_to_async(closing_service.request_closing)(conversation)
+                
+                # 3. Limpar memória para garantir que o fluxo pare aqui
+                await redis_memory_service.clear_memory(provedor_id, conversation_id, "whatsapp", "unknown")
+                logger.info(f"[ChatbotEngine][Close] Encerramento solicitado para conv {conversation_id}")
+                
+            except Exception as e:
+                logger.error(f"[ChatbotEngine][Close] Erro ao encerrar atendimento: {e}", exc_info=True)
+
 
     @staticmethod
     async def _persist_chatbot_message(conv, content_for_db, msg_btns=None, msg_rows=None):
@@ -1139,25 +1153,59 @@ class ChatbotEngine:
         return False, "Nenhuma integração compatível encontrada"
     
     @staticmethod
-    async def send_order_details_pix(conv, content, pix_code, merchant_name, key, key_type, amount_value, reference_id, items_list) -> Tuple[bool, Any]:
+    async def send_message_agnostic_document(conv, text, file_url, file_name=None) -> Tuple[bool, Any]:
+        """Envia um documento (PDF, etc) via Cloud API ou Evolution."""
+        inbox = conv.inbox
+        provedor = inbox.provedor
+        
+        if inbox.channel_id == "whatsapp_cloud_api" or inbox.channel_type == "whatsapp_oficial" or (provedor.integracoes_externas.get('cloud_api_active') == True):
+            return await sync_to_async(send_via_whatsapp_cloud_api)(
+                conversation=conv,
+                content=text,
+                message_type='document',
+                file_url=file_url,
+                file_name=file_name
+            )
+        # Evolution fallback placeholder
+        return await ChatbotEngine.send_message_agnostic(conv, f"{text}\n\nLink: {file_url}")
+
+    @staticmethod
+    async def send_order_details_payment(conv, content, pix_code=None, boleto_code=None, merchant_name=None, amount_value=0, reference_id="ref", items_list=None) -> Tuple[bool, Any]:
         """
-        Envia mensagem interativa de detalhes do pedido (review_and_pay) com Pix.
+        Envia mensagem interativa de detalhes do pedido com Pix e/ou Boleto.
         """
+        payment_settings = []
+        
+        # 1. PIX
+        if pix_code:
+            pix_key, pix_key_type = ChatbotEngine._extract_pix_info(pix_code)
+            payment_settings.append({
+                "type": "pix_dynamic_code",
+                "pix_dynamic_code": {
+                    "code": pix_code,
+                    "merchant_name": merchant_name or "Empresa",
+                    "key": pix_key,
+                    "key_type": pix_key_type
+                }
+            })
+            
+        # 2. BOLETO
+        if boleto_code:
+            # Limpar linha digitável (apenas números, max 48)
+            linha_limpa = ''.join(filter(str.isdigit, str(boleto_code)))[:48]
+            if len(linha_limpa) >= 47:
+                payment_settings.append({
+                    "type": "boleto",
+                    "boleto": {
+                        "digitable_line": linha_limpa
+                    }
+                })
+
         order_details = {
             "reference_id": reference_id,
             "type": "digital-goods",
             "payment_type": "br",
-            "payment_settings": [
-                {
-                    "type": "pix_dynamic_code",
-                    "pix_dynamic_code": {
-                        "code": pix_code,
-                        "merchant_name": merchant_name,
-                        "key": key,
-                        "key_type": key_type
-                    }
-                }
-            ],
+            "payment_settings": payment_settings,
             "currency": "BRL",
             "total_amount": {
                 "value": int(amount_value * 100),
@@ -1165,7 +1213,7 @@ class ChatbotEngine:
             },
             "order": {
                 "status": "pending",
-                "items": items_list,
+                "items": items_list or [],
                 "subtotal": {
                     "value": int(amount_value * 100),
                     "offset": 100

@@ -246,16 +246,12 @@ async def try_handle_fatura_flow(*, mensagem: str, provedor, contexto: Dict[str,
         )
         
         if cliente_satisfeito:
-            # Cliente está satisfeito - encerrar atendimento
-            logger.info(f"[FATURA_FLOW] Cliente satisfeito detectado na conversa {conversation_id}, encerrando atendimento")
+            # Cliente está satisfeito - apenas confirmar e deixar IA decidir
+            logger.info(f"[FATURA_FLOW] Cliente satisfeito detectado na conversa {conversation_id}")
             return {
                 "success": True,
-                "resposta": "Perfeito! Fico feliz em ter ajudado. Se precisar de mais alguma coisa no futuro, estou à disposição! Tenha um ótimo dia! 👋",
-                "final_action": "ENCERRAR_ATENDIMENTO",
-                "function_call": {
-                    "name": "encerrar_atendimento",
-                    "arguments": json.dumps({"motivo": "Cliente confirmou que não precisa de mais nada após receber fatura"})
-                },
+                "resposta": "Perfeito! Fico feliz em ter ajudado. Se precisar de mais alguma coisa, estou à disposição! 👋",
+                "final_action": "CLIENTE_SATISFEITO",
                 "ai_conversation_id": f"ai:{provedor_id}:{conversation_id}",
             }
         
@@ -442,6 +438,7 @@ async def try_handle_fatura_flow(*, mensagem: str, provedor, contexto: Dict[str,
             {
                 "cpf_cnpj": cpf,
                 "tipo_pagamento": tipo_pagamento,
+                "contrato_id": mem.get("contrato_id"),
                 "provedor_id": provedor_id,
                 "conversation_id": conversation_id,
             },

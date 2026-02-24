@@ -7,17 +7,18 @@ import {
     ArrowLeft, Settings, Trash2, MessageSquare,
     Zap, GitBranch, Database, Globe, X, Check,
     GripVertical, Info, Send, User, ChevronRight, List,
-    Eye, EyeOff, Wifi
+    Eye, EyeOff, Wifi, XCircle
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const NODE_TYPES = {
-    start: { label: 'Início', color: 'bg-emerald-500', icon: Play },
-    message: { label: 'Mensagem', color: 'bg-blue-500', icon: MessageSquare },
-    sgp: { label: 'Consulta SGP', color: 'bg-purple-500', icon: Database },
-    planos: { label: 'Planos de Internet', color: 'bg-cyan-500', icon: Wifi },
-    menu: { label: 'Lista Interativa (WhatsApp)', color: 'bg-emerald-600', icon: List },
-    transfer: { label: 'Transferir Atendimento', color: 'bg-orange-500', icon: Share2 },
+    start: { label: 'Início', color: 'text-slate-400', icon: Play },
+    message: { label: 'Mensagem', color: 'text-slate-400', icon: MessageSquare },
+    sgp: { label: 'Consulta SGP', color: 'text-slate-400', icon: Database },
+    planos: { label: 'Planos de Internet', color: 'text-slate-400', icon: Wifi },
+    menu: { label: 'Lista Interativa (WhatsApp)', color: 'text-slate-400', icon: List },
+    transfer: { label: 'Transferir Atendimento', color: 'text-slate-400', icon: Share2 },
+    close: { label: 'Encerrar Atendimento', color: 'text-slate-400', icon: XCircle },
 };
 
 const ChatbotBuilder = () => {
@@ -258,7 +259,7 @@ const ChatbotBuilder = () => {
     };
 
     const handleCanvasMouseDown = (e) => {
-        if (e.button === 0 && e.target === canvasRef.current) {
+        if (e.button === 0) {
             setIsPanning(true);
             setContextMenu({ show: false, x: 0, y: 0 });
         }
@@ -385,6 +386,17 @@ const ChatbotBuilder = () => {
                     }
                     setCurrentNodeId(nextNode.id);
                     // Não chama processNextStep pois transfer é terminal
+                } else if (nextNode.type === 'close') {
+                    setSimMessages(prev => [...prev, {
+                        role: 'bot',
+                        content: nextNode.data.content || 'Atendimento encerrado.',
+                    }]);
+                    setSimMessages(prev => [...prev, {
+                        role: 'system',
+                        content: 'Simulando: Atendimento Finalizado.'
+                    }]);
+                    setCurrentNodeId(nextNode.id);
+                    // Terminal
                 } else {
                     setSimMessages(prev => [...prev, { role: 'system', content: `Executando: ${nextNode.data.label}` }]);
                     setCurrentNodeId(nextNode.id);
@@ -419,6 +431,9 @@ const ChatbotBuilder = () => {
                         finalizeConnection(node.id);
                     }
                 }}
+                onMouseDown={(e) => {
+                    e.stopPropagation();
+                }}
                 onClick={(e) => {
                     e.stopPropagation();
                     setSelectedNode(node.id);
@@ -427,9 +442,9 @@ const ChatbotBuilder = () => {
                     }`}
             >
                 {/* Header do Nó */}
-                <div className="flex items-center gap-3 p-4 border-b border-slate-900">
-                    <div className={`p-2 rounded-xl text-white ${TypeConfig.color}`}>
-                        <TypeConfig.icon size={16} />
+                <div className="flex items-center gap-3 p-4 border-b border-slate-900 bg-slate-950/50 rounded-t-3xl text-white">
+                    <div className={`${TypeConfig.color}`}>
+                        <TypeConfig.icon size={20} strokeWidth={1.5} />
                     </div>
                     <div className="flex flex-col flex-1 truncate">
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 leading-none">
@@ -445,6 +460,7 @@ const ChatbotBuilder = () => {
                             onClick={(e) => {
                                 e.stopPropagation();
                                 updateNodeData(node.id, { isCollapsed: !node.data.isCollapsed });
+                                setSelectedNode(node.id);
                             }}
                             className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all"
                             title={node.data.isCollapsed ? "Mostrar conteúdo" : "Esconder conteúdo"}
@@ -460,8 +476,8 @@ const ChatbotBuilder = () => {
                         </button>
                     </div>
 
-                    {/* Output Point (General) - Apenas se não tiver botões ou for start/api. Transferir é terminal. */}
-                    {(!node.data.buttons || node.data.buttons.length === 0) && (!node.data.rows || node.data.rows.length === 0) && node.type !== 'transfer' && node.type !== 'planos' && (
+                    {/* Output Point (General) - Apenas se não tiver botões ou for start/api. Transferir e Close são terminais. */}
+                    {(!node.data.buttons || node.data.buttons.length === 0) && (!node.data.rows || node.data.rows.length === 0) && node.type !== 'transfer' && node.type !== 'close' && node.type !== 'planos' && (
                         <div
                             onMouseDown={(e) => startConnection(e, node.id, null)}
                             className="absolute -right-2 top-[35px] w-4 h-4 rounded-full bg-blue-500 border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30"
@@ -473,43 +489,49 @@ const ChatbotBuilder = () => {
                 <div className="absolute -left-1.5 top-[35px] w-3 h-3 bg-slate-700 border-2 border-slate-950 rounded-full" />
 
                 {/* Botões do Nó (Para Branching) */}
-                {!node.data.isCollapsed && (node.data.buttons || []).map((btn, bidx) => (
-                    <div key={btn.id} className="relative px-4 py-2 border-b border-slate-900 last:border-0 group/btn">
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-[10px] font-bold text-blue-400 uppercase tracking-widest truncate">
-                            {btn.title}
+                {
+                    !node.data.isCollapsed && (node.data.buttons || []).map((btn, bidx) => (
+                        <div key={btn.id} className="relative px-4 py-2 border-b border-slate-900 last:border-0 group/btn">
+                            <div className="bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-[10px] font-bold text-blue-400 uppercase tracking-widest truncate">
+                                {btn.title}
+                            </div>
+                            {/* Dot por botão */}
+                            <div
+                                onMouseDown={(e) => startConnection(e, node.id, btn.id)}
+                                className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-blue-500 border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30"
+                            />
                         </div>
-                        {/* Dot por botão */}
-                        <div
-                            onMouseDown={(e) => startConnection(e, node.id, btn.id)}
-                            className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-blue-500 border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30"
-                        />
-                    </div>
-                ))}
+                    ))
+                }
 
                 {/* Itens do Menu (Para Branching) */}
-                {!node.data.isCollapsed && (node.data.rows || []).map((row, ridx) => (
-                    <div key={row.id} className="relative px-4 py-2 border-b border-slate-900 last:border-0 group/row">
-                        <div className={`bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-[10px] font-bold truncate ${node.type === 'planos' ? 'text-cyan-400' : 'text-emerald-400'}`}>
-                            {row.title}
-                            {row.description && <span className="text-slate-500 ml-1">— {row.description}</span>}
+                {
+                    !node.data.isCollapsed && (node.data.rows || []).map((row, ridx) => (
+                        <div key={row.id} className="relative px-4 py-2 border-b border-slate-900 last:border-0 group/row">
+                            <div className={`bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-[10px] font-bold truncate ${node.type === 'planos' ? 'text-cyan-400' : 'text-emerald-400'}`}>
+                                {row.title}
+                                {row.description && <span className="text-slate-500 ml-1">— {row.description}</span>}
+                            </div>
+                            {/* Dot por item */}
+                            <div
+                                onMouseDown={(e) => startConnection(e, node.id, row.id)}
+                                className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30 ${node.type === 'planos' ? 'bg-cyan-500' : 'bg-emerald-500'}`}
+                            />
                         </div>
-                        {/* Dot por item */}
-                        <div
-                            onMouseDown={(e) => startConnection(e, node.id, row.id)}
-                            className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30 ${node.type === 'planos' ? 'bg-cyan-500' : 'bg-emerald-500'}`}
-                        />
-                    </div>
-                ))}
+                    ))
+                }
 
                 {/* Conteúdo Preview (Opcional) */}
-                {!node.data.isCollapsed && node.data.content && (
-                    <div className="p-4 pt-2">
-                        <p className="text-[10px] text-slate-400 line-clamp-2 bg-slate-900/30 p-2 rounded-lg italic border border-slate-800/50">
-                            "{node.data.content}"
-                        </p>
-                    </div>
-                )}
-            </motion.div>
+                {
+                    !node.data.isCollapsed && node.data.content && (
+                        <div className="p-4 pt-2">
+                            <p className="text-[10px] text-slate-400 line-clamp-2 bg-slate-900/30 p-2 rounded-lg italic border border-slate-800/50">
+                                "{node.data.content}"
+                            </p>
+                        </div>
+                    )
+                }
+            </motion.div >
         );
     };
 
@@ -525,18 +547,13 @@ const ChatbotBuilder = () => {
         <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
             {/* Top Toolbar */}
             <div className="flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 shadow-sm z-50">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-blue-600 dark:text-blue-400">
-                        <Bot size={24} />
+                <div className="flex items-center gap-4">
+                    <div className="text-slate-600 dark:text-slate-400">
+                        <Bot size={28} strokeWidth={1.5} />
                     </div>
-                    <div>
-                        <h1 className="text-lg font-bold text-slate-800 dark:text-white leading-none">
-                            {currentFlow ? currentFlow.name : t('chatbot_builder')}
-                        </h1>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-widest font-semibold text-blue-500">
-                            Editor de Fluxos v2.0
-                        </p>
-                    </div>
+                    <h1 className="text-xl font-bold text-slate-800 dark:text-white leading-none tracking-tight">
+                        Chatbot
+                    </h1>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -569,8 +586,8 @@ const ChatbotBuilder = () => {
                             animate={{ opacity: 1, y: 0 }}
                             className="max-w-md w-full p-10 bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-2xl text-center"
                         >
-                            <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-8 text-blue-600 dark:text-blue-400">
-                                <Bot size={40} />
+                            <div className="w-20 h-20 mx-auto mb-8 text-slate-600 dark:text-slate-400 flex items-center justify-center">
+                                <Bot size={64} strokeWidth={1.5} />
                             </div>
                             <h2 className="text-3xl font-black text-slate-800 dark:text-white mb-4 uppercase italic">
                                 Vamos automatizar?
@@ -655,8 +672,8 @@ const ChatbotBuilder = () => {
                                                     }}
                                                     className="w-full flex items-center gap-3 p-2.5 hover:bg-white/5 rounded-xl transition-all text-left group"
                                                 >
-                                                    <div className={`p-1.5 rounded-lg text-white ${config.color} shadow-sm group-hover:scale-110 transition-transform`}>
-                                                        <config.icon size={14} />
+                                                    <div className={`${config.color} group-hover:scale-110 transition-transform`}>
+                                                        <config.icon size={20} strokeWidth={1.5} />
                                                     </div>
                                                     <span className="text-sm font-bold text-slate-300 group-hover:text-white">{config.label}</span>
                                                 </button>
@@ -674,7 +691,7 @@ const ChatbotBuilder = () => {
                             onMouseMove={handleCanvasMouseMove}
                             onMouseUp={handleCanvasMouseUp}
                             onContextMenu={handleCanvasContextMenu}
-                            className="flex-1 overflow-hidden bg-slate-950 relative select-none"
+                            className={`flex-1 overflow-hidden bg-slate-950 relative select-none ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
                             onClick={() => {
                                 setSelectedNode(null);
                                 setContextMenu({ show: false, x: 0, y: 0, type: null, targetId: null });
@@ -688,13 +705,7 @@ const ChatbotBuilder = () => {
                                     transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px)`,
                                     transformOrigin: '0 0'
                                 }}
-                                className={`absolute inset-0 ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
-                                onPointerDown={(e) => {
-                                    if (e.button === 0 && e.target === e.currentTarget) {
-                                        setIsPanning(true);
-                                        setContextMenu({ show: false, x: 0, y: 0, pendingConnection: null });
-                                    }
-                                }}
+                                className="absolute top-0 left-0"
                             >
                                 {/* SVG Layer for Edges */}
                                 <svg className="absolute inset-0 pointer-events-none w-full h-full z-10 overflow-visible">
@@ -752,11 +763,12 @@ const ChatbotBuilder = () => {
                                                 <path
                                                     d={`M ${x1} ${y1} C ${x1 + 100} ${y1}, ${x2 - 100} ${y2}, ${x2} ${y2}`}
                                                     fill="none"
-                                                    stroke={edge.sourceHandle?.startsWith('row') ? '#10b981' : '#3b82f6'}
-                                                    strokeWidth="3"
-                                                    className="opacity-60 drop-shadow-sm pointer-events-none transition-all"
+                                                    stroke="#f59e0b"
+                                                    strokeWidth="2.5"
+                                                    strokeDasharray="8,5"
+                                                    className="opacity-70 drop-shadow-sm pointer-events-none transition-all"
                                                 />
-                                                <circle cx={x2} cy={y2} r="4" fill={edge.sourceHandle?.startsWith('row') ? '#10b981' : '#3b82f6'} className="pointer-events-none" />
+                                                <circle cx={x2} cy={y2} r="4" fill="#f59e0b" className="pointer-events-none" />
                                             </g>
                                         );
                                     })}
@@ -783,9 +795,9 @@ const ChatbotBuilder = () => {
                                                     C ${sNode.position.x + 340} ${sy},
                                                       ${mousePos.x - 50} ${mousePos.y}, ${mousePos.x} ${mousePos.y}`}
                                                 fill="none"
-                                                stroke={connectionSourceHandle?.startsWith('row') ? '#10b981' : '#3b82f6'}
+                                                stroke="#f59e0b"
                                                 strokeWidth="2"
-                                                strokeDasharray="6,6"
+                                                strokeDasharray="8,5"
                                             />
                                         );
                                     })()}
@@ -1078,6 +1090,7 @@ const ChatbotBuilder = () => {
                                                 { value: 'liberar_por_confianca', label: 'Liberar por Confiança (Contrato)', input: 'contrato', desc: 'Faz liberação por promessa de pagamento. Variável: {{sucesso}}' },
                                                 { value: 'criar_chamado', label: 'Criar Chamado Técnico (Contrato)', input: 'contrato', desc: 'Abre chamado no SGP. Variável: {{protocolo}}' },
                                                 { value: 'listar_manutencoes', label: 'Listar Manutenções (CPF)', input: 'cpf', desc: 'Lista manutenções na área do cliente. Variável: {{manutencoes}}' },
+                                                { value: 'enviar_pagamento', label: 'Enviar Pagamento (PIX/Boleto)', input: 'cpf', desc: 'Envia métodos de pagamento. Variável: {{status_envio_pagamento}}' },
                                             ];
                                             const selectedEndpoint = SGP_ENDPOINTS.find(e => e.value === sgpAction) || SGP_ENDPOINTS[0];
                                             return (
@@ -1141,7 +1154,23 @@ const ChatbotBuilder = () => {
                                                         </div>
                                                     )}
 
-                                                    {(sgpAction === 'listar_titulos' || sgpAction === 'criar_chamado' || sgpAction === 'liberar_por_confianca') && (
+                                                    {sgpAction === 'enviar_pagamento' && (
+                                                        <div>
+                                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-purple-500">Método de Pagamento</label>
+                                                            <select
+                                                                value={sgpNode?.data.paymentMethod || 'ambos'}
+                                                                onChange={(e) => updateNodeData(selectedNode, { paymentMethod: e.target.value })}
+                                                                className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-purple-500 transition-all text-slate-800 dark:text-white"
+                                                            >
+                                                                <option value="ambos">Ambos (PIX e Boleto)</option>
+                                                                <option value="pix">Apenas PIX</option>
+                                                                <option value="boleto">Apenas Boleto</option>
+                                                            </select>
+                                                            <p className="text-[9px] text-slate-400 mt-1 px-1 italic text-purple-400/80">Escolha qual método será enviado para o cliente.</p>
+                                                        </div>
+                                                    )}
+
+                                                    {(sgpAction === 'listar_titulos' || sgpAction === 'criar_chamado' || sgpAction === 'liberar_por_confianca' || sgpAction === 'enviar_pagamento') && (
                                                         <div className="space-y-4">
                                                             <div>
                                                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-purple-500">Mensagem de Sucesso</label>
@@ -1151,7 +1180,8 @@ const ChatbotBuilder = () => {
                                                                     placeholder={
                                                                         sgpAction === 'criar_chamado' ? "Ex: Chamado aberto! Seu protocolo é {protocolo}." :
                                                                             sgpAction === 'liberar_por_confianca' ? "Ex: Liberado por {liberado_dias} dias! Protocolo: {protocolo}" :
-                                                                                "Ex: Obrigado! Suas faturas foram enviadas acima."
+                                                                                sgpAction === 'enviar_pagamento' ? "Ex: Segue abaixo as opções para pagamento da sua fatura." :
+                                                                                    "Ex: Obrigado! Suas faturas foram enviadas acima."
                                                                     }
                                                                     rows={3}
                                                                     className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-purple-500 transition-all resize-none"
@@ -1159,7 +1189,8 @@ const ChatbotBuilder = () => {
                                                                 <p className="text-[9px] text-slate-400 mt-1 px-1 italic">
                                                                     {sgpAction === 'criar_chamado' ? "Será enviada após a criação. Use {protocolo}." :
                                                                         sgpAction === 'liberar_por_confianca' ? "Será enviada após a liberação. Use {liberado_dias} e {protocolo}." :
-                                                                            "Será enviada após a listagem das faturas."
+                                                                            sgpAction === 'enviar_pagamento' ? "Será enviada após o envio do pagamento." :
+                                                                                "Será enviada após a listagem das faturas."
                                                                     }
                                                                 </p>
                                                             </div>
@@ -1381,6 +1412,26 @@ const ChatbotBuilder = () => {
                                                         onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
                                                         placeholder="Ex: Aguarde um momento, estamos te transferindo..."
                                                         className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-blue-500 transition-all outline-none text-slate-800 dark:text-white resize-none font-bold"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {nodes.find(n => n.id === selectedNode)?.type === 'close' && (
+                                            <div className="space-y-6">
+                                                <div className="p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/30 rounded-2xl text-xs text-red-700 dark:text-red-400">
+                                                    <p className="font-bold uppercase tracking-widest mb-1">Encerrar Atendimento</p>
+                                                    <p>Este bloco finaliza o atendimento automático e move a conversa para o status de encerrada.</p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Mensagem de Despedida</label>
+                                                    <textarea
+                                                        rows={3}
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.content || ''}
+                                                        onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
+                                                        placeholder="Ex: Obrigado pelo contato! Atendimento encerrado."
+                                                        className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-red-500 transition-all outline-none text-slate-800 dark:text-white resize-none font-bold"
                                                     />
                                                 </div>
                                             </div>

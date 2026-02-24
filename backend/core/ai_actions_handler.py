@@ -102,21 +102,25 @@ class AIActionsHandler:
         return "\n".join(linhas)
 
     def _formatar_contratos_padrao(self, contratos: list, nome_cliente: str) -> str:
-        """Formata contratos no padrão WhatsApp"""
+        """Formata contratos no padrão WhatsApp com status"""
         nome = f"*{nome_cliente.upper()}*"
         if len(contratos) == 1:
             c = contratos[0]
             cid = str(c.get('contratoId', ''))
+            status = str(c.get('contratoStatusDisplay', '')).upper()
             end_parts = [c.get('endereco_logradouro'), c.get('endereco_numero'), c.get('endereco_bairro'), c.get('endereco_cidade'), c.get('endereco_uf')]
             end = ' '.join(str(p).strip() for p in end_parts if p and str(p).strip().lower() != 'none').upper() or "ENDEREÇO NÃO INFORMADO"
-            return f"{nome}, contrato localizado:\n\n1 - Contrato ({cid}): *{end}*\n\nSeus dados estão corretos? Me confirma para continuar."
+            
+            msg = f"{nome}, contrato localizado:\n\n1 - Contrato ({cid}) - *{status}*\nEndereço: *{end}*\n\nSeus dados estão corretos? Me confirma para continuar."
+            return msg
         else:
             msg = f"{nome}, encontramos mais de um contrato. Escolha o contrato desejado:"
             for idx, c in enumerate(contratos, 1):
                 cid = str(c.get('contratoId', ''))
+                status = str(c.get('contratoStatusDisplay', '')).upper()
                 end_parts = [c.get('endereco_logradouro'), c.get('endereco_numero'), c.get('endereco_bairro'), c.get('endereco_cidade'), c.get('endereco_uf')]
                 end = ' '.join(str(p).strip() for p in end_parts if p and str(p).strip().lower() != 'none').upper() or "ENDEREÇO NÃO INFORMADO"
-                msg += f"\n\n{idx} - Contrato ({cid}): *{end}*"
+                msg += f"\n\n{idx} - Contrato ({cid}) - *{status}*\nEndereço: *{end}*"
             return msg
 
     def execute_database_function(self, provedor: Provedor, function_name: str, function_args: dict, contexto: dict = None) -> dict:
@@ -395,7 +399,8 @@ class AIActionsHandler:
                         'contrato_status_display': c.get('contratoStatusDisplay'),
                         'motivo_status': c.get('motivo_status'),
                         'is_suspenso': is_suspenso, 'cliente_consultado': True, 
-                        'flow': actual_flow, 'step': actual_step,
+                        'flow': actual_flow if len(contratos) == 1 else 'FATURA', 
+                        'step': actual_step if len(contratos) == 1 else 'AGUARDANDO_ESCOLHA_CONTRATO',
                         'contratos': contratos if len(contratos) > 1 else None
                     }
                     
@@ -555,10 +560,11 @@ class AIActionsHandler:
             elif function_name == "gerar_fatura_completa":
                 cpf = function_args.get('cpf_cnpj', '')
                 tipo_pagamento = function_args.get('tipo_pagamento', 'pix')
+                contrato_id = function_args.get('contrato_id') or conversation_state.get('contrato_id')
                 if not self._is_valid_cpf_cnpj(cpf): return {"success": False, "erro": "CPF/CNPJ inválido."}
                 
                 fs = FaturaService()
-                dados = fs.buscar_fatura_sgp(provedor, cpf)
+                dados = fs.buscar_fatura_sgp(provedor, cpf, contrato_id)
                 
                 # Verificar se retornou mensagem positiva (todas as faturas pagas)
                 if dados and dados.get('mensagem_positiva'):

@@ -66,18 +66,19 @@ class FaturaService:
         # Se não for CPF nem CNPJ válido, retornar como está
         return cpf_cnpj
 
-    def buscar_fatura_sgp(self, provedor, cpf_cnpj: str) -> Optional[Dict[str, Any]]:
+    def buscar_fatura_sgp(self, provedor, cpf_cnpj: str, contrato_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Busca fatura mais atrasada no SGP via endpoint /api/ura/titulos/
-        Filtra faturas em aberto com vencimento passado e retorna a mais antiga.
-        Se não houver faturas em atraso, retorna mensagem positiva.
+        Prioriza a fatura mais antiga em atraso. Se não houver atrasadas, a mais antiga em aberto.
+        Filtra por contrato_id se fornecido.
         
         Args:
             provedor: Objeto Provedor com configurações SGP
-            cpf_cnpj: CPF ou CNPJ do cliente para buscar fatura
+            cpf_cnpj: CPF ou CNPJ do cliente
+            contrato_id: Opcional ID do contrato para filtrar
             
         Returns:
-            Dados da fatura mais atrasada no formato esperado ou dict com mensagem positiva
+            Dados da fatura selecionada ou dict com mensagem positiva
         """
         try:
             # region agent log
@@ -86,141 +87,85 @@ class FaturaService:
                 {
                     "provedor_id": getattr(provedor, "id", None),
                     "cpf_len": len("".join(filter(str.isdigit, str(cpf_cnpj)))),
-                    "cpf_last2": "".join(filter(str.isdigit, str(cpf_cnpj)))[-2:] if cpf_cnpj else None,
+                    "contrato_id": contrato_id,
                 },
                 location="fatura_service.py:buscar_fatura_sgp:entry",
                 hypothesis_id="H1",
             )
             # endregion
-            # Importar SGPClient para usar a mesma autenticação
             from .sgp_client import SGPClient
             
-            # Obter configurações do SGP do provedor (dinâmicas por provedor)
             integracao = provedor.integracoes_externas or {}
             sgp_url = integracao.get('sgp_url')
             sgp_token = integracao.get('sgp_token')
             sgp_app = integracao.get('sgp_app')
-
-            # region agent log
-            _debug_log(
-                "buscar_fatura_sgp_config",
-                {
-                    "provedor_id": getattr(provedor, "id", None),
-                    "has_sgp_url": bool(sgp_url),
-                    "has_sgp_token": bool(sgp_token),
-                    "has_sgp_app": bool(sgp_app),
-                },
-                location="fatura_service.py:buscar_fatura_sgp:config",
-                hypothesis_id="H1",
-            )
-            # endregion
             
             if not all([sgp_url, sgp_token, sgp_app]):
                 return None
             
-            # Criar cliente SGP com as configurações dinâmicas do provedor
-            sgp = SGPClient(
-                base_url=sgp_url,
-                token=sgp_token,
-                app_name=sgp_app
-            )
-            
-            # Remover formatação do CPF/CNPJ (apenas números) para enviar ao SGP
+            sgp = SGPClient(base_url=sgp_url, token=sgp_token, app_name=sgp_app)
             cpf_cnpj_limpo = ''.join(filter(str.isdigit, str(cpf_cnpj)))
             
-            # Listar todas as faturas do cliente
             resultado = sgp.listar_titulos(cpf_cnpj_limpo, limit=250)
-
-            # region agent log
-            _debug_log(
-                "buscar_fatura_sgp_result",
-                {
-                    "provedor_id": getattr(provedor, "id", None),
-                    "has_titulos": bool(resultado.get("titulos")) if isinstance(resultado, dict) else None,
-                    "total_titulos": len(resultado.get("titulos", [])) if isinstance(resultado, dict) else None,
-                },
-                location="fatura_service.py:buscar_fatura_sgp:result",
-                hypothesis_id="H3",
-            )
-            # endregion
 
             if not resultado or not isinstance(resultado, dict):
                 return None
             
             titulos = resultado.get('titulos', [])
+            
+            # FILTRO POR CONTRATO (se fornecido)
+            if contrato_id:
+                cid_str = str(contrato_id).strip()
+                titulos = [t for t in titulos if str(t.get('contratoId', t.get('contrato_id', ''))).strip() == cid_str]
+
             if not titulos:
-                # Nenhuma fatura encontrada - retornar mensagem positiva
                 return {
                     'status': 0,
                     'mensagem_positiva': True,
                     'mensagem': 'Parabéns! Todas as suas faturas estão pagas. Não há nenhuma fatura em aberto ou em atraso.'
                 }
             
-            # Data atual para comparação
             hoje = datetime.now().date()
             
-            # Filtrar faturas em aberto com vencimento passado
             faturas_atrasadas = []
+            faturas_abertas = []
+
             for titulo in titulos:
-                status = titulo.get('status', '').lower()
+                status = str(titulo.get('status', '')).lower()
                 data_vencimento_str = titulo.get('dataVencimento', '')
                 
-                # Verificar se está em aberto
                 if status != 'aberto':
                     continue
                 
-                # Verificar se a data de vencimento é válida e está no passado
                 try:
                     if data_vencimento_str:
                         data_vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
+                        meta = {'titulo': titulo, 'data_vencimento': data_vencimento}
                         if data_vencimento < hoje:
-                            faturas_atrasadas.append({
-                                'titulo': titulo,
-                                'data_vencimento': data_vencimento
-                            })
+                            faturas_atrasadas.append(meta)
+                        else:
+                            faturas_abertas.append(meta)
                 except (ValueError, TypeError):
-                    # Se não conseguir parsear a data, pular esta fatura
                     continue
             
-            # Se não houver faturas em atraso, verificar se há faturas abertas (não vencidas)
-            if not faturas_atrasadas:
-                faturas_abertas = [t for t in titulos if t.get('status', '').lower() == 'aberto']
-                if not faturas_abertas:
-                    # Nenhuma fatura em aberto - retornar mensagem positiva
-                    return {
-                        'status': 0,
-                        'mensagem_positiva': True,
-                        'mensagem': 'Parabéns! Todas as suas faturas estão pagas. Não há nenhuma fatura em aberto ou em atraso.'
-                    }
-                else:
-                    # Há faturas abertas mas não vencidas - pegar a mais próxima do vencimento
-                    faturas_ordenadas = []
-                    for titulo in faturas_abertas:
-                        data_vencimento_str = titulo.get('dataVencimento', '')
-                        try:
-                            if data_vencimento_str:
-                                data_vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
-                                faturas_ordenadas.append({
-                                    'titulo': titulo,
-                                    'data_vencimento': data_vencimento
-                                })
-                        except (ValueError, TypeError):
-                            continue
-                    
-                    if faturas_ordenadas:
-                        # Ordenar por data de vencimento (mais próxima primeiro)
-                        faturas_ordenadas.sort(key=lambda x: x['data_vencimento'])
-                        fatura_selecionada = faturas_ordenadas[0]['titulo']
-                    else:
-                        # Não conseguiu parsear datas - pegar primeira fatura aberta
-                        fatura_selecionada = faturas_abertas[0]
-            else:
-                # Ordenar faturas atrasadas por data de vencimento (mais antiga primeiro)
-                faturas_atrasadas.sort(key=lambda x: x['data_vencimento'])
+            fatura_selecionada = None
+
+            # REGRA: Priorizar a mais antiga ATRASADA
+            if faturas_atrasadas:
+                faturas_atrasadas.sort(key=lambda x: x['data_vencimento']) # Mais antiga primeiro
                 fatura_selecionada = faturas_atrasadas[0]['titulo']
+            # SENÃO: Priorizar a mais antiga ABERTA (futura)
+            elif faturas_abertas:
+                faturas_abertas.sort(key=lambda x: x['data_vencimento']) # Mais antiga (vencimento mais próximo) primeiro
+                fatura_selecionada = faturas_abertas[0]['titulo']
             
-            # Converter para o formato esperado pelo sistema (compatível com segunda_via_fatura)
-            # O formato esperado tem: status, links (array com fatura, codigopix, linhadigitavel, link, vencimento, valor)
+            if not fatura_selecionada:
+                return {
+                    'status': 0,
+                    'mensagem_positiva': True,
+                    'mensagem': 'Parabéns! Todas as suas faturas estão pagas. Não há nenhuma fatura em aberto ou em atraso.'
+                }
+            
             fatura_formatada = {
                 'status': 1,
                 'links': [{
@@ -367,7 +312,7 @@ class FaturaService:
             if vencimento and '-' in str(vencimento):
                 try:
                     vencimento_date = datetime.strptime(vencimento, "%Y-%m-%d")
-                    vencimento_formatado = vencimento_date.strftime("%d/%m/%Y")
+                    vencimento_formatado = vencimento_date.strftime("%d.%m.%Y")
                 except:
                     pass
             
@@ -576,7 +521,7 @@ class FaturaService:
             if vencimento and '-' in str(vencimento):
                 try:
                     vencimento_date = datetime.strptime(vencimento, "%Y-%m-%d")
-                    vencimento_formatado = vencimento_date.strftime("%d/%m/%Y")
+                    vencimento_formatado = vencimento_date.strftime("%d.%m.%Y")
                 except:
                     pass
             

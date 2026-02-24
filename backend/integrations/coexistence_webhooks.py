@@ -514,10 +514,14 @@ def process_message_echoes(waba_id: str, value: dict):
                     is_active=True
                 )
             
-            # Obter ou criar equipe IA automaticamente
-            ia_team = Team.get_or_create_ia_team(provedor)
+            # Verificar modo de atendimento
+            bot_mode = getattr(provedor, 'bot_mode', 'ia')
+            ia_team = None
+            if bot_mode == 'ia':
+                # Obter ou criar equipe IA automaticamente apenas se estiver no modo IA
+                ia_team = Team.get_or_create_ia_team(provedor)
             
-            # Criar conversa com status "snoozed" (Com IA) e equipe IA atribuída
+            # Criar conversa. No modo chatbot, status é "pending" e não tem equipe IA.
             # Usar filter().first() para evitar MultipleObjectsReturned
             conversation = Conversation.objects.filter(
                 contact=contact,
@@ -528,18 +532,17 @@ def process_message_echoes(waba_id: str, value: dict):
                 conversation = Conversation.objects.create(
                     contact=contact,
                     inbox=inbox,
-                    status="snoozed",  # Com IA
-                    team=ia_team,       # Equipe IA
+                    status="snoozed" if bot_mode == 'ia' else "pending",
+                    team=ia_team,
                     assignee=None
                 )
                 conv_created = True
             else:
                 conv_created = False
             
-            # Se a conversa já existia mas estava fechada ou em closing, reabrir com IA
-            # Incluir "closing": cliente retornou durante janela de tolerância ou após IA ter finalizado
+            # Se a conversa já existia mas estava fechada ou em closing, reabrir
             if conversation.status in ["closed", "resolved", "finalizada", "closing"]:
-                conversation.status = "snoozed"
+                conversation.status = "snoozed" if bot_mode == 'ia' else "pending"
                 conversation.team = ia_team
                 conversation.assignee = None
                 conversation.save()
@@ -701,7 +704,7 @@ def process_history_sync(waba_id: str, value: dict):
                 )
             
             # Usar filter().first() para evitar MultipleObjectsReturned
-            conversation = Conversation.objects.filter(
+            conversation = Conversation.objects.select_related('team').filter(
                 contact=contact,
                 inbox=inbox
             ).first()
@@ -975,12 +978,16 @@ def process_incoming_messages(waba_id: str, value: dict):
                     is_active=True
                 )
             
-            # Obter ou criar equipe IA automaticamente
-            ia_team = Team.get_or_create_ia_team(provedor)
+            # Verificar modo de atendimento
+            bot_mode = getattr(provedor, 'bot_mode', 'ia')
+            ia_team = None
+            if bot_mode == 'ia':
+                # Obter ou criar equipe IA automaticamente apenas se estiver no modo IA
+                ia_team = Team.get_or_create_ia_team(provedor)
             
-            # Criar conversa com status "snoozed" (Com IA) e equipe IA atribuída
+            # Criar conversa. No modo chatbot, status é "pending" e não tem equipe IA.
             # Usar filter().first() para evitar MultipleObjectsReturned
-            conversation = Conversation.objects.filter(
+            conversation = Conversation.objects.select_related('team').filter(
                 contact=contact,
                 inbox=inbox
             ).first()
@@ -989,19 +996,18 @@ def process_incoming_messages(waba_id: str, value: dict):
                 conversation = Conversation.objects.create(
                     contact=contact,
                     inbox=inbox,
-                    status="snoozed",  # Com IA (não "pending" que é Em Espera)
-                    team=ia_team,       # Atribuir à equipe IA
+                    status="snoozed" if bot_mode == 'ia' else "pending",
+                    team=ia_team,       # Atribuir à equipe IA se for modo IA
                     assignee=None       # Sem atendente específico
                 )
                 conv_created = True
             else:
                 conv_created = False
             
-            # Se a conversa já existia mas estava fechada ou em closing, reabrir com IA
-            # Incluir "closing": cliente retornou durante janela de tolerância ou após IA ter finalizado
+            # Se a conversa já existia mas estava fechada ou em closing, reabrir
             if conversation.status in ["closed", "resolved", "finalizada", "closing"]:
-                conversation.status = "snoozed"  # Com IA
-                conversation.team = ia_team       # Atribuir à equipe IA
+                conversation.status = "snoozed" if bot_mode == 'ia' else "pending"
+                conversation.team = ia_team
                 conversation.assignee = None
                 conversation.save()
             
@@ -1324,27 +1330,45 @@ def process_incoming_messages(waba_id: str, value: dict):
             chatbot_handled = False
             
             if is_customer_message:
-                if bot_mode == 'chatbot':
-                    logger.info(f"[WhatsAppWebhook] Provador {provedor.id} em modo CHATBOT. Invocando ChatbotEngine.")
-                    try:
-                        from asgiref.sync import async_to_sync
-                        async def run_chatbot_engine():
-                            return await ChatbotEngine.process_message(
-                                provedor_id=provedor.id,
-                                conversation_id=conversation.id,
-                                message_content=content or "",
-                                button_id=additional_attrs.get("button_id")
-                            )
-                        
-                        # Sempre tenta processar pelo chatbot se estiver no modo chatbot
-                        result = async_to_sync(run_chatbot_engine)()
-                        chatbot_handled = result[0] if isinstance(result, tuple) else result
-                        if chatbot_handled:
-                            logger.info(f"[WhatsAppWebhook] Mensagem processada pelo Chatbot Engine na conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
-                        else:
-                            logger.warning(f"[WhatsAppWebhook] Provedor em modo CHATBOT mas nenhum nó foi executado para a conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
-                    except Exception as chatbot_err:
-                        logger.error(f"[WhatsAppWebhook] Erro ao invocar Chatbot Engine: {chatbot_err}", exc_info=True)
+                # VERIFICAR SE O CANAL TEM IA/CHATBOT ATIVA
+                if canal and not canal.ia_ativa:
+                    logger.info(f"[WhatsAppWebhook] ChatBot suprimido para o canal {canal.id} ({canal.nome}): ia_ativa=False")
+                    chatbot_handled = False
+                elif bot_mode == 'chatbot':
+                    # VERIFICAR SUPRESSÃO DO CHATBOT (Atribuído, Status Ativo ou Transferido para Equipe Humana)
+                    is_assigned = conversation.assignee_id is not None
+                    is_active_agent_status = conversation.status in ['open', 'closed', 'closing']
+                    # Só suprimir por equipe se não for a equipe "IA"
+                    is_transferred_to_human_team = (
+                        conversation.team_id is not None and 
+                        conversation.team is not None and 
+                        conversation.team.name != "IA"
+                    )
+                    
+                    if is_assigned or is_active_agent_status or is_transferred_to_human_team:
+                        logger.info(f"[WhatsAppWebhook] ChatbotEngine suprimido para conversa {conversation.id}: atribuída (assignee_id={conversation.assignee_id}), status ativo (status={conversation.status}) ou transferida para equipe humana (team={conversation.team.name if conversation.team else 'N/A'}).")
+                        chatbot_handled = False
+                    else:
+                        logger.info(f"[WhatsAppWebhook] Provador {provedor.id} em modo CHATBOT. Invocando ChatbotEngine.")
+                        try:
+                            from asgiref.sync import async_to_sync
+                            async def run_chatbot_engine():
+                                return await ChatbotEngine.process_message(
+                                    provedor_id=provedor.id,
+                                    conversation_id=conversation.id,
+                                    message_content=content or "",
+                                    button_id=additional_attrs.get("button_id")
+                                )
+                            
+                            # Sempre tenta processar pelo chatbot se estiver no modo chatbot
+                            result = async_to_sync(run_chatbot_engine)()
+                            chatbot_handled = result[0] if isinstance(result, tuple) else result
+                            if chatbot_handled:
+                                logger.info(f"[WhatsAppWebhook] Mensagem processada pelo Chatbot Engine na conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
+                            else:
+                                logger.warning(f"[WhatsAppWebhook] Provedor em modo CHATBOT mas nenhum nó foi executado para a conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
+                        except Exception as chatbot_err:
+                            logger.error(f"[WhatsAppWebhook] Erro ao invocar Chatbot Engine: {chatbot_err}", exc_info=True)
                 else:
                     # Se estiver em modo IA, ainda podemos tentar o chatbot como fallback ou se já houver um fluxo iniciado?
                     # Por simplicidade e seguindo a solicitação de "bot_mode", se for IA, pulamos o chatbot aqui.
@@ -1418,13 +1442,20 @@ def process_incoming_messages(waba_id: str, value: dict):
             # Processar apenas mensagens de texto do cliente
             # IMPORTANTE: Não chamar IA se CSAT foi processado
             # IMPORTANTE: Áudios não são processados pela IA (apenas exibidos no chat)
+            # IMPORTANTE: Não chamar IA se IA estiver desativada no canal
+            canal_ia_ativa = canal.ia_ativa if canal else True
+            
             should_call_ai = (
                 not csat_processed 
                 and content 
                 and message_obj.is_from_customer 
                 and message_type == "text"  # Apenas mensagens de texto
+                and canal_ia_ativa  # Apenas se a IA estiver ativa no canal
             )
             
+            if not canal_ia_ativa:
+                logger.info(f"[WhatsAppWebhook] Chamada da IA suprimida para o canal {canal.id if canal else 'N/A'}: ia_ativa=False")
+
             if should_call_ai:
                 logger.info(f"[WhatsAppWebhook] Verificando se deve chamar IA - content={bool(content)}, message_type={message_type}, is_from_customer={message_obj.is_from_customer}")
                 logger.info(f"[WhatsAppWebhook] Condições satisfeitas, iniciando chamada da IA para conversa {conversation.id}")

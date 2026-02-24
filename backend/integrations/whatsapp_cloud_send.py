@@ -683,7 +683,7 @@ def send_via_whatsapp_cloud_api(
             interactive_payload: Dict[str, Any] = {}
             
             body_text = str(content)[:1024]
-            header_val = str(header_text)[:60] if header_text else "MENU"
+            header_val = str(header_text)[:60] if header_text else None
             footer_val = str(footer_text)[:1024] if footer_text else ""
             
             if rows:
@@ -704,10 +704,6 @@ def send_via_whatsapp_cloud_api(
                 
                 interactive_payload = {
                     "type": "list",
-                    "header": {
-                        "type": "text",
-                        "text": header_val
-                    },
                     "body": {
                         "text": body_text
                     },
@@ -719,6 +715,12 @@ def send_via_whatsapp_cloud_api(
                         "sections": sections_payload
                     }
                 }
+
+                if header_val:
+                    interactive_payload["header"] = {
+                        "type": "text",
+                        "text": header_val
+                    }
             else:
                 # WhatsApp Reply Buttons
                 buttons_payload: List[Dict[str, Any]] = []

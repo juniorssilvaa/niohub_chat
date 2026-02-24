@@ -619,11 +619,15 @@ class TelegramService:
             if existing:
                 return existing
             
-            ia_team = Team.get_or_create_ia_team(provedor)
+            bot_mode = getattr(provedor, 'bot_mode', 'ia')
+            ia_team = None
+            if bot_mode == 'ia':
+                ia_team = Team.get_or_create_ia_team(provedor)
+            
             return Conversation.objects.create(
                 contact=contact,
                 inbox=inbox,
-                status="snoozed",
+                status="snoozed" if bot_mode == 'ia' else "pending",
                 team=ia_team,
                 assignee=None
             )
