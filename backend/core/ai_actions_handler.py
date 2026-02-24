@@ -177,7 +177,7 @@ class AIActionsHandler:
             if function_name == "encerrar_atendimento":
                 if conv:
                     closing_service.request_closing(conv)
-                    redis_memory_service.clear_conversation_memory_sync(conv.id, provedor_id=provedor.id, channel=channel, phone=phone)
+                    redis_memory_service.clear_conversation_memory_sync(provedor_id=provedor.id, conversation_id=conv.id, channel=channel, phone=phone)
                     res = {
                         "success": True, 
                         "mensagem_formatada": "Perfeito! Estou encerrando seu atendimento agora conforme solicitado. Se precisar de algo no futuro, é só nos chamar novamente. Tenha um ótimo dia! 👋"
@@ -249,9 +249,17 @@ class AIActionsHandler:
 
             # Integração SGP
             integracao = provedor.integracoes_externas or {}
-            sgp_url, sgp_token, sgp_app = integracao.get('sgp_url'), integracao.get('sgp_token'), integracao.get('sgp_app')
+            
+            # Tentar buscar do objeto aninhado 'sgp' ou da raiz
+            sgp_config = integracao.get('sgp', {}) if isinstance(integracao.get('sgp'), dict) else integracao
+            
+            sgp_url = sgp_config.get('sgp_url') or integracao.get('sgp_url')
+            sgp_token = sgp_config.get('sgp_token') or integracao.get('sgp_token')
+            sgp_app = sgp_config.get('sgp_app') or integracao.get('sgp_app')
+            
             if not all([sgp_url, sgp_token, sgp_app]):
-                return {"success": False, "erro": "SGP não configurado."}
+                logger.error(f"[SGP] Configuração incompleta para provedor {provedor.id}: url={bool(sgp_url)}, token={bool(sgp_token)}, app={bool(sgp_app)}")
+                return {"success": False, "erro": "SGP não configurado corretamente."}
             
             sgp = SGPClient(base_url=sgp_url, token=sgp_token, app_name=sgp_app)
             res = {"success": False, "erro": "Ação não reconhecida."}
@@ -582,13 +590,30 @@ class AIActionsHandler:
                 if conversation_state.get('is_suspenso'):
                     return {"success": False, "erro": "Contrato suspenso.", "contrato_suspenso": True}
                 
+                # Criar chamado no SGP
                 sgp_res = sgp.criar_chamado(contrato=re.sub(r'[^\d]', '', str(cid)), conteudo=cont, ocorrenciatipo=1)
+                
                 if sgp_res.get('success'):
                     protocolo = sgp_res.get('protocolo')
+                    
+                    # 🚨 REGRA DE ORDEM: O protocolo deve ser retornado para o Chatbot primeiro
+                    # O Chatbot irá gerar a resposta contendo o protocolo e então solicitaremos a transferência
                     if conv:
-                        DatabaseTools(provedor=provedor).executar_transferencia_conversa(conv.id, "SUPORTE TÉCNICO", f"Chamado: {protocolo}")
-                    res = {"success": True, "protocolo": protocolo, "mensagem_formatada": f"Já abri seu chamado (Protocolo: {protocolo}) e estou te transferindo para o suporte. Só um momento!"}
+                        # Executar a transferência via DatabaseTools
+                        # Importante: Isso muda o status para 'pending'. O fluxo do webhook garantirá
+                        # que a resposta atual do Chatbot ainda seja enviada antes do bot parar de responder.
+                        db_tools = DatabaseTools(provedor=provedor)
+                        transfer_res = db_tools.executar_transferencia_conversa(conv.id, "SUPORTE TÉCNICO", f"Chamado: {protocolo}")
+                        
+                        logger.info(f"[SGP] Chamado {protocolo} criado e conversa {conv.id} transferida: {transfer_res.get('success')}")
+
+                    res = {
+                        "success": True, 
+                        "protocolo": protocolo, 
+                        "mensagem_formatada": f"Com certeza! Já abri seu chamado técnico (Protocolo: {protocolo}) e estou transferindo você agora mesmo para o suporte para que possam te dar continuidade. Só um momento!"
+                    }
                 else:
+                    logger.warning(f"[SGP] Falha ao criar chamado: {sgp_res.get('error')} | raw: {sgp_res.get('raw')}")
                     res = {"success": False, "erro": sgp_res.get('error')}
             
             elif function_name == "liberar_por_confianca":

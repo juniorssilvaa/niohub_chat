@@ -168,7 +168,7 @@ def log_conversation_closure(request, conversation, action_type, resolution_type
         
         # Enviar todas as mensagens da conversa para Supabase
         try:
-            from conversations.models import Message
+            # from conversations.models import Message
             messages = Message.objects.filter(conversation=conversation).order_by('created_at')
             messages_sent = 0
             
@@ -517,7 +517,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         import logging
         import requests
         from django.conf import settings
-        logger = logging.getLogger(__name__)
+        # logger = logging.getLogger(__name__)
         conversation_id = kwargs.get('pk')
         
         # Converter para int se necessário
@@ -874,7 +874,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 
         except Exception as e:
             import logging
-            logger = logging.getLogger(__name__)
+            # logger = logging.getLogger(__name__)
             logger.error(f"[RETRIEVE] Erro ao buscar conversa {conversation_id} no Supabase: {e}", exc_info=True)
             # Se falhar tudo, retornar 404
             return Response({'error': 'Conversa não encontrada'}, status=404)
@@ -949,7 +949,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             tuple: (success: bool, response: str)
         """
         import logging
-        logger = logging.getLogger(__name__)
+        # logger = logging.getLogger(__name__)
         logger.info(f"[_SEND_TELEGRAM] Iniciando envio Telegram: conversation_id={conversation.id}, content_length={len(content)}")
         
         try:
@@ -961,7 +961,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             logger.info(f"[_SEND_TELEGRAM] Contato: id={contact.id}, phone={contact.phone}, additional_attrs_keys={list(contact.additional_attributes.keys()) if contact.additional_attributes else []}")
             
             # Primeiro tentar pegar o chat_id da última mensagem recebida (mais confiável)
-            from conversations.models import Message
+            # from conversations.models import Message
             last_message = Message.objects.filter(
                 conversation=conversation,
                 is_from_customer=True
@@ -1091,7 +1091,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 
         except Exception as e:
             import logging
-            logger = logging.getLogger(__name__)
+            # logger = logging.getLogger(__name__)
             logger.error(f"Erro ao enviar mensagem humana para Telegram: {e}", exc_info=True)
             return False, str(e)
     
@@ -1102,7 +1102,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         Usado quando a janela de atendimento está fechada (após 24h).
         """
         import logging
-        logger = logging.getLogger(__name__)
+        # logger = logging.getLogger(__name__)
         logger.info(f"[START_WITH_TEMPLATE] Método chamado - dados: {request.data}")
         
         from integrations.whatsapp_cloud_send import send_template_message
@@ -1259,7 +1259,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         # Criar mensagem no banco de dados após envio bem-sucedido
         try:
             import json
-            from conversations.models import Message
+            # from conversations.models import Message
             
             # Extrair message_id da resposta da Meta
             message_id = None
@@ -1674,11 +1674,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
                             'conversation_id': conversation_id
                         }, status=410)  # 410 Gone - recurso não está mais disponível
                 except Exception as e:
-                    import logging
-                    logger = logging.getLogger(__name__)
                     logger.debug(f"Erro ao verificar conversa no Supabase: {e}")
                     pass
             
+            logger.warning(f"[CloseConversation] Conversa {conversation_id} não encontrada. ProvedorID: {provedor_id}")
             return Response({
                 'error': 'Conversa não encontrada',
                 'conversation_id': conversation_id
@@ -1746,32 +1745,37 @@ class ConversationViewSet(viewsets.ModelViewSet):
                     channel_type=conversation.inbox.channel_type
                 )
             else:
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.info(f"AuditLog já existe para conversa {conversation.id}, evitando duplicação")
         except Exception as audit_err:
-            import logging
-            logger = logging.getLogger(__name__)
+            # logger.warning(f"Falha ao criar/verificar AuditLog no Django: {audit_err}")
             logger.warning(f"Falha ao criar/verificar AuditLog no Django: {audit_err}")
         
-        # Limpar memória Redis da conversa encerrada IMEDIATAMENTE
         try:
             from core.redis_memory_service import redis_memory_service
-            redis_cleared = redis_memory_service.clear_conversation_memory_sync(
-                conversation.id,
-                provedor_id=conversation.inbox.provedor_id if conversation.inbox else None
-            )
-            if redis_cleared:
-                logger.info(f"[CloseConversation] ✓ Memória Redis limpa imediatamente para conversa {conversation.id} (encerrada por agente)")
+            p_id = conversation.inbox.provedor_id if (conversation.inbox and conversation.inbox.provedor_id) else None
+            
+            # Se não tem provedor_id via inbox, tenta via atributo direto ou request
+            if not p_id:
+                p_id = getattr(conversation, 'provedor_id', None)
+            
+            if p_id:
+                redis_cleared = redis_memory_service.clear_conversation_memory_sync(
+                    provedor_id=p_id,
+                    conversation_id=conversation.id
+                )
+                if redis_cleared:
+                    logger.info(f"[CloseConversation] ✓ Memória Redis limpa imediatamente para conversa {conversation.id} (provedor {p_id})")
+                else:
+                    logger.warning(f"[CloseConversation] ✗ Falha ao limpar memória Redis para conversa {conversation.id}")
             else:
-                logger.warning(f"[CloseConversation] ✗ Falha ao limpar memória Redis para conversa {conversation.id}")
+                logger.warning(f"[CloseConversation] ⚠ Não foi possível determinar provedor_id para limpar Redis da conversa {conversation.id}")
         except Exception as redis_err:
             logger.error(f"[CloseConversation] Erro ao limpar memória Redis da conversa {conversation.id}: {redis_err}", exc_info=True)
         
         # IMPORTANTE: Criar mensagem de sistema ANTES da migração
         # (após migração, a conversa será removida do local)
         try:
-            from conversations.models import Message
+            # from conversations.models import Message
             Message.objects.create(
                 conversation=conversation,
                 content=f"Conversa encerrada por {user.get_full_name() or user.username}. Resolução: {resolution_type}. {resolution_notes}",
@@ -1965,8 +1969,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
         try:
             from core.redis_memory_service import redis_memory_service
             redis_cleared = redis_memory_service.clear_conversation_memory_sync(
-                conversation.id,
-                provedor_id=conversation.inbox.provedor_id if conversation.inbox else None
+                provedor_id=conversation.inbox.provedor_id if conversation.inbox else None,
+                conversation_id=conversation.id
             )
             if redis_cleared:
                 logger.info(f"[CloseConversationAI] ✓ Memória Redis limpa imediatamente para conversa {conversation.id} (encerrada pela IA via API)")
@@ -2647,7 +2651,7 @@ class MessageViewSet(viewsets.ModelViewSet):
     def send_text(self, request):
         """Enviar mensagem de texto"""
         import logging
-        logger = logging.getLogger(__name__)
+        # logger = logging.getLogger(__name__)
         
         conversation_id = request.data.get('conversation_id')
         content = request.data.get('content')
@@ -2965,7 +2969,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             tuple: (success: bool, response: str)
         """
         import logging
-        logger = logging.getLogger(__name__)
+        # logger = logging.getLogger(__name__)
         logger.info(f"[_SEND_TELEGRAM] Iniciando envio Telegram: conversation_id={conversation.id}, content_length={len(content)}")
         
         try:
@@ -2978,7 +2982,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             logger.info(f"[_SEND_TELEGRAM] Contato: id={contact.id}, phone={contact.phone}, additional_attrs_keys={list(contact.additional_attributes.keys()) if contact.additional_attributes else []}")
             
             # Primeiro tentar pegar o chat_id da última mensagem recebida (mais confiável)
-            from conversations.models import Message
+            # from conversations.models import Message
             last_message = Message.objects.filter(
                 conversation=conversation,
                 is_from_customer=True
@@ -3109,7 +3113,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 
         except Exception as e:
             import logging
-            logger = logging.getLogger(__name__)
+            # logger = logging.getLogger(__name__)
             logger.error(f"Erro ao enviar mensagem humana para Telegram: {e}", exc_info=True)
             return False, str(e)
 
@@ -3191,7 +3195,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 
         except Exception as e:
             import logging
-            logger = logging.getLogger(__name__)
+            # logger = logging.getLogger(__name__)
             logger.error(f"Erro ao enviar mídia para Telegram: {e}", exc_info=True)
             return False, str(e)
 
@@ -4513,7 +4517,7 @@ def serve_media_file(request, conversation_id, filename):
         
         # Importar logging
         import logging
-        logger = logging.getLogger(__name__)
+        # logger = logging.getLogger(__name__)
         
         # Verificar se a conversa existe
         try:
@@ -4596,7 +4600,7 @@ def serve_media_file(request, conversation_id, filename):
         raise
     except Exception as e:
         import logging
-        logger = logging.getLogger(__name__)
+        # logger = logging.getLogger(__name__)
         logger.error(f"[ServeMedia] Erro ao servir arquivo {filename}: {e}", exc_info=True)
         raise Http404(f"Erro ao servir arquivo: {str(e)}")
 
@@ -4760,7 +4764,7 @@ class DashboardStatsView(APIView):
         
         # Log para debug
         import logging
-        logger = logging.getLogger(__name__)
+        # logger = logging.getLogger(__name__)
         logger.info(f"[DashboardStats] Usuário {user.id} ({user.username}) - Provedor: {provedor.id} ({provedor.nome})")
         
         # Importar modelos necessários
@@ -4843,7 +4847,7 @@ class DashboardStatsView(APIView):
                         conversas_resolvidas_supabase = 0
         except Exception as e:
             import logging
-            logger = logging.getLogger(__name__)
+            # logger = logging.getLogger(__name__)
             logger.warning(f"Erro ao buscar conversas do Supabase para provedor {provedor.id}: {e}")
             conversas_resolvidas_supabase = 0
         
@@ -4987,7 +4991,7 @@ class DashboardStatsView(APIView):
                     })
         except Exception as e:
             import logging
-            logger = logging.getLogger(__name__)
+            # logger = logging.getLogger(__name__)
             logger.error(f"Erro ao calcular performance dos atendentes: {e}")
         
         return Response({

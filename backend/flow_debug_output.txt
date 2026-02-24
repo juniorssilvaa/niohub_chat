@@ -1,0 +1,36 @@
+Fluxo ID: 11 | Nome: Novo Fluxo de Chatbot | Provedor: NIO NET
+
+--- TODOS OS NÓS ---
+ID: node_1771755205353 | Type: start | Label: Início
+ID: node_1771800458731 | Type: menu | Label: Lista Interativa (WhatsApp)
+ID: node_1771800725780 | Type: menu | Label: Lista Interativa (WhatsApp)
+ID: node_1771808023208 | Type: sgp | Label: Consulta SGP
+  sgpAction: listar_titulos
+  inputVar: None
+ID: node_1771855380337 | Type: message | Label: Mensagem
+ID: node_1771855513778 | Type: message | Label: Suporte - Técnico
+ID: node_1771862984561 | Type: sgp | Label: Endpoit consult
+  sgpAction: None
+  inputVar: None
+ID: node_1771863159468 | Type: menu | Label: Lista Interativa (WhatsApp)
+ID: node_1771893358340 | Type: sgp | Label: Consulta SGP
+  sgpAction: criar_chamado
+  inputVar: None
+ID: node_1771893403243 | Type: sgp | Label: Consulta SGP
+  sgpAction: criar_chamado
+  inputVar: None
+ID: node_1771894869868 | Type: transfer | Label: Transferir Atendimento
+ID: node_1771901617604 | Type: transfer | Label: Transferir Atendimento
+
+--- ARESTAS (EDGES) ---
+Edge: node_1771755205353 -> node_1771800458731 (handle: None)
+Edge: node_1771800458731 -> node_1771800725780 (handle: row_1)
+Edge: node_1771800725780 -> node_1771855380337 (handle: None)
+Edge: node_1771855380337 -> node_1771808023208 (handle: None)
+Edge: node_1771800725780 -> node_1771855513778 (handle: row_1771800849317)
+Edge: node_1771855513778 -> node_1771862984561 (handle: None)
+Edge: node_1771862984561 -> node_1771863159468 (handle: None)
+Edge: node_1771863159468 -> node_1771893358340 (handle: row_1771863159468)
+Edge: node_1771863159468 -> node_1771893403243 (handle: row_1771863205370)
+Edge: node_1771893358340 -> node_1771894869868 (handle: None)
+Edge: node_1771893403243 -> node_1771901617604 (handle: None)

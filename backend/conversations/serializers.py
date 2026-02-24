@@ -300,6 +300,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     contact = ContactSerializer(read_only=True)
     inbox = InboxSerializer(read_only=True)
     assignee = UserSerializer(read_only=True)
+    team = serializers.SerializerMethodField()
     labels = LabelSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
@@ -307,7 +308,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = [
-            'id', 'contact', 'inbox', 'assignee', 'status',
+            'id', 'contact', 'inbox', 'assignee', 'team', 'status',
             'labels', 'additional_attributes', 'last_message_at', 'created_at',
             'last_message', 'unread_count'
         ]
@@ -326,6 +327,16 @@ class ConversationListSerializer(serializers.ModelSerializer):
     def get_unread_count(self, obj):
         # Implementar lógica de contagem de mensagens não lidas
         return 0
+
+    def get_team(self, obj):
+        """Retorna dados do time se existir"""
+        if obj.team:
+            return {
+                'id': obj.team.id,
+                'name': obj.team.name,
+                'description': obj.team.description
+            }
+        return None
 
 
 class TeamMemberSerializer(serializers.ModelSerializer):

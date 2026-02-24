@@ -1282,3 +1282,16 @@ class ChatbotFlowSerializer(serializers.ModelSerializer):
         model = ChatbotFlow
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class PlanoSerializer(serializers.ModelSerializer):
+    class Meta:
+        from core.models import Plano
+        model = Plano
+        fields = [
+            'id', 'provedor', 'nome', 'descricao',
+            'velocidade_download', 'velocidade_upload',
+            'preco', 'ativo', 'ordem',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

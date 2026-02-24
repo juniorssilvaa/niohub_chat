@@ -7,15 +7,15 @@ import { useNotifications } from '../contexts/NotificationContext';
 
 const ConversationList = memo(({ onConversationSelect, selectedConversation, provedorId, onConversationUpdate, user }) => {
   const { painelWsConnected } = useNotifications();
-  
+
   const [searchTerm, setSearchTerm] = useState(() => {
     return localStorage.getItem('conversationSearchTerm') || '';
   });
-  
+
   const [activeTab, setActiveTab] = useState(() => {
     return localStorage.getItem('conversationListActiveTab') || 'mine';
   });
-  
+
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(false);
   const userPermissions = useMemo(() => user?.permissions || [], [user]);
@@ -29,12 +29,12 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   const audioRef = useRef(null);
   const prevConversationsRef = useRef({}); // { [id]: lastMessageIdOrTime }
   const hasSoundInitRef = useRef(false);
-  
+
   //  Estados para novo atendimento
   const [showMenuAtendimento, setShowMenuAtendimento] = useState(false);
   const [modalNovoContato, setModalNovoContato] = useState(false);
   const [modalContatoExistente, setModalContatoExistente] = useState(false);
-  
+
   const [novoContato, setNovoContato] = useState({
     nome: '',
     telefone: '',
@@ -44,20 +44,20 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     templateSelecionado: null,
     canalId: null
   });
-  
+
   const [templates, setTemplates] = useState([]);
   const [carregandoTemplates, setCarregandoTemplates] = useState(false);
-  
+
   const [contatoExistente, setContatoExistente] = useState({
     busca: '',
     contato: null,
     mensagem: ''
   });
-  
+
   const [enviandoAtendimento, setEnviandoAtendimento] = useState(false);
   const [buscandoContato, setBuscandoContato] = useState(false);
   const [contatosEncontrados, setContatosEncontrados] = useState([]);
-  
+
   //  Função para buscar contatos existentes
   const buscarContatos = async (termo) => {
     if (!termo.trim()) {
@@ -68,12 +68,12 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     setBuscandoContato(true);
     // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    
+
     try {
       const response = await axios.get(`/api/contacts/?search=${termo}`, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       setContatosEncontrados(response.data.results || []);
     } catch (error) {
       // Erro ao buscar contatos
@@ -84,7 +84,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   };
 
   // Removido prompt de desbloqueio (UX simplificada)
-  useEffect(() => {}, [authReady, user?.sound_notifications_enabled]);
+  useEffect(() => { }, [authReady, user?.sound_notifications_enabled]);
 
   // Buscar templates quando modal abrir e canal for WhatsApp
   useEffect(() => {
@@ -100,33 +100,33 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   // Função para buscar templates do canal WhatsApp
   const buscarTemplates = async (canalId) => {
     if (!canalId) return;
-    
+
     setCarregandoTemplates(true);
     // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    
+
     try {
       const response = await axios.get(`/api/canais/${canalId}/message-templates/`, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // O endpoint retorna { success: true, templates: [...] }
       const templatesList = response.data?.templates || response.data || [];
-      
+
       console.log('Total de templates retornados:', templatesList.length);
       console.log('Templates (primeiros 3):', templatesList.slice(0, 3));
-      
+
       // Filtrar apenas templates aprovados (case-insensitive para segurança)
-      const templatesAprovados = templatesList.filter(t => 
+      const templatesAprovados = templatesList.filter(t =>
         t.status && t.status.toUpperCase() === 'APPROVED'
       );
-      
+
       setTemplates(templatesAprovados);
-      
+
       console.log('Templates aprovados encontrados:', templatesAprovados.length, 'de', templatesList.length);
-      
+
       if (templatesAprovados.length === 0 && templatesList.length > 0) {
-        console.warn('Há templates mas nenhum está aprovado. Status dos templates:', 
+        console.warn('Há templates mas nenhum está aprovado. Status dos templates:',
           templatesList.map(t => ({ name: t.name, status: t.status }))
         );
       }
@@ -149,25 +149,25 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       if (provedorId) {
         params.provedor_id = provedorId;
       }
-      
+
       const response = await axios.get('/api/canais/', {
         headers: { Authorization: `Token ${token}` },
         params: params
       });
-      
+
       // A resposta pode ter results (paginado) ou ser um array direto
       const canais = response.data.results || response.data || [];
-      
+
       console.log('Canais encontrados:', canais.length);
       console.log('Canais disponíveis:', canais.map(c => ({ id: c.id, tipo: c.tipo, ativo: c.ativo, nome: c.name || c.nome })));
-      
+
       // Filtrar apenas canais WhatsApp Oficial ativos
       const canalWhatsApp = canais.find(
         canal => canal.tipo === 'whatsapp_oficial' && canal.ativo === true
       );
-      
+
       console.log('Canal WhatsApp encontrado:', canalWhatsApp ? `ID: ${canalWhatsApp.id}, Nome: ${canalWhatsApp.name || canalWhatsApp.nome}` : 'Nenhum');
-      
+
       if (canalWhatsApp) {
         setNovoContato(prev => ({ ...prev, canalId: canalWhatsApp.id }));
         buscarTemplates(canalWhatsApp.id);
@@ -215,7 +215,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       // Se usar template e canal for WhatsApp, usar endpoint de template
       if (novoContato.usarTemplate && novoContato.canal === 'whatsapp' && novoContato.canalId) {
         const template = templates.find(t => t.name === novoContato.templateSelecionado);
-        
+
         if (!template) {
           alert('Template não encontrado');
           setEnviandoAtendimento(false);
@@ -241,7 +241,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         } else {
           throw new Error(response.data.error || 'Erro ao enviar template');
         }
-        
+
         setEnviandoAtendimento(false);
         return;
       }
@@ -250,7 +250,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       const userResponse = await axios.get('/api/auth/me/', {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // 1. Criar ou buscar contato
       let contactResponse;
       try {
@@ -277,7 +277,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       const inboxesResponse = await axios.get('/api/inboxes/', {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       const inbox = inboxesResponse.data.results.find(
         inbox => inbox.channel_type === novoContato.canal
       ) || inboxesResponse.data.results[0];
@@ -307,10 +307,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       alert('Atendimento criado com sucesso! Aparecerá no painel em instantes.');
       setNovoContato({ nome: '', telefone: '', canal: 'whatsapp', mensagem: '', usarTemplate: false, templateSelecionado: null, canalId: null });
       setModalNovoContato(false);
-      
+
       // Recarregar conversas
       setTimeout(() => fetchConversations(true), 1000);
-      
+
     } catch (error) {
       // Tratar erro traduzido do backend
       const errorMessage = error.response?.data?.error || error.response?.data?.detail || error.message;
@@ -336,12 +336,12 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       const userResponse = await axios.get('/api/auth/me/', {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // 1. Buscar inbox padrão
       const inboxesResponse = await axios.get('/api/inboxes/', {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       const inbox = inboxesResponse.data.results.find(
         inbox => inbox.channel_type === 'whatsapp'
       ) || inboxesResponse.data.results[0];
@@ -372,10 +372,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       setContatoExistente({ busca: '', contato: null, mensagem: '' });
       setModalContatoExistente(false);
       setContatosEncontrados([]);
-      
+
       // Recarregar conversas
       setTimeout(() => fetchConversations(true), 1000);
-      
+
     } catch (error) {
       // Erro ao enviar para contato existente
       alert('Erro ao enviar mensagem: ' + (error.response?.data?.detail || error.message));
@@ -388,11 +388,11 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   const isMounted = useRef(true);
   const wsRef = useRef(null);
   const retryTimeoutRef = useRef(null);
-  
+
   // Cleanup quando o componente desmontar
   useEffect(() => {
     isMounted.current = true;
-    
+
     return () => {
       isMounted.current = false;
       if (wsRef.current) {
@@ -465,7 +465,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         link2.href = href;
         document.head.appendChild(link2);
       }
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const startBlinkingFavicon = () => {
@@ -504,17 +504,17 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       audioRef.current.play()
         .then(() => setShowSoundPrompt(false))
         .catch(() => setShowSoundPrompt(true));
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const fetchTimeoutRef = useRef(null);
-  
+
   // Função para buscar conversas com debounce
   const fetchConversations = async (forceRefresh = false) => {
     if (!isMounted.current || !authReady) {
       return;
     }
-    
+
     // Se já houver um agendamento, cancelar para evitar múltiplas chamadas
     if (fetchTimeoutRef.current) {
       clearTimeout(fetchTimeoutRef.current);
@@ -525,7 +525,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       if (forceRefresh) {
         setLoading(true);
       }
-      
+
       try {
         const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
         if (!token) {
@@ -538,38 +538,38 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           ordering: '-last_message_at',
           _t: new Date().getTime().toString() // Cache bust
         });
-        
+
         if (provedorId) {
           params.append('provedor_id', provedorId);
         }
-        
+
         const res = await axios.get(`/api/conversations/?${params.toString()}`, {
           headers: { Authorization: `Token ${token}` }
         });
-        
+
         if (!isMounted.current) return;
 
         const conversationsData = res.data.results || res.data || [];
-        
+
         const closedStatuses = ['closed', 'encerrada', 'resolved', 'finalizada'];
         const activeConversations = conversationsData.filter(conv => {
           const status = conv.status || conv.additional_attributes?.status;
           const isClosed = closedStatuses.includes(status);
-          
+
           if (isClosed && selectedConversation?.id === conv.id) {
             if (onConversationUpdate) {
               onConversationUpdate(null);
             }
             localStorage.removeItem('selectedConversation');
           }
-          
+
           return !isClosed;
         });
-        
+
         if (selectedConversation) {
           const selectedStillExists = activeConversations.some(c => c.id === selectedConversation.id);
           const selectedStatus = selectedConversation.status || selectedConversation.additional_attributes?.status;
-          
+
           if (!selectedStillExists || closedStatuses.includes(selectedStatus)) {
             if (onConversationUpdate) {
               onConversationUpdate(null);
@@ -577,7 +577,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             localStorage.removeItem('selectedConversation');
           }
         }
-        
+
         try {
           const prevMap = prevConversationsRef.current || {};
           const nextMap = {};
@@ -600,12 +600,12 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           if (!hasSoundInitRef.current) {
             hasSoundInitRef.current = true;
           }
-        } catch (_) {}
+        } catch (_) { }
 
         setConversations(activeConversations);
         setHasInitialized(true);
         setLastUpdateTime(new Date());
-        
+
       } catch (err) {
         if (isMounted.current) {
           if (err.response?.status === 401) {
@@ -670,35 +670,35 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     // No entanto, ainda precisamos dos handlers de onmessage para atualizar a lista local.
     // Para manter a estabilidade, vamos mover a conexão para o Context e usar os eventos de lá.
     // Por enquanto, vamos apenas garantir que a conexão aqui não caia ao trocar conversas.
-    
+
     const connectWebSocket = () => {
       // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       if (!token) return;
-      
+
       const wsUrl = buildWebSocketUrl(`/ws/painel/${provedorId}/`, { token });
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
-      
+
       const wsTimeout = setTimeout(() => {
         // Log removido('Timeout do WebSocket');
         setWsConnected(false);
       }, 5000);
-      
+
       ws.onopen = () => {
         clearTimeout(wsTimeout);
         setWsConnected(true);
       };
-      
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
+
           // CORREÇÃO: Tratar evento de conversa fechada ANTES de outros eventos
-          if (data.type === 'conversation_event' && 
-              (data.event_type === 'conversation_closed' || data.event_type === 'conversation_ended')) {
+          if (data.type === 'conversation_event' &&
+            (data.event_type === 'conversation_closed' || data.event_type === 'conversation_ended')) {
             const closedConversationId = data.conversation_id;
-            
+
             // Remover conversa fechada do estado imediatamente
             setConversations(prevConversations => {
               const filtered = prevConversations.filter(conv => {
@@ -709,7 +709,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               });
               return filtered;
             });
-            
+
             // Se a conversa fechada estava selecionada, limpar seleção IMEDIATAMENTE
             if (selectedConversationRef.current?.id === closedConversationId) {
               if (onConversationUpdateRef.current) {
@@ -719,27 +719,27 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               // Limpar localStorage também
               localStorage.removeItem('selectedConversation');
             }
-            
+
             // Recarregar lista para garantir sincronização
             setTimeout(() => fetchConversations(true), 300);
             return;
           }
-          
+
           // Processar todos os tipos de eventos relacionados a conversas
-          const isConversationEvent = data.type === 'conversation_created' || 
-              data.type === 'conversation_updated' || 
-              data.type === 'conversation_event';
+          const isConversationEvent = data.type === 'conversation_created' ||
+            data.type === 'conversation_updated' ||
+            data.type === 'conversation_event';
           const isMessageEvent = data.type === 'new_message' ||
-              data.type === 'message_created' ||
-              data.type === 'message' ||
-              data.type === 'chat_message' ||
-              data.type === 'messages' ||
-              data.event_type === 'new_message' ||
-              data.event_type === 'message_received' ||
-              data.event_type === 'message' ||
-              data.event_type === 'chat_message' ||
-              data.event_type === 'messages';
-          
+            data.type === 'message_created' ||
+            data.type === 'message' ||
+            data.type === 'chat_message' ||
+            data.type === 'messages' ||
+            data.event_type === 'new_message' ||
+            data.event_type === 'message_received' ||
+            data.event_type === 'message' ||
+            data.event_type === 'chat_message' ||
+            data.event_type === 'messages';
+
           if (isConversationEvent || isMessageEvent) {
             // Tocar som e piscar favicon conforme o tipo de evento
             try {
@@ -760,11 +760,11 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                   startBlinkingFavicon();
                 }
               }
-            } catch (_) {}
-            
+            } catch (_) { }
+
             setNewMessageNotification(true);
             setTimeout(() => setNewMessageNotification(false), 3000);
-            
+
             // SEMPRE recarregar a lista de conversas quando houver evento de nova conversa ou nova mensagem
             // Isso garante que a lista seja atualizada mesmo se o payload não contiver a conversa completa
             if (isMounted.current) {
@@ -782,14 +782,14 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                   });
                 });
               }
-              
+
               // SEMPRE recarregar para garantir que a lista esteja atualizada
               // Limpar timeout anterior se existir para evitar múltiplas chamadas
               if (fetchTimeoutRef.current) {
                 clearTimeout(fetchTimeoutRef.current);
                 fetchTimeoutRef.current = null;
               }
-              
+
               // Usar um pequeno delay para evitar múltiplas chamadas simultâneas
               // Mas garantir que sempre execute
               fetchTimeoutRef.current = setTimeout(() => {
@@ -805,26 +805,26 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           // Silenciar erro para não expor informações sensíveis
         }
       };
-      
+
       ws.onclose = (event) => {
         clearTimeout(wsTimeout);
         setWsConnected(false);
-        
+
         // Códigos que indicam erro permanente (não tentar reconectar)
         // 4001 = Unauthorized, 4003 = Forbidden
         const permanentErrorCodes = [4001, 4003];
-        
+
         if (permanentErrorCodes.includes(event.code)) {
           // Erro de permissão ou autenticação - não tentar reconectar
           return;
         }
-        
+
         // Tentar reconectar em 3 segundos apenas se não foi erro permanente
         if (isMounted.current && authReady) {
           setTimeout(connectWebSocket, 3000);
         }
       };
-      
+
       ws.onerror = (error) => {
         // CORREÇÃO DE SEGURANÇA: Não expor token em logs
         // O erro pode conter a URL com token, mas não vamos logá-la
@@ -832,9 +832,9 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         setWsConnected(false);
       };
     };
-    
+
     connectWebSocket();
-    
+
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
@@ -889,24 +889,24 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         const status = c.status || c.additional_attributes?.status;
         const assignedUser = c.additional_attributes?.assigned_user;
         const assignedTeam = c.additional_attributes?.assigned_team;
-        
+
         if (!c.assignee) {
           // Conversas com IA ou em espera geral
           if (status === 'pending' || status === 'snoozed') {
             return true;
           }
-          
+
           // Conversas transferidas para este usuário específico
           if (assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString())) {
             return true;
           }
-          
+
           // Conversas transferidas para equipe do usuário
           if (assignedTeam && user && user.team && assignedTeam.id === user.team.id) {
             return true;
           }
         }
-        
+
         return false;
       }).length,
     });
@@ -957,27 +957,27 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         const status = c.status || c.additional_attributes?.status;
         const assignedUser = c.additional_attributes?.assigned_user;
         const assignedTeam = c.additional_attributes?.assigned_team;
-        
+
         // Debug removido
-        
+
         // Conversas sem assignee OU transferidas para este usuário/equipe
         if (!c.assignee || (assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString()))) {
           // Conversas com IA ou em espera geral
           if (status === 'pending' || status === 'snoozed') {
             return true;
           }
-          
+
           // Conversas transferidas para este usuário específico
           if (assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString())) {
             return true;
           }
-          
+
           // Conversas transferidas para equipe do usuário (se ele pertence à equipe)
           if (assignedTeam && user && user.team && assignedTeam.id === user.team.id) {
             return true;
           }
         }
-        
+
         return false;
       });
     }
@@ -989,10 +989,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         const contactName = c.contact?.name || '';
         const lastMessage = c.last_message?.content || '';
         const phone = c.contact?.phone || '';
-        
+
         return contactName.toLowerCase().includes(searchLower) ||
-               lastMessage.toLowerCase().includes(searchLower) ||
-               phone.includes(searchTerm);
+          lastMessage.toLowerCase().includes(searchLower) ||
+          phone.includes(searchTerm);
       });
     }
 
@@ -1028,7 +1028,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           <h2 className="text-lg font-semibold">Conversas</h2>
           <div className="flex items-center space-x-2">
             {/* Botão de ativar sons removido */}
-            
+
             {/* Notificação de nova mensagem */}
             {newMessageNotification && (
               <div className="flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs animate-pulse">
@@ -1036,15 +1036,15 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 <span>Nova mensagem!</span>
               </div>
             )}
-            
-            <button 
+
+            <button
               onClick={() => fetchConversations(true)}
               className="text-muted-foreground hover:text-foreground p-1"
               title="Atualizar conversas"
             >
             </button>
             <div className="relative">
-              <button 
+              <button
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1056,7 +1056,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               >
                 <UserPlus size={20} />
               </button>
-              
+
               {/* Menu de opções */}
               {showMenuAtendimento && (
                 <div className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-lg shadow-lg py-1 z-50">
@@ -1114,11 +1114,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                activeTab === tab.id
+              className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === tab.id
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               {tab.label}
               {tab.count > 0 && (
@@ -1132,10 +1131,9 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       </div>
 
       {/* Conversation List */}
-      <div 
-        className={`flex-1 conversation-list ${
-          filteredConversations.length > 3 ? 'overflow-y-auto' : 'overflow-hidden'
-        }`}
+      <div
+        className={`flex-1 conversation-list ${filteredConversations.length > 3 ? 'overflow-y-auto' : 'overflow-hidden'
+          }`}
         style={filteredConversations.length > 3 ? {
           maxHeight: '450px' // Altura para mostrar aproximadamente 3 conversas (~150px cada com padding e bordas)
         } : {}}
@@ -1156,7 +1154,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                   <h3 className="text-lg font-medium mb-2">Acesso Restrito</h3>
                   <p className="text-sm mb-4">Você precisa estar logado para acessar as conversas.</p>
                 </div>
-                <button 
+                <button
                   onClick={() => window.location.href = '/admin/login/'}
                   className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
                 >
@@ -1184,7 +1182,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 <h3 className="text-lg font-semibold text-foreground mb-2">
                   Nenhuma conversa ativa
                 </h3>
-                
+
                 {/* Texto explicativo */}
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   Suas conversas aparecerão aqui assim que novos clientes entrarem em contato
@@ -1206,9 +1204,8 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             <div
               key={conversation.id}
               onClick={() => onConversationSelect(conversation)}
-              className={`p-3 border-b border-border cursor-pointer transition-colors hover:bg-muted/50 ${
-                selectedConversation?.id === conversation.id ? 'bg-muted' : ''
-              }`}
+              className={`p-3 border-b border-border cursor-pointer transition-colors hover:bg-muted/50 ${selectedConversation?.id === conversation.id ? 'bg-muted' : ''
+                }`}
             >
               <div className="flex items-start space-x-3">
                 <div className="flex-shrink-0">
@@ -1224,26 +1221,38 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                     )}
                   </div>
                 </div>
-                
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-medium text-foreground truncate">
                       {conversation.contact?.name || 'Contato sem nome'}
                     </h3>
                     <span className="text-xs text-muted-foreground">
-                      {conversation.last_message?.created_at ? 
-                        new Date(conversation.last_message.created_at).toLocaleTimeString('pt-BR', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
+                      {conversation.last_message?.created_at ?
+                        new Date(conversation.last_message.created_at).toLocaleTimeString('pt-BR', {
+                          hour: '2-digit',
+                          minute: '2-digit'
                         }) : ''
                       }
                     </span>
                   </div>
-                  
+
                   <p className="text-sm text-muted-foreground truncate mt-1">
-                    {conversation.last_message?.content || 'Nenhuma mensagem'}
+                    {(() => {
+                      const msg = conversation.last_message;
+                      if (!msg) return 'Nenhuma mensagem';
+
+                      // Se o conteúdo for vazio ou apenas pontos, verificar se é mensagem interativa
+                      if (!msg.content || msg.content === '...') {
+                        const attrs = msg.additional_attributes;
+                        if (attrs?.interactive_rows?.length > 0) return '📋 Menu de Opções';
+                        if (attrs?.interactive_buttons?.length > 0) return '🔘 Botões Interativos';
+                      }
+
+                      return msg.content || 'Nenhuma mensagem';
+                    })()}
                   </p>
-                  
+
                   {/*  Tempo de atendimento em aberto */}
                   <div className="mt-2">
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-600 text-white">
@@ -1255,7 +1264,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                         const diffMinutos = Math.floor(diffMs / (1000 * 60));
                         const diffHoras = Math.floor(diffMinutos / 60);
                         const diffDias = Math.floor(diffHoras / 24);
-                        
+
                         if (diffDias > 0) {
                           return `${diffDias} dia${diffDias > 1 ? 's' : ''}`;
                         } else if (diffHoras > 0) {
@@ -1272,7 +1281,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           ))
         )}
       </div>
-      
+
       {/*  Modal de novo contato */}
       <Dialog open={modalNovoContato} onOpenChange={setModalNovoContato}>
         <DialogContent className="max-w-md w-full">
@@ -1290,7 +1299,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium mb-2">Telefone (com 55)</label>
               <input
@@ -1301,13 +1310,13 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium mb-2">Canal</label>
               <select
                 value={novoContato.canal}
-                onChange={(e) => setNovoContato(prev => ({ 
-                  ...prev, 
+                onChange={(e) => setNovoContato(prev => ({
+                  ...prev,
                   canal: e.target.value,
                   usarTemplate: e.target.value === 'whatsapp' ? prev.usarTemplate : false,
                   templateSelecionado: e.target.value === 'whatsapp' ? prev.templateSelecionado : null
@@ -1319,15 +1328,15 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 <option value="email">Email</option>
               </select>
             </div>
-            
+
             {novoContato.canal === 'whatsapp' && (
               <div>
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={novoContato.usarTemplate}
-                    onChange={(e) => setNovoContato(prev => ({ 
-                      ...prev, 
+                    onChange={(e) => setNovoContato(prev => ({
+                      ...prev,
                       usarTemplate: e.target.checked,
                       templateSelecionado: e.target.checked ? prev.templateSelecionado : null,
                       mensagem: e.target.checked ? '' : prev.mensagem
@@ -1375,7 +1384,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 />
               </div>
             )}
-            
+
             <div className="flex items-center justify-end space-x-2 pt-4">
               <button
                 onClick={() => setModalNovoContato(false)}
@@ -1389,10 +1398,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 disabled={enviandoAtendimento}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
-                {enviandoAtendimento 
-                  ? 'Enviando...' 
-                  : novoContato.usarTemplate 
-                    ? 'Enviar Template' 
+                {enviandoAtendimento
+                  ? 'Enviando...'
+                  : novoContato.usarTemplate
+                    ? 'Enviar Template'
                     : 'Enviar Mensagem'}
               </button>
             </div>
@@ -1420,7 +1429,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            
+
             {/* Lista de contatos encontrados */}
             {contatosEncontrados.length > 0 && (
               <div className="max-h-40 overflow-y-auto border border-border rounded-lg">
@@ -1428,9 +1437,8 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                   <button
                     key={contato.id}
                     onClick={() => setContatoExistente(prev => ({ ...prev, contato }))}
-                    className={`w-full text-left p-3 hover:bg-accent transition-colors border-b last:border-b-0 ${
-                      contatoExistente.contato?.id === contato.id ? 'bg-accent' : ''
-                    }`}
+                    className={`w-full text-left p-3 hover:bg-accent transition-colors border-b last:border-b-0 ${contatoExistente.contato?.id === contato.id ? 'bg-accent' : ''
+                      }`}
                   >
                     <div className="font-medium">{contato.name}</div>
                     <div className="text-sm text-muted-foreground">{contato.phone}</div>
@@ -1438,7 +1446,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 ))}
               </div>
             )}
-            
+
             {/* Contato selecionado */}
             {contatoExistente.contato && (
               <div className="p-3 bg-muted rounded-lg">
@@ -1446,7 +1454,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 <div className="text-sm">{contatoExistente.contato.name} - {contatoExistente.contato.phone}</div>
               </div>
             )}
-            
+
             <div>
               <label className="block text-sm font-medium mb-2">Mensagem</label>
               <textarea
@@ -1457,7 +1465,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
               />
             </div>
-            
+
             <div className="flex items-center justify-end space-x-2 pt-4">
               <button
                 onClick={() => {

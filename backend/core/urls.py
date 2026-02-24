@@ -18,6 +18,7 @@ router.register(r'integrations/email', views.EmailIntegrationViewSet, basename='
 router.register(r'integrations/whatsapp', views.WhatsAppIntegrationViewSet, basename='whatsapp-integrations')
 router.register(r'integrations/webchat', views.WebchatIntegrationViewSet, basename='webchat-integrations')
 router.register(r'chatbot-flows', views.ChatbotFlowViewSet, basename='chatbot-flows')
+router.register(r'planos', views.PlanoViewSet, basename='planos')
 
 urlpatterns = [
     # Rotas específicas ANTES do router para evitar conflitos

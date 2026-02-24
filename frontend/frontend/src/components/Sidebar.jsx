@@ -18,6 +18,7 @@ import {
   PlugZap, // Ícone para Integrações
   ScrollText, // Ícone para Auditoria
   Bot, // Ícone para Construtor de Chatbot
+  Wifi, // Ícone para Planos
   ChevronsLeft,
   ChevronsRight
 } from 'lucide-react';
@@ -65,6 +66,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
     { id: 'teams', icon: UserCog, label: t('equipes'), path: `/app/accounts/${provedorId}/equipes` },
     { id: 'audit', icon: ScrollText, label: t('audit'), path: `/app/accounts/${provedorId}/audit` },
     { id: 'chatbot-builder', icon: Bot, label: t('chatbot_builder'), path: `/app/accounts/${provedorId}/chatbot-builder` },
+    { id: 'planos', icon: Wifi, label: t('planos'), path: `/app/accounts/${provedorId}/planos` },
     { id: 'csat', icon: Smile, label: t('csat'), path: `/app/accounts/${provedorId}/csat` },
   ];
 
@@ -215,8 +217,8 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
                       key={item.path}
                       to={item.path}
                       className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item.path)
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                          : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                        : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                         }`}
                       title={isCollapsed ? item.label : ''}
                     >
@@ -239,8 +241,8 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
                     key={item.path}
                     to={item.path}
                     className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item.path)
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                        : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                       }`}
                     title={isCollapsed ? item.label : ''}
                   >

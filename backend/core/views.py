@@ -869,8 +869,8 @@ def evolution_webhook(request):
                         try:
                             from core.redis_memory_service import redis_memory_service
                             redis_memory_service.clear_conversation_memory_sync(
-                                existing_conversation.id,
-                                provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None
+                                provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None,
+                                conversation_id=existing_conversation.id
                             )
                         except Exception as e:
                             pass
@@ -2169,8 +2169,8 @@ def webhook_evolution_uazapi(request):
                     try:
                         from core.redis_memory_service import redis_memory_service
                         redis_memory_service.clear_conversation_memory_sync(
-                            existing_conversation.id,
-                            provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None
+                            provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None,
+                            conversation_id=existing_conversation.id
                         )
                     except Exception as e:
                         pass
@@ -6617,4 +6617,38 @@ class ChatbotFlowViewSet(viewsets.ModelViewSet):
             logger.info(f"[CHATBOT-FLOW]   Edge: {e.get('source')} → {e.get('target')} | handle={e.get('sourceHandle')}")
         instance = serializer.save()
         logger.info(f"[CHATBOT-FLOW] Salvo com sucesso. Nodes no DB: {len(instance.nodes)}")
+
+
+class PlanoViewSet(viewsets.ModelViewSet):
+    """CRUD de Planos de Internet por provedor"""
+    def get_serializer_class(self):
+        from core.serializers import PlanoSerializer
+        return PlanoSerializer
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        from core.models import Plano
+        user = self.request.user
+        queryset = Plano.objects.all()
+
+        if user.user_type != 'superadmin':
+            provedores = Provedor.objects.filter(admins=user)
+            queryset = queryset.filter(provedor__in=provedores)
+
+        provedor_id = self.request.query_params.get('provedor')
+        if provedor_id:
+            queryset = queryset.filter(provedor_id=provedor_id)
+
+        return queryset.order_by('ordem', 'nome')
+
+    def perform_create(self, serializer):
+        if 'provedor' not in serializer.validated_data:
+            provedor = self.request.user.provedores_admin.first()
+            if provedor:
+                serializer.save(provedor=provedor)
+            else:
+                serializer.save()
+        else:
+            serializer.save()
 

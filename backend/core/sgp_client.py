@@ -221,7 +221,7 @@ class SGPClient:
             f"[SGP] Criando chamado | Contrato={contrato} | Tipo={ocorrenciatipo}"
         )
         self.logger.info(
-            f"[SGP] Conteúdo do chamado: {conteudo[:200]}"
+            f"[SGP] Payload completo: {data}"
         )
 
         try:

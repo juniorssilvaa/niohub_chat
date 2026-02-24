@@ -7,17 +7,17 @@ import {
     ArrowLeft, Settings, Trash2, MessageSquare,
     Zap, GitBranch, Database, Globe, X, Check,
     GripVertical, Info, Send, User, ChevronRight, List,
-    Eye, EyeOff
+    Eye, EyeOff, Wifi
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const NODE_TYPES = {
     start: { label: 'Início', color: 'bg-emerald-500', icon: Play },
     message: { label: 'Mensagem', color: 'bg-blue-500', icon: MessageSquare },
-    condition: { label: 'Condição', color: 'bg-amber-500', icon: GitBranch },
     sgp: { label: 'Consulta SGP', color: 'bg-purple-500', icon: Database },
-    api: { label: 'Integração API', color: 'bg-indigo-500', icon: Globe },
+    planos: { label: 'Planos de Internet', color: 'bg-cyan-500', icon: Wifi },
     menu: { label: 'Lista Interativa (WhatsApp)', color: 'bg-emerald-600', icon: List },
+    transfer: { label: 'Transferir Atendimento', color: 'bg-orange-500', icon: Share2 },
 };
 
 const ChatbotBuilder = () => {
@@ -48,6 +48,8 @@ const ChatbotBuilder = () => {
     const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
     const [isPanning, setIsPanning] = useState(false);
     const [contextMenu, setContextMenu] = useState({ show: false, x: 0, y: 0, type: null, targetId: null });
+    const [availableTeams, setAvailableTeams] = useState([]);
+    const [availablePlanos, setAvailablePlanos] = useState([]);
 
     useEffect(() => {
         const fetchFlows = async () => {
@@ -76,7 +78,31 @@ const ChatbotBuilder = () => {
             }
         };
 
-        if (provedorId) fetchFlows();
+        const fetchTeams = async () => {
+            try {
+                const response = await axios.get(`/api/teams/?provedor=${provedorId}`);
+                const teams = Array.isArray(response.data) ? response.data : (response.data.results || []);
+                setAvailableTeams(teams);
+            } catch (error) {
+                console.error('Erro ao buscar equipes:', error);
+            }
+        };
+
+        const fetchPlanos = async () => {
+            try {
+                const response = await axios.get(`/api/planos/?provedor=${provedorId}`);
+                const planos = Array.isArray(response.data) ? response.data : (response.data.results || []);
+                setAvailablePlanos(planos.filter(p => p.ativo));
+            } catch (error) {
+                console.error('Erro ao buscar planos:', error);
+            }
+        };
+
+        if (provedorId) {
+            fetchFlows();
+            fetchTeams();
+            fetchPlanos();
+        }
     }, [provedorId]);
 
     const handleCreateFlow = async () => {
@@ -327,7 +353,7 @@ const ChatbotBuilder = () => {
                     if (buttons.length === 0) {
                         processNextStep(nextNode.id);
                     }
-                } else if (nextNode.type === 'menu') {
+                } else if (nextNode.type === 'menu' || nextNode.type === 'planos') {
                     const rows = nextNode.data.rows || [];
                     setSimMessages(prev => [...prev, {
                         role: 'bot',
@@ -341,6 +367,24 @@ const ChatbotBuilder = () => {
                         }
                     }]);
                     setCurrentNodeId(nextNode.id);
+                } else if (nextNode.type === 'transfer') {
+                    setSimMessages(prev => [...prev, {
+                        role: 'bot',
+                        content: nextNode.data.content || '...',
+                    }]);
+                    if (nextNode.data.transferMode === 'choice') {
+                        setSimMessages(prev => [...prev, {
+                            role: 'system',
+                            content: 'Simulando: Listando equipes para o usuário escolher...'
+                        }]);
+                    } else {
+                        setSimMessages(prev => [...prev, {
+                            role: 'system',
+                            content: `Simulando: Transferência direta para equipe ID ${nextNode.data.teamId || '(não selecionada)'}. Atendimento Encerrado.`
+                        }]);
+                    }
+                    setCurrentNodeId(nextNode.id);
+                    // Não chama processNextStep pois transfer é terminal
                 } else {
                     setSimMessages(prev => [...prev, { role: 'system', content: `Executando: ${nextNode.data.label}` }]);
                     setCurrentNodeId(nextNode.id);
@@ -416,8 +460,8 @@ const ChatbotBuilder = () => {
                         </button>
                     </div>
 
-                    {/* Output Point (General) - Apenas se não tiver botões ou for start/api */}
-                    {(!node.data.buttons || node.data.buttons.length === 0) && (!node.data.rows || node.data.rows.length === 0) && (
+                    {/* Output Point (General) - Apenas se não tiver botões ou for start/api. Transferir é terminal. */}
+                    {(!node.data.buttons || node.data.buttons.length === 0) && (!node.data.rows || node.data.rows.length === 0) && node.type !== 'transfer' && node.type !== 'planos' && (
                         <div
                             onMouseDown={(e) => startConnection(e, node.id, null)}
                             className="absolute -right-2 top-[35px] w-4 h-4 rounded-full bg-blue-500 border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30"
@@ -445,13 +489,14 @@ const ChatbotBuilder = () => {
                 {/* Itens do Menu (Para Branching) */}
                 {!node.data.isCollapsed && (node.data.rows || []).map((row, ridx) => (
                     <div key={row.id} className="relative px-4 py-2 border-b border-slate-900 last:border-0 group/row">
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-[10px] font-bold text-emerald-400 truncate">
+                        <div className={`bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-[10px] font-bold truncate ${node.type === 'planos' ? 'text-cyan-400' : 'text-emerald-400'}`}>
                             {row.title}
+                            {row.description && <span className="text-slate-500 ml-1">— {row.description}</span>}
                         </div>
                         {/* Dot por item */}
                         <div
                             onMouseDown={(e) => startConnection(e, node.id, row.id)}
-                            className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-emerald-500 border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30"
+                            className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30 ${node.type === 'planos' ? 'bg-cyan-500' : 'bg-emerald-500'}`}
                         />
                     </div>
                 ))}
@@ -588,11 +633,12 @@ const ChatbotBuilder = () => {
                                                                 label: NODE_TYPES[type].label,
                                                                 content: '',
                                                                 buttons: [],
-                                                                buttonText: type === 'menu' ? 'Ver Opções' : '',
-                                                                sectionTitle: type === 'menu' ? 'Selecione uma opção' : '',
-                                                                headerText: type === 'menu' ? 'MENU' : '',
-                                                                footerText: type === 'menu' ? 'Clique para selecionar' : '',
-                                                                rows: type === 'menu' ? [{ id: 'row_' + Date.now(), title: 'Opção 1', description: '' }] : []
+                                                                buttonText: (type === 'menu' || type === 'planos') ? 'Ver Opções' : '',
+                                                                sectionTitle: type === 'menu' ? 'Selecione uma opção' : (type === 'planos' ? 'Nossos Planos' : ''),
+                                                                headerText: type === 'menu' ? 'MENU' : (type === 'planos' ? 'PLANOS' : ''),
+                                                                footerText: (type === 'menu' || type === 'planos') ? 'Clique para selecionar' : '',
+                                                                rows: type === 'menu' ? [{ id: 'row_' + Date.now(), title: 'Opção 1', description: '' }] : (type === 'planos' ? availablePlanos.map(p => ({ id: 'plano_' + p.id, title: p.nome, description: `${p.velocidade_download}Mbps - R$ ${p.preco}` })) : []),
+                                                                ...(type === 'planos' ? { useDynamicPlanos: true } : {})
                                                             }
                                                         };
                                                         setNodes(prev => [...prev, newNode]);
@@ -789,16 +835,19 @@ const ChatbotBuilder = () => {
                                             <p className="text-[9px] text-slate-400 mt-2 italic px-1">Este nome serve para você se organizar no canvas.</p>
                                         </div>
 
-                                        <div>
-                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Conteúdo da Mensagem</label>
-                                            <textarea
-                                                rows={6}
-                                                value={nodes.find(n => n.id === selectedNode)?.data.content || ''}
-                                                onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
-                                                placeholder="Olá! Como posso te ajudar hoje?"
-                                                className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-blue-500 transition-all outline-none text-slate-800 dark:text-white resize-none font-bold placeholder:font-normal"
-                                            />
-                                        </div>
+                                        {/* Campos básicos específicos por tipo */}
+                                        {(nodes.find(n => n.id === selectedNode)?.type === 'message' || nodes.find(n => n.id === selectedNode)?.type === 'menu') && (
+                                            <div>
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">CONTEÚDO DA MENSAGEM</label>
+                                                <textarea
+                                                    rows={6}
+                                                    value={nodes.find(n => n.id === selectedNode)?.data.content || ''}
+                                                    onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
+                                                    placeholder="Olá! Como posso te ajudar hoje?"
+                                                    className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-blue-500 transition-all outline-none text-slate-800 dark:text-white resize-none font-bold placeholder:font-normal"
+                                                />
+                                            </div>
+                                        )}
 
                                         {nodes.find(n => n.id === selectedNode)?.type === 'message' && (
                                             <div>
@@ -985,6 +1034,34 @@ const ChatbotBuilder = () => {
                                                         )}
                                                     </div>
                                                 </div>
+
+                                                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                                                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200 dark:border-slate-800 rounded-2xl">
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Encerrar Atendimento</span>
+                                                            <span className="text-[9px] text-slate-500 font-medium">Fecha a conversa automaticamente após o envio</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => updateNodeData(selectedNode, { autoClose: !(nodes.find(n => n.id === selectedNode)?.data.autoClose || false) })}
+                                                            className={`w-12 h-6 rounded-full transition-all relative ${nodes.find(n => n.id === selectedNode)?.data.autoClose ? 'bg-pink-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                        >
+                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${nodes.find(n => n.id === selectedNode)?.data.autoClose ? 'left-7' : 'left-1'}`} />
+                                                        </button>
+                                                    </div>
+
+                                                    {nodes.find(n => n.id === selectedNode)?.data.autoClose && (
+                                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                                            <label className="block text-[10px] font-black text-pink-500 uppercase tracking-widest mb-2">Mensagem de Encerramento (Opcional)</label>
+                                                            <textarea
+                                                                value={nodes.find(n => n.id === selectedNode)?.data.closingMessage || ''}
+                                                                onChange={(e) => updateNodeData(selectedNode, { closingMessage: e.target.value })}
+                                                                placeholder="Ex: Obrigado! Atendimento finalizado por aqui."
+                                                                rows={2}
+                                                                className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-pink-500 transition-all resize-none"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
 
@@ -1050,33 +1127,73 @@ const ChatbotBuilder = () => {
                                                         />
                                                     </div>
 
-                                                    {sgpAction === 'listar_titulos' && (
-                                                        <>
+                                                    {sgpAction === 'criar_chamado' && (
+                                                        <div>
+                                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição do Chamado (Conteúdo)</label>
+                                                            <textarea
+                                                                rows={3}
+                                                                value={sgpNode?.data.content || ''}
+                                                                onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
+                                                                placeholder="Ex: Cliente solicita suporte técnico via WhatsApp."
+                                                                className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-purple-500 transition-all resize-none"
+                                                            />
+                                                            <p className="text-[9px] text-slate-400 mt-1 px-1 italic">Texto que será enviado como descrição do chamado no SGP.</p>
+                                                        </div>
+                                                    )}
+
+                                                    {(sgpAction === 'listar_titulos' || sgpAction === 'criar_chamado' || sgpAction === 'liberar_por_confianca') && (
+                                                        <div className="space-y-4">
                                                             <div>
-                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-purple-500">Mensagem de Sucesso/Encerramento</label>
+                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-purple-500">Mensagem de Sucesso</label>
                                                                 <textarea
                                                                     value={sgpNode?.data.successMessage || ''}
                                                                     onChange={(e) => updateNodeData(selectedNode, { successMessage: e.target.value })}
-                                                                    placeholder="Ex: Obrigado! Suas faturas foram enviadas acima. Deseja mais alguma coisa?"
+                                                                    placeholder={
+                                                                        sgpAction === 'criar_chamado' ? "Ex: Chamado aberto! Seu protocolo é {protocolo}." :
+                                                                            sgpAction === 'liberar_por_confianca' ? "Ex: Liberado por {liberado_dias} dias! Protocolo: {protocolo}" :
+                                                                                "Ex: Obrigado! Suas faturas foram enviadas acima."
+                                                                    }
                                                                     rows={3}
                                                                     className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-purple-500 transition-all resize-none"
                                                                 />
-                                                                <p className="text-[9px] text-slate-400 mt-1 px-1 italic">Esta mensagem será enviada após a listagem das faturas.</p>
+                                                                <p className="text-[9px] text-slate-400 mt-1 px-1 italic">
+                                                                    {sgpAction === 'criar_chamado' ? "Será enviada após a criação. Use {protocolo}." :
+                                                                        sgpAction === 'liberar_por_confianca' ? "Será enviada após a liberação. Use {liberado_dias} e {protocolo}." :
+                                                                            "Será enviada após a listagem das faturas."
+                                                                    }
+                                                                </p>
                                                             </div>
 
-                                                            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200 dark:border-slate-800 rounded-2xl">
-                                                                <div className="flex flex-col gap-1">
-                                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Encerrar Atendimento</span>
-                                                                    <span className="text-[9px] text-slate-500 font-medium">Fecha a conversa automaticamente após o envio</span>
-                                                                </div>
-                                                                <button
-                                                                    onClick={() => updateNodeData(selectedNode, { autoClose: !sgpNode?.data.autoClose })}
-                                                                    className={`w-12 h-6 rounded-full transition-all relative ${sgpNode?.data.autoClose ? 'bg-purple-500 shadow-lg shadow-purple-500/30' : 'bg-slate-300 dark:bg-slate-700'}`}
-                                                                >
-                                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${sgpNode?.data.autoClose ? 'left-7' : 'left-1'}`} />
-                                                                </button>
-                                                            </div>
-                                                        </>
+                                                            {sgpAction !== 'criar_chamado' && (
+                                                                <>
+                                                                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200 dark:border-slate-800 rounded-2xl">
+                                                                        <div className="flex flex-col gap-1">
+                                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Encerrar Atendimento</span>
+                                                                            <span className="text-[9px] text-slate-500 font-medium">Fecha a conversa automaticamente após o envio</span>
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => updateNodeData(selectedNode, { autoClose: !(sgpNode?.data.autoClose || false) })}
+                                                                            className={`w-12 h-6 rounded-full transition-all relative ${sgpNode?.data.autoClose ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                                        >
+                                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${sgpNode?.data.autoClose ? 'left-7' : 'left-1'}`} />
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {sgpNode?.data.autoClose && (
+                                                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                                                            <label className="block text-[10px] font-black text-purple-500 uppercase tracking-widest mb-2">Mensagem de Encerramento (Opcional)</label>
+                                                                            <textarea
+                                                                                value={sgpNode?.data.closingMessage || ''}
+                                                                                onChange={(e) => updateNodeData(selectedNode, { closingMessage: e.target.value })}
+                                                                                placeholder="Ex: Atendimento finalizado. Qualquer dúvida estamos à disposição!"
+                                                                                rows={2}
+                                                                                className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-purple-500 transition-all resize-none"
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     )}
 
                                                     <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -1086,6 +1203,188 @@ const ChatbotBuilder = () => {
                                                 </div>
                                             );
                                         })()}
+
+                                        {nodes.find(n => n.id === selectedNode)?.type === 'planos' && (
+                                            <div className="space-y-6">
+                                                <div className="p-4 bg-cyan-50 dark:bg-cyan-900/10 border border-cyan-100 dark:border-cyan-800/30 rounded-2xl">
+                                                    <p className="text-[10px] text-cyan-600 dark:text-cyan-400 font-bold uppercase tracking-widest mb-1">Bloco Planos</p>
+                                                    <p className="text-[10px] text-cyan-700/70 dark:text-cyan-400/70 leading-relaxed">
+                                                        Este bloco envia os planos de internet cadastrados como uma <b>Lista Interativa do WhatsApp</b>. O cliente poderá selecionar um plano.
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Cabeçalho (Header)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.headerText || ''}
+                                                        onChange={(e) => updateNodeData(selectedNode, { headerText: e.target.value })}
+                                                        placeholder="Ex: PLANOS"
+                                                        maxLength={60}
+                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-cyan-500"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Mensagem (Body)</label>
+                                                    <textarea
+                                                        rows={4}
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.content || ''}
+                                                        onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
+                                                        placeholder="Confira nossos planos de internet:"
+                                                        className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-cyan-500 transition-all outline-none text-slate-800 dark:text-white resize-none font-bold placeholder:font-normal"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Rodapé (Footer)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.footerText || ''}
+                                                        onChange={(e) => updateNodeData(selectedNode, { footerText: e.target.value })}
+                                                        placeholder="Ex: Selecione o plano desejado"
+                                                        maxLength={60}
+                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-cyan-500"
+                                                    />
+                                                </div>
+
+                                                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Texto do Botão da Lista</label>
+                                                    <input
+                                                        type="text"
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.buttonText || ''}
+                                                        onChange={(e) => updateNodeData(selectedNode, { buttonText: e.target.value })}
+                                                        placeholder="Ex: Ver Planos"
+                                                        maxLength={20}
+                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-cyan-500"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Título da Seção</label>
+                                                    <input
+                                                        type="text"
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.sectionTitle || ''}
+                                                        onChange={(e) => updateNodeData(selectedNode, { sectionTitle: e.target.value })}
+                                                        placeholder="Ex: Nossos Planos"
+                                                        maxLength={24}
+                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-cyan-500"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Planos (itens da lista)</label>
+                                                        <span className="text-[10px] font-bold text-slate-400">{(nodes.find(n => n.id === selectedNode)?.data.rows || []).length}/10</span>
+                                                    </div>
+
+                                                    <button
+                                                        onClick={() => {
+                                                            const planosRows = availablePlanos.map(p => ({
+                                                                id: 'plano_' + p.id,
+                                                                title: p.nome,
+                                                                description: `${p.velocidade_download}Mbps - R$ ${p.preco}`
+                                                            }));
+                                                            updateNodeData(selectedNode, { rows: planosRows });
+                                                        }}
+                                                        className="w-full mb-4 py-3 border-2 border-dashed border-cyan-300 dark:border-cyan-700 rounded-2xl text-cyan-500 hover:text-cyan-400 hover:border-cyan-400 transition-all font-bold text-xs flex items-center justify-center gap-2"
+                                                    >
+                                                        <Wifi size={16} />
+                                                        Sincronizar Planos Cadastrados
+                                                    </button>
+
+                                                    <div className="space-y-4">
+                                                        {(nodes.find(n => n.id === selectedNode)?.data.rows || []).map((row, idx) => (
+                                                            <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-3">
+                                                                <div className="flex justify-between items-center gap-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={row.title}
+                                                                        placeholder="Nome do plano"
+                                                                        maxLength={24}
+                                                                        onChange={(e) => {
+                                                                            const currentRows = [...(nodes.find(n => n.id === selectedNode)?.data.rows || [])];
+                                                                            currentRows[idx].title = e.target.value;
+                                                                            updateNodeData(selectedNode, { rows: currentRows });
+                                                                        }}
+                                                                        className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-cyan-500"
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const currentRows = (nodes.find(n => n.id === selectedNode)?.data.rows || []).filter((_, i) => i !== idx);
+                                                                            updateNodeData(selectedNode, { rows: currentRows });
+                                                                        }}
+                                                                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                                <input
+                                                                    type="text"
+                                                                    value={row.description || ''}
+                                                                    placeholder="Ex: 100Mbps - R$ 99,90"
+                                                                    maxLength={72}
+                                                                    onChange={(e) => {
+                                                                        const currentRows = [...(nodes.find(n => n.id === selectedNode)?.data.rows || [])];
+                                                                        currentRows[idx].description = e.target.value;
+                                                                        updateNodeData(selectedNode, { rows: currentRows });
+                                                                    }}
+                                                                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-[10px] font-medium outline-none focus:border-cyan-500"
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {nodes.find(n => n.id === selectedNode)?.type === 'transfer' && (
+                                            <div className="space-y-6">
+                                                <div className="p-4 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-2xl text-xs text-orange-700 dark:text-orange-400">
+                                                    <p className="font-bold uppercase tracking-widest mb-1">Transferência</p>
+                                                    <p>Este bloco encerra o atendimento automático e transfere para um humano.</p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Modo de Transferência</label>
+                                                    <select
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.transferMode || 'choice'}
+                                                        onChange={(e) => updateNodeData(selectedNode, { transferMode: e.target.value })}
+                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-blue-500"
+                                                    >
+                                                        <option value="choice">Cliente Escolhe a Equipe</option>
+                                                        <option value="direct">Transferir Direto p/ Equipe</option>
+                                                    </select>
+                                                </div>
+
+                                                {nodes.find(n => n.id === selectedNode)?.data.transferMode === 'direct' && (
+                                                    <div>
+                                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Equipe de Destino</label>
+                                                        <select
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.teamId || ''}
+                                                            onChange={(e) => updateNodeData(selectedNode, { teamId: e.target.value })}
+                                                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-blue-500"
+                                                        >
+                                                            <option value="">Selecione uma equipe...</option>
+                                                            {availableTeams.map(team => (
+                                                                <option key={team.id} value={team.id}>{team.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
+
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Mensagem antes de transferir</label>
+                                                    <textarea
+                                                        rows={3}
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.content || ''}
+                                                        onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
+                                                        placeholder="Ex: Aguarde um momento, estamos te transferindo..."
+                                                        className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-blue-500 transition-all outline-none text-slate-800 dark:text-white resize-none font-bold"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <div className="p-5 bg-blue-50 dark:bg-blue-900/20 rounded-3xl border border-blue-100 dark:border-blue-800/30">
                                             <div className="flex items-center gap-3 mb-3 text-blue-600 dark:text-blue-400">
@@ -1108,7 +1407,8 @@ const ChatbotBuilder = () => {
                                         </button>
                                     </div>
                                 </motion.div>
-                            )}
+                            )
+                            }
                         </AnimatePresence>
                     </>
                 )}

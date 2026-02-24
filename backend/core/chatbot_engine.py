@@ -39,6 +39,25 @@ class ChatbotEngine:
     """
 
     @staticmethod
+    def _replace_placeholders(data: Any, context: Dict[str, Any]) -> Any:
+        """
+        Recursivamente substitui {{var}} nos dados (str, list, dict) usando o contexto.
+        """
+        if isinstance(data, str):
+            for key, value in context.items():
+                if isinstance(value, (str, int, float, bool)):
+                    # Suporta {{var}} e {{ var }}
+                    placeholder1 = f"{{{{{key}}}}}"
+                    placeholder2 = f"{{{{ {key} }}}}"
+                    data = data.replace(placeholder1, str(value)).replace(placeholder2, str(value))
+            return data
+        elif isinstance(data, list):
+            return [ChatbotEngine._replace_placeholders(item, context) for item in data]
+        elif isinstance(data, dict):
+            return {k: ChatbotEngine._replace_placeholders(v, context) for k, v in data.items()}
+        return data
+
+    @staticmethod
     async def process_message(provedor_id: int, conversation_id: int, message_content: str, button_id: Optional[str] = None):
         """
         Processa uma mensagem recebida e avança o fluxo.
@@ -127,6 +146,51 @@ class ChatbotEngine:
                     return True, "Aguardando seleção de contrato"
             # === FIM da seleção de contrato ===
 
+            # === TRANSFER: Verifica se está aguardando escolha de equipe ===
+            if current_node_id.startswith('transfer_select_'):
+                transfer_original_node_id = current_node_id[len('transfer_select_'):]
+                
+                # Se o usuário escolheu uma equipe via botão ou texto
+                selected_team_id = None
+                if button_id and button_id.startswith('team_'):
+                    selected_team_id = button_id[len('team_'):]
+                elif message_content:
+                    # Tentar encontrar equipe pelo nome (ignore case)
+                    from conversations.models import Team
+                    team_name_input = str(message_content).strip().lower()
+                    team = await sync_to_async(Team.objects.filter(provedor_id=provedor_id, name__iexact=team_name_input, is_active=True).first)()
+                    if team:
+                        selected_team_id = team.id
+
+                if selected_team_id:
+                    logger.info(f"[ChatbotEngine][Transfer] Equipe selecionada: {selected_team_id}")
+                    from conversations.models import Conversation, Team
+                    conv = await sync_to_async(Conversation.objects.select_related('inbox', 'inbox__provedor', 'contact').get)(id=conversation_id)
+                    team = await sync_to_async(Team.objects.get)(id=selected_team_id)
+                    
+                    # Realizar transferência para "Em Espera" (pending)
+                    conv.status = 'pending'
+                    conv.team = team
+                    conv.assignee = None # Limpa atribuição individual se houver
+                    await sync_to_async(conv.save)() # Salva tudo para garantir que equipe e status persistam
+                    
+                    # Enviar confirmação (opcional)
+                    await ChatbotEngine.send_message_agnostic(conv=conv, text=f"Entendido! Você será atendido pelo setor *{team.name}*. Um atendente falará com você em breve.")
+                    
+                    # Resetar estado do chatbot para esta conversa
+                    await redis_memory_service.clear_memory(provedor_id, conversation_id, "whatsapp", "unknown")
+                    
+                    logger.info(f"[ChatbotEngine][Transfer] Conversa {conversation_id} transferida para equipe {team.name}")
+                    return True, f"Transferido para {team.name}"
+                else:
+                    # Se não reconheceu a equipe, repetir o menu ou avisar
+                    logger.warning(f"[ChatbotEngine][Transfer] Equipe inválida: {message_content}")
+                    from conversations.models import Conversation
+                    conv = await sync_to_async(Conversation.objects.select_related('inbox', 'inbox__provedor', 'contact').get)(id=conversation_id)
+                    await ChatbotEngine.send_message_agnostic(conv=conv, text="Desculpe, não reconheci essa opção. Por favor, selecione um dos setores da lista.")
+                    return True, "Aguardando seleção válida de equipe"
+            # === FIM da seleção de equipe ===
+
             # Tentar encontrar o próximo nó
             # 1. Se for clique em botão (button_id), tentar achar aresta que combine com o handle
             if button_id:
@@ -161,6 +225,25 @@ class ChatbotEngine:
                     edge = next((e for e in edges if e.get('source') == current_node_id), None)
             
             if edge:
+                # === NOVO: Capturar título da opção selecionada (botão ou menu) ===
+                current_node = next((n for n in nodes if n.get('id') == current_node_id), None)
+                if current_node:
+                    data = current_node.get('data', {})
+                    if button_id and current_node.get('type') == 'message':
+                        btn = next((b for b in data.get('buttons', []) if b.get('id') == button_id), None)
+                        if btn:
+                            flow_context['conteudo'] = btn.get('title')
+                            logger.info(f"[ChatbotEngine] OPÇÃO ESCOLHIDA (Botão): {btn.get('title')}")
+                    elif button_id and current_node.get('type') == 'menu':
+                        row = next((r for r in data.get('rows', []) if r.get('id') == button_id), None)
+                        if row:
+                            flow_context['conteudo'] = row.get('title')
+                            logger.info(f"[ChatbotEngine] OPÇÃO ESCOLHIDA (Menu): {row.get('title')}")
+                    
+                    current_state['flow_context'] = flow_context
+                    await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
+                # === FIM da captura ===
+
                 next_node = next((n for n in nodes if n.get('id') == edge.get('target')), None)
                 logger.info(f"[ChatbotEngine] Aresta encontrada: {edge.get('id')} | target={edge.get('target')} | sourceHandle={edge.get('sourceHandle')} | next_node={'ENCONTRADO: ' + next_node.get('id') if next_node else 'NÃO ENCONTRADO'}")
                 logger.info(f"[ChatbotEngine] IDs de nós disponíveis: {[n.get('id') for n in nodes]}")
@@ -203,19 +286,53 @@ class ChatbotEngine:
 
         logger.info(f"[ChatbotEngine] Executando nó {node_id} ({node_type}) para conv {conversation_id}")
 
-        if node_type in ['message', 'menu']:
+        if node_type in ['message', 'menu', 'planos']:
             try:
-                content = node_data.get('content', '...')
-                buttons = node_data.get('buttons', [])
-                rows = node_data.get('rows', [])
-                button_text = node_data.get('buttonText', 'Ver Opções')
-                section_title = node_data.get('sectionTitle', 'Selecione uma opção')
-                header = node_data.get('headerText') or node_data.get('header')
-                footer = node_data.get('footerText') or node_data.get('footer')
+                # Obter contexto para substituição de variáveis
+                existing_state = await redis_memory_service.get_ai_state(provedor_id, conversation_id, "whatsapp", "unknown")
+                flow_context = existing_state.get('flow_context', {})
+                
+                # Substituição Universal de Placeholders
+                node_data_processed = ChatbotEngine._replace_placeholders(node_data, flow_context)
+                logger.info(f"[ChatbotEngine] Node Data Processada: {json.dumps(node_data_processed, indent=2, ensure_ascii=False)}")
+                
+                content = node_data_processed.get('content')
+                if not content or str(content).strip() == "":
+                    # WhatsApp Cloud API exige corpo não vazio para mensagens interativas
+                    content = "..."
+                
+                buttons = node_data_processed.get('buttons', [])
+                rows = node_data_processed.get('rows', [])
+                
+                # Para nós do tipo 'planos', buscar planos ativos do banco dinamicamente
+                if node_type == 'planos' and node_data.get('useDynamicPlanos'):
+                    try:
+                        from core.models import Plano
+                        planos_ativos = await sync_to_async(
+                            lambda: list(Plano.objects.filter(provedor_id=provedor_id, ativo=True).order_by('ordem', 'nome'))
+                        )()
+                        if planos_ativos:
+                            rows = [
+                                {
+                                    'id': f'plano_{p.id}',
+                                    'title': p.nome[:24],
+                                    'description': f'{p.velocidade_download}Mbps - R$ {p.preco}'[:72]
+                                }
+                                for p in planos_ativos
+                            ]
+                            logger.info(f"[ChatbotEngine] Planos dinâmicos carregados: {len(rows)} planos ativos")
+                        else:
+                            logger.warning(f"[ChatbotEngine] Nenhum plano ativo encontrado para provedor {provedor_id}")
+                    except Exception as e:
+                        logger.error(f"[ChatbotEngine] Erro ao buscar planos dinâmicos: {e}", exc_info=True)
+                button_text = node_data_processed.get('buttonText', 'Ver Opções')
+                section_title = node_data_processed.get('sectionTitle', 'Selecione uma opção')
+                header = node_data_processed.get('headerText') or node_data_processed.get('header')
+                footer = node_data_processed.get('footerText') or node_data_processed.get('footer')
                 
                 from conversations.models import Conversation
                 
-                logger.info(f"[ChatbotEngine] Preparando envio de {node_type} para conversa {conversation_id}")
+                logger.info(f"[ChatbotEngine] Preparando envio de {node_type} para conversa {conversation_id} | Body length={len(content)}")
                 
                 conversation = await sync_to_async(Conversation.objects.select_related('inbox', 'inbox__provedor', 'contact').get)(id=conversation_id)
                 
@@ -232,8 +349,7 @@ class ChatbotEngine:
                 logger.info(f"[ChatbotEngine] Resultado do envio do nó {node_id}: success={success}, response={response}")
 
                 if success:
-                    # Atualizar estado no Redis — MERGE para preservar o flow_context (ex: CPF salvo)
-                    existing_state = await redis_memory_service.get_ai_state(provedor_id, conversation_id, "whatsapp", "unknown")
+                    # Atualizar estado no Redis
                     existing_state["chatbot_node_id"] = node_id
                     existing_state["flow_id"] = flow.id
                     await redis_memory_service.update_ai_state(
@@ -244,11 +360,59 @@ class ChatbotEngine:
                         "unknown"
                     )
                     
-                    # NÃO avançar automaticamente para o próximo nó!
-                    # Nós do tipo 'message' sem botões devem AGUARDAR input do usuário.
-                    # O avanço ocorre quando o usuário enviar a próxima mensagem.
+                    # Verificar autoClose para nós message/menu
+                    if node_data.get('autoClose'):
+                        closing_msg = node_data.get('closingMessage')
+                        if closing_msg and str(closing_msg).strip():
+                            # Substituir placeholders na mensagem de encerramento
+                            closing_msg_processed = ChatbotEngine._replace_placeholders(str(closing_msg), flow_context)
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=closing_msg_processed)
+                            logger.info(f"[ChatbotEngine] Mensagem de encerramento enviada para conv {conversation_id}")
+                        
+                        await sync_to_async(closing_service.request_closing)(conversation)
+                        logger.info(f"[ChatbotEngine] Encerramento solicitado para conv {conversation_id} (nó {node_id})")
+                    else:
+                        # NÃO avançar automaticamente para o próximo nó!
+                        # Nós do tipo 'message' sem botões devem AGUARDAR input do usuário.
+                        # O avanço ocorre quando o usuário enviar a próxima mensagem.
+                        pass
             except Exception as e:
                 logger.error(f"[ChatbotEngine] Erro crítico ao executar nó {node_id}: {e}", exc_info=True)
+
+        elif node_type == 'condition':
+            try:
+                # Obter contexto
+                current_state = await redis_memory_service.get_ai_state(provedor_id, conversation_id, "whatsapp", "unknown")
+                flow_context = current_state.get('flow_context', {})
+                
+                variable = node_data.get('variable')
+                operator = node_data.get('operator', 'equals')
+                value = node_data.get('value')
+                
+                actual_value = flow_context.get(variable)
+                
+                logger.info(f"[ChatbotEngine][Condition] Avaliando: {variable}({actual_value}) {operator} {value}")
+                
+                result = False
+                if operator == 'equals':
+                    result = str(actual_value).lower() == str(value).lower()
+                elif operator == 'contains':
+                    result = str(value).lower() in str(actual_value).lower()
+                elif operator == 'exists':
+                    result = actual_value is not None and actual_value != ''
+                
+                # Definir porta de saída (TRUE ou FALSE)
+                handle = 'TRUE' if result else 'FALSE'
+                logger.info(f"[ChatbotEngine][Condition] Resultado: {handle}")
+                
+                # Encontrar aresta correspondente ao handle
+                edge = next((e for e in flow.edges if e.get('source') == node_id and e.get('sourceHandle') == handle), None)
+                if edge:
+                    next_node = next((n for n in flow.nodes if n.get('id') == edge.get('target')), None)
+                    if next_node:
+                        await ChatbotEngine.execute_node(provedor_id, conversation_id, next_node, flow)
+            except Exception as e:
+                logger.error(f"[ChatbotEngine][Condition] Erro ao avaliar nó {node_id}: {e}")
 
         elif node_type == 'start':
             # Apenas pula para o próximo
@@ -264,7 +428,9 @@ class ChatbotEngine:
             try:
                 sgp_action = node_data.get('sgpAction', 'consultar_cliente')
                 input_var = node_data.get('inputVar', 'cpf')
-                error_message = node_data.get('errorMessage', 'Não foi possível consultar seus dados. Tente novamente.')
+                error_message = node_data.get('errorMessage')
+                if not error_message or str(error_message).strip() == "":
+                    error_message = "Não foi possível consultar seus dados. Tente novamente."
 
                 # Obter o domínio/conversa para enviar feedback ao usuário depois
                 from conversations.models import Conversation
@@ -273,28 +439,39 @@ class ChatbotEngine:
                 # Ler estado atual do Redis para obter o valor da variável de entrada
                 current_state = await redis_memory_service.get_ai_state(provedor_id, conversation_id, "whatsapp", "unknown")
                 flow_context = current_state.get('flow_context', {})
-                input_value = flow_context.get(input_var)
+                input_value = flow_context.get(input_var) if input_var and input_var != 'None' else None
 
-                # Fallback: última mensagem de texto do usuário
+                # Fallback Inteligente: Se não tem input_value, buscar contrato ou cpf no contexto
                 if not input_value:
-                    input_value = current_state.get('last_user_message', '')
+                    input_value = flow_context.get('contrato') or flow_context.get('cpf') or flow_context.get('cpfcnpj')
+                
+                # Fallback final: última mensagem de texto do usuário (apenas se parecer ID numérico)
+                if not input_value:
+                    last_msg = str(current_state.get('last_user_message', '')).strip()
+                    # Se a última mensagem for puramente numérica e tiver entre 4 e 14 dígitos, assumimos ser o dado buscado
+                    if re.match(r'^\d{4,14}$', last_msg):
+                        input_value = last_msg
 
-                logger.info(f"[ChatbotEngine][SGP] Executando ação '{sgp_action}' com {input_var}='{input_value}' para conv {conversation_id}")
+                logger.info(f"[ChatbotEngine][SGP] Executando ação '{sgp_action}' com input='{input_value}' (var original: {input_var}) para conv {conversation_id}")
 
                 if not input_value:
                     logger.warning(f"[ChatbotEngine][SGP] Variável '{input_var}' não encontrada no contexto. Enviando mensagem de erro.")
                     await ChatbotEngine.send_message_agnostic(conv=conversation, text=f"Para continuar, preciso do valor de '{input_var}'. Por favor, informe.")
                     return
 
-                # Obter configurações do SGP do provedor
+                # Obter configurações do SGP do provedor (Robustez Unificada)
                 provedor = conversation.inbox.provedor
-                sgp_config = provedor.integracoes_externas.get('sgp', {})
-                sgp_url = sgp_config.get('base_url') or provedor.integracoes_externas.get('sgp_url')
-                sgp_token = sgp_config.get('token') or provedor.integracoes_externas.get('sgp_token')
-                sgp_app = sgp_config.get('app') or provedor.integracoes_externas.get('sgp_app', 'NioChat')
+                integracao = provedor.integracoes_externas or {}
+                
+                # Tentar buscar do objeto aninhado 'sgp' ou da raiz
+                sgp_config = integracao.get('sgp', {}) if isinstance(integracao.get('sgp'), dict) else integracao
+                
+                sgp_url = sgp_config.get('sgp_url') or sgp_config.get('base_url') or integracao.get('sgp_url')
+                sgp_token = sgp_config.get('sgp_token') or sgp_config.get('token') or integracao.get('sgp_token')
+                sgp_app = sgp_config.get('sgp_app') or sgp_config.get('app') or integracao.get('sgp_app') or 'NioChat'
 
                 if not sgp_url or not sgp_token:
-                    logger.error(f"[ChatbotEngine][SGP] Configuração SGP não encontrada para provedor {provedor_id}")
+                    logger.error(f"[ChatbotEngine][SGP] Configuração SGP incompleta para provedor {provedor_id}: url={bool(sgp_url)}, token={bool(sgp_token)}")
                     await ChatbotEngine.send_message_agnostic(conv=conversation, text=error_message)
                     return
 
@@ -558,11 +735,15 @@ class ChatbotEngine:
                             
                             # Condição: Só envia se não for erro
                             if result_context.get('status_faturas') != 'error':
-                                if success_msg:
+                                if success_msg and str(success_msg).strip() != "":
                                     await ChatbotEngine.send_message_agnostic(conv=conversation, text=success_msg)
                                     logger.info(f"[ChatbotEngine][SGP] Mensagem de sucesso enviada: {success_msg[:30]}...")
                                 
                                 if auto_close:
+                                    closing_msg = node_data.get('closingMessage')
+                                    if closing_msg and str(closing_msg).strip():
+                                        await ChatbotEngine.send_message_agnostic(conv=conversation, text=str(closing_msg))
+                                        logger.info(f"[ChatbotEngine][SGP] Mensagem de encerramento enviada para conv {conversation_id}")
                                     await sync_to_async(closing_service.request_closing)(conversation)
                                     logger.info(f"[ChatbotEngine][SGP] Encerramento solicitado para conv {conversation_id}")
                     else:
@@ -576,13 +757,83 @@ class ChatbotEngine:
 
                 elif sgp_action == 'liberar_por_confianca':
                     cpf_ctx = flow_context.get('cpf', '') or flow_context.get('cpfcnpj', '')
-                    result = await sync_to_async(sgp.liberar_por_confianca)(input_value, cpf_cnpj=cpf_ctx)
+                    
+                    # Garantir que o contrato seja apenas números se for liberação
+                    input_limpo = re.sub(r'[^\d]', '', str(input_value))
+                    contrato_final = input_limpo
+                    
+                    # Se o valor parece um CPF (11 dígitos), buscar o contrato ID real no SGP
+                    if len(input_limpo) == 11:
+                        logger.info(f"[ChatbotEngine][SGP] CPF detectado ({input_limpo}) na liberação. Buscando Contrato ID real...")
+                        try:
+                            # Tentar buscar via listagem de títulos (que retorna o contrato ID)
+                            titulos_res = await sync_to_async(sgp.listar_titulos)(input_limpo, limit=1)
+                            if titulos_res and titulos_res.get('titulos') and len(titulos_res['titulos']) > 0:
+                                contrato_final = str(titulos_res['titulos'][0].get('clienteContrato', input_limpo))
+                                logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto para liberação: {contrato_final}")
+                        except Exception as e:
+                            logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF na liberação: {e}")
+                    
+                    result = await sync_to_async(sgp.liberar_por_confianca)(contrato_final, cpf_cnpj=cpf_ctx)
                     if result:
-                        result_context = {'sucesso': result.get('status') == 1, 'sgp_liberacao': result}
+                        sucesso = result.get('status') == 1 or result.get('liberado') == True
+                        protocolo = result.get('protocolo', '')
+                        dias = result.get('liberado_dias', 0)
+                        
+                        result_context = {
+                            'sucesso': sucesso,
+                            'protocolo': protocolo,
+                            'liberado_dias': dias,
+                            'sgp_liberacao': result
+                        }
+                        
+                        if sucesso:
+                            custom_msg = node_data.get('successMessage')
+                            if custom_msg and str(custom_msg).strip():
+                                msg_confirmacao = str(custom_msg).replace('{protocolo}', str(protocolo)).replace('{liberado_dias}', str(dias))
+                            else:
+                                # Fallback padrão
+                                msg_confirmacao = f"Sua liberação por confiança foi realizada com sucesso! Seu serviço estará disponível por mais {dias} dias. Protocolo: {protocolo}"
+                            
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=msg_confirmacao)
+                            logger.info(f"[ChatbotEngine][SGP] Feedback de liberação enviado. Protocolo: {protocolo}")
+                            
+                            if node_data.get('autoClose'):
+                                closing_msg = node_data.get('closingMessage')
+                                if closing_msg and str(closing_msg).strip():
+                                    await ChatbotEngine.send_message_agnostic(conv=conversation, text=str(closing_msg))
+                                    logger.info(f"[ChatbotEngine][SGP] Mensagem de encerramento enviada após liberação para conv {conversation_id}")
+                                await sync_to_async(closing_service.request_closing)(conversation)
+                                logger.info(f"[ChatbotEngine][SGP] Encerramento solicitado após liberação para conv {conversation_id}")
 
                 elif sgp_action == 'criar_chamado':
-                    conteudo = flow_context.get('conteudo', 'Chamado via Chatbot NioChat')
-                    result = await sync_to_async(sgp.criar_chamado)(input_value, conteudo)
+                    # Tentar pegar do context ou da configuração do nó
+                    conteudo_cfg = node_data.get('content', '')
+                    conteudo = flow_context.get('conteudo') or conteudo_cfg or 'Chamado via Chatbot NioChat'
+                    
+                    # Substituir placeholders se houver
+                    conteudo = ChatbotEngine._replace_placeholders(conteudo, flow_context)
+                    
+                    logger.info(f"[ChatbotEngine][SGP] Criando chamado com conteúdo: {conteudo}")
+                    
+                    # Garantir que o contrato seja apenas números se for criação de chamado
+                    input_limpo = re.sub(r'[^\d]', '', str(input_value))
+                    contrato_final = input_limpo
+                    
+                    # Se o valor parece um CPF (11 dígitos), buscar o contrato ID real no SGP
+                    if len(input_limpo) == 11:
+                        logger.info(f"[ChatbotEngine][SGP] CPF detectado ({input_limpo}). Buscando Contrato ID real...")
+                        try:
+                            # Tentar buscar via listagem de títulos (que retorna o contrato ID)
+                            titulos_res = await sync_to_async(sgp.listar_titulos)(input_limpo, limit=1)
+                            if titulos_res and titulos_res.get('titulos') and len(titulos_res['titulos']) > 0:
+                                contrato_final = str(titulos_res['titulos'][0].get('clienteContrato', input_limpo))
+                                logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto para o CPF: {contrato_final}")
+                        except Exception as e:
+                            logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF: {e}")
+                    
+                    tipo = node_data.get('ocorrenciatipo', 1)
+                    result = await sync_to_async(sgp.criar_chamado)(contrato_final, conteudo, ocorrenciatipo=tipo)
                     if result:
                         result_context = {
                             'protocolo': result.get('protocolo', ''),
@@ -590,6 +841,41 @@ class ChatbotEngine:
                             'sucesso': result.get('success', False),
                             'sgp_chamado': result
                         }
+                        
+                        # 🚨 REGRA DE OURO: Feedback automático de protocolo no Chatbot
+                        if result.get('success') and result.get('protocolo'):
+                            protocolo = result.get('protocolo')
+                            
+                            # Tentar descobrir para qual equipe vamos transferir (para o feedback ser mais natural)
+                            equipe_nome = "nossa equipe técnica"
+                            try:
+                                next_nodes_ids = [e.get('target') for e in flow.edges if e.get('source') == node_id]
+                                if next_nodes_ids:
+                                    target_node = next((n for n in flow.nodes if n.get('id') == next_nodes_ids[0]), None)
+                                    if target_node and target_node.get('type') == 'transfer':
+                                        team_id = target_node.get('data', {}).get('teamId')
+                                        if team_id:
+                                            from conversations.models import Team
+                                            team_obj = await sync_to_async(Team.objects.filter(id=team_id).first)()
+                                            if team_obj:
+                                                equipe_nome = team_obj.name
+                            except Exception as e:
+                                logger.warning(f"[ChatbotEngine][SGP] Erro ao tentar descobrir nome da equipe: {e}")
+
+                            # Permitir que o usuário personalize a mensagem de sucesso no nó
+                            custom_msg = node_data.get('successMessage')
+                            if custom_msg and str(custom_msg).strip():
+                                msg_confirmacao = str(custom_msg).replace('{protocolo}', str(protocolo)).replace('{equipe}', equipe_nome)
+                            else:
+                                # Fallback para mensagem padrão (Sugerido pelo usuário)
+                                msg_confirmacao = f"Chamado técnico registrado (Protocolo: {protocolo}). Estou te transferindo agora para a equipe {equipe_nome}, que dará continuidade ao atendimento. Só um instante!"
+                            
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=msg_confirmacao)
+                            logger.info(f"[ChatbotEngine][SGP] Feedback automático de protocolo enviado: {protocolo}")
+                        elif not result.get('success'):
+                            # Se falhou, avisar o usuário usando a mensagem de erro do nó
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=error_message)
+                            return # Interrompe o avanço se falhar a criação crítica
 
                 elif sgp_action == 'listar_manutencoes':
                     result = await sync_to_async(sgp.listar_manutencoes)(input_value)
@@ -609,50 +895,179 @@ class ChatbotEngine:
                 current_state['flow_id'] = flow.id
                 await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
 
-                # Avançar automaticamente para o próximo nó (ex: mensagem com resultado)
+                # Avançar automaticamente para o próximo nó
+                # (SGP é um nó de processo, deve sempre avançar se houver conexão)
                 import asyncio
-                edges = flow.edges
-                nodes = flow.nodes
-                edge = next((e for e in edges if e.get('source') == node_id), None)
+                edge = next((e for e in flow.edges if e.get('source') == node_id), None)
                 if edge:
-                    next_node = next((n for n in nodes if n.get('id') == edge.get('target')), None)
+                    next_node = next((n for n in flow.nodes if n.get('id') == edge.get('target')), None)
                     if next_node:
-                        logger.info(f"[ChatbotEngine][SGP] Avançando automaticamente de {node_id} para {next_node.get('id')}")
-                        # Substituir variáveis de contexto no conteúdo do próximo nó
-                        next_node_data = dict(next_node.get('data', {}))
-                        content = next_node_data.get('content', '')
-                        for var_name, var_value in flow_context.items():
-                            if isinstance(var_value, (str, int, float)):
-                                content = str(content).replace(f'{{{{{var_name}}}}}', str(var_value))
-                        next_node_data['content'] = content
-                        next_node = dict(next_node)
-                        next_node['data'] = next_node_data
+                        # Delay de 1s conforme solicitado para fluidez
                         await asyncio.sleep(1.0)
-                        await ChatbotEngine.execute_node(provedor_id, conversation_id, next_node, flow)
+                        logger.info(f"[ChatbotEngine][SGP] Avançando automaticamente de {node_id} para {next_node.get('id')} ({next_node.get('type')})")
+                        
+                        # Executa o próximo nó (execute_node agora cuida de placeholders internamente)
+                        try:
+                            await ChatbotEngine.execute_node(provedor_id, conversation_id, next_node, flow)
+                        except Exception as next_err:
+                            logger.error(f"[ChatbotEngine][SGP] Erro ao executar nó seguinte {next_node.get('id')}: {next_err}")
                     else:
-                        logger.warning(f"[ChatbotEngine][SGP] Próximo nó {edge.get('target')} não encontrado para transição de {node_id}")
+                        logger.warning(f"[ChatbotEngine][SGP] Próximo nó {edge.get('target')} não encontrado.")
                 else:
-                    # Sem próximo nó: a mensagem formatada já foi enviada acima
-                    logger.info(f"[ChatbotEngine][SGP] Nenhum próximo nó configurado após SGP {node_id}.")
+                    logger.info(f"[ChatbotEngine][SGP] Nenhum nó de saída encontrado após SGP {node_id}.")
 
             except Exception as e:
                 logger.error(f"[ChatbotEngine][SGP] Erro ao executar nó SGP {node_id}: {e}", exc_info=True)
 
+        elif node_type == 'transfer':
+            try:
+                transfer_mode = node_data.get('transferMode', 'choice') # 'direct' ou 'choice'
+                team_id = node_data.get('teamId')
+                content = node_data.get('content', 'Aguarde um momento, estamos transferindo seu atendimento...')
+                
+                from conversations.models import Conversation, Team
+                conversation = await sync_to_async(Conversation.objects.select_related('inbox', 'inbox__provedor', 'contact').get)(id=conversation_id)
+                
+                # 1. Enviar mensagem de aviso
+                if content:
+                    await ChatbotEngine.send_message_agnostic(conv=conversation, text=content)
+
+                if transfer_mode == 'direct' and team_id:
+                    # Transferência Direta
+                    logger.info(f"[ChatbotEngine][Transfer] Iniciando transferência direta para equipe {team_id}")
+                    team = await sync_to_async(Team.objects.get)(id=team_id)
+                    conversation.status = 'pending'
+                    conversation.team = team
+                    conversation.assignee = None
+                    await sync_to_async(conversation.save)() # Salva tudo para garantir persistência
+                    
+                    # Limpar estado para encerrar o fluxo (humano assume)
+                    await redis_memory_service.clear_memory(provedor_id, conversation_id, "whatsapp", "unknown")
+                    logger.info(f"[ChatbotEngine][Transfer] Transferência direta CONCLUÍDA para {team.name}")
+                
+                elif transfer_mode == 'choice':
+                    # Listar equipes do provedor
+                    provedor = conversation.inbox.provedor
+                    teams = await sync_to_async(list)(Team.objects.filter(provedor=provedor, is_active=True).exclude(name="IA"))
+                    
+                    if not teams:
+                        logger.warning(f"[ChatbotEngine][Transfer] Nenhuma equipe encontrada para o provedor {provedor_id}")
+                        conversation.status = 'pending' # Abre geral (fila de espera) se não houver equipes
+                        await sync_to_async(conversation.save)()
+                        await redis_memory_service.clear_memory(provedor_id, conversation_id, "whatsapp", "unknown")
+                        return
+
+                    rows = []
+                    for t in teams[:10]:
+                        rows.append({
+                            'id': f'team_{t.id}',
+                            'title': t.name[:24],
+                            'description': (t.description or 'Falar com atendente')[:72]
+                        })
+                    
+                    await ChatbotEngine.send_message_agnostic(
+                        conv=conversation,
+                        text="Por favor, selecione o setor desejado:",
+                        msg_rows=rows,
+                        msg_btn_text="Ver Setores",
+                        msg_sec_title="Setores Disponíveis"
+                    )
+                    
+                    # Salvar estado de aguardando seleção
+                    current_state = await redis_memory_service.get_ai_state(provedor_id, conversation_id, "whatsapp", "unknown")
+                    current_state['chatbot_node_id'] = f'transfer_select_{node_id}'
+                    await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
+                    logger.info(f"[ChatbotEngine][Transfer] Aguardando seleção de equipe na conv {conversation_id}")
+            
+            except Exception as e:
+                logger.error(f"[ChatbotEngine][Transfer] Erro ao executar nó de transferência: {e}", exc_info=True)
+
+
+    @staticmethod
+    async def _persist_chatbot_message(conv, content_for_db, msg_btns=None, msg_rows=None):
+        """
+        Salva a mensagem do chatbot no banco de dados e emite via WebSocket.
+        Isso garante que as mensagens apareçam no ChatArea e na auditoria.
+        """
+        try:
+            from conversations.models import Message
+            from channels.layers import get_channel_layer
+            import json as _json
+
+            # Montar conteúdo para exibição no ChatArea
+            display_content = content_for_db or ''
+            additional_attrs = {
+                'from_ai': True,
+                'sent_via': 'chatbot_engine',
+                'sender_type': 'bot',
+            }
+
+            # Se tiver botões/rows, salvar info extra para renderização
+            if msg_btns:
+                additional_attrs['interactive_buttons'] = msg_btns
+            if msg_rows:
+                additional_attrs['interactive_rows'] = msg_rows
+
+            msg_obj = await sync_to_async(Message.objects.create)(
+                conversation=conv,
+                content=display_content,
+                message_type='text',
+                is_from_customer=False,
+                additional_attributes=additional_attrs
+            )
+            logger.info(f"[ChatbotEngine] Mensagem do chatbot salva no banco: id={msg_obj.id}, conv={conv.id}")
+
+            # Broadcast via WebSocket para o ChatArea receber em tempo real
+            try:
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    from django.utils import timezone as tz
+                    await channel_layer.group_send(
+                        f"conversation_{conv.id}",
+                        {
+                            "type": "chat_message",
+                            "message": {
+                                "id": msg_obj.id,
+                                "content": display_content,
+                                "message_type": "text",
+                                "is_from_customer": False,
+                                "created_at": msg_obj.created_at.isoformat() if msg_obj.created_at else tz.now().isoformat(),
+                                "sender": {"sender_type": "bot"},
+                                "from_ai": True,
+                                "additional_attributes": additional_attrs,
+                            },
+                            "sender": {"sender_type": "bot"},
+                        }
+                    )
+                    logger.debug(f"[ChatbotEngine] WebSocket broadcast enviado para conversation_{conv.id}")
+            except Exception as ws_err:
+                logger.warning(f"[ChatbotEngine] Falha no WebSocket broadcast (não crítico): {ws_err}")
+
+        except Exception as db_err:
+            logger.error(f"[ChatbotEngine] Erro ao salvar mensagem do chatbot no banco: {db_err}", exc_info=True)
 
     @staticmethod
     async def send_message_agnostic(conv, text, msg_btns=None, msg_header=None, msg_footer=None, msg_rows=None, msg_btn_text=None, msg_sec_title=None) -> Tuple[bool, Any]:
         """
-        Helper para enviar mensagem baseada na integração (WhatsApp Cloud, Evolution, Uazapi)
+        Helper para enviar mensagem baseada na integração (WhatsApp Cloud, Evolution, Uazapi).
+        Persiste no banco ANTES de enviar para garantir experiência em tempo real.
         """
         inbox = conv.inbox
         provedor = inbox.provedor
         
-        logger.info(f"[ChatbotEngine] Enviando mensagem para inbox {inbox.id} (canal: {inbox.channel_id}) | Texto: {text[:100]}...")
+        logger.info(f"[ChatbotEngine] Processando envio de mensagem para inbox {inbox.id} | Texto: {text[:100]}...")
+
+        # Persistir no banco ANTES do envio real para garantir exibição instantânea no painel
+        # Isso elimina o atraso causado pela latência da API externa (WhatsApp Cloud / Evolution)
+        await ChatbotEngine._persist_chatbot_message(conv, text, msg_btns, msg_rows)
+
+        success = False
+        response = None
 
         # 1. WhatsApp Cloud API (Oficial)
         if inbox.channel_id == "whatsapp_cloud_api" or inbox.channel_type == "whatsapp_oficial" or (provedor.integracoes_externas.get('cloud_api_active') == True):
             if msg_btns or msg_rows:
-                return await sync_to_async(send_via_whatsapp_cloud_api)(
+                success, response = await sync_to_async(send_via_whatsapp_cloud_api)(
                     conversation=conv,
                     content=text,
                     message_type='interactive',
@@ -664,11 +1079,13 @@ class ChatbotEngine:
                     footer=msg_footer
                 )
             else:
-                return await sync_to_async(send_via_whatsapp_cloud_api)(
+                success, response = await sync_to_async(send_via_whatsapp_cloud_api)(
                     conversation=conv,
                     content=text,
                     message_type='text'
                 )
+            
+            return success, response
 
         # 2. Evolution / Uazapi (Baseado em integrations/views.py)
         uazapi_token = provedor.integracoes_externas.get('whatsapp_token')
@@ -712,7 +1129,9 @@ class ChatbotEngine:
                     headers=headers,
                     timeout=15
                 )
-                return resp.status_code in [200, 201], resp.text
+                success = resp.status_code in [200, 201]
+                response = resp.text
+                return success, response
             except Exception as e:
                 logger.error(f"[ChatbotEngine] Erro ao enviar Evolution/Uazapi: {e}")
                 return False, str(e)

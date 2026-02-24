@@ -152,7 +152,7 @@ export default function ConversationAudit({ provedorId }) {
     setError('');
     try {
       const token = localStorage.getItem('token');
-      
+
       const params = new URLSearchParams({
         provedor_id: provedorId,
         conversation_closed: 'true',
@@ -167,13 +167,13 @@ export default function ConversationAudit({ provedorId }) {
       });
 
       const data = response.data.results || response.data || [];
-      
+
       // Enriquecer dados com informações adicionais
       const enrichedData = await Promise.all(data.map(async (conv) => {
         try {
           // Buscar mensagens do Supabase em vez da API Django
           const messages = await getMessages(conv.conversation_id, provedorId);
-          
+
           // Simular dados da conversa baseado na auditoria
           const conversationData = {
             created_at: conv.created_at,
@@ -181,7 +181,7 @@ export default function ConversationAudit({ provedorId }) {
             message_count: messages.length,
             status: 'closed'
           };
-          
+
           // Calcular duração
           let duration = 'N/A';
           if (conversationData.created_at && conversationData.ended_at) {
@@ -190,7 +190,7 @@ export default function ConversationAudit({ provedorId }) {
             const durationMs = endTime - startTime;
             const hours = Math.floor(durationMs / (1000 * 60 * 60));
             const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-            
+
             if (hours > 0) {
               duration = `${hours}h ${minutes}m`;
             } else {
@@ -202,21 +202,21 @@ export default function ConversationAudit({ provedorId }) {
             const durationMs = now - startTime;
             const hours = Math.floor(durationMs / (1000 * 60 * 60));
             const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-            
+
             if (hours > 0) {
               duration = `${hours}h ${minutes}m`;
             } else {
               duration = `${minutes}m`;
             }
           }
-          
+
           // Buscar CSAT rating
           let csatRating = null;
           try {
             const csatResponse = await axios.get(`/api/csat/feedbacks/?conversation=${conv.conversation_id}`, {
               headers: { Authorization: `Token ${token}` }
             });
-            
+
             const csatData = csatResponse.data.results || csatResponse.data || [];
             if (csatData.length > 0) {
               csatRating = csatData[0].rating_value;
@@ -224,20 +224,20 @@ export default function ConversationAudit({ provedorId }) {
           } catch (csatError) {
             // CSAT não encontrado, usar null
           }
-          
+
           // Buscar contagem de mensagens
           let messageCount = 0;
           try {
             const messagesResponse = await axios.get(`/api/messages/?conversation=${conv.conversation_id}`, {
               headers: { Authorization: `Token ${token}` }
             });
-            
+
             const messagesData = messagesResponse.data.results || messagesResponse.data || [];
             messageCount = messagesData.length;
           } catch (messagesError) {
             // Mensagens não encontradas, usar 0
           }
-          
+
           return {
             ...conv,
             duration,
@@ -254,7 +254,7 @@ export default function ConversationAudit({ provedorId }) {
           };
         }
       }));
-      
+
       setConversations(enrichedData);
     } catch (err) {
       console.error('ConversationAudit: Erro ao buscar conversas:', err);
@@ -282,14 +282,14 @@ export default function ConversationAudit({ provedorId }) {
     setLoadingMessages(true);
     try {
       const token = localStorage.getItem('token');
-      
+
       // Buscar dados completos da conversa do endpoint que busca do Supabase
       const response = await axios.get(`/api/conversations/${conversationId}/`, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       const conversationData = response.data;
-      
+
       // Verificar se a conversa foi fechada pela IA
       // Buscar TODOS os audit logs da conversa APENAS do Supabase (SEM fallback para banco local)
       try {
@@ -297,19 +297,19 @@ export default function ConversationAudit({ provedorId }) {
         const auditData = await getAuditLogs(provedorId, {
           conversation_id: conversationId
         });
-        
+
         let auditLogs = [];
-        
+
         // Se encontrou no Supabase, usar esses dados
         if (auditData && auditData.length > 0) {
           // Filtrar apenas logs desta conversa específica
-          auditLogs = auditData.filter(log => 
-            log.conversation_id === parseInt(conversationId) || 
+          auditLogs = auditData.filter(log =>
+            log.conversation_id === parseInt(conversationId) ||
             log.conversation_id === conversationId
           );
         }
         // NÃO fazer fallback para API Django - usar apenas Supabase
-        
+
         const aiClosedLog = auditLogs.find(log => log.action === 'conversation_closed_ai');
         if (aiClosedLog) {
           conversationData.is_ai_closed = true;
@@ -324,7 +324,7 @@ export default function ConversationAudit({ provedorId }) {
           conversationData.is_ai_closed = true;
         }
       }
-      
+
       // Calcular duração da conversa
       if (conversationData.created_at && conversationData.ended_at) {
         const startTime = new Date(conversationData.created_at);
@@ -332,7 +332,7 @@ export default function ConversationAudit({ provedorId }) {
         const durationMs = endTime - startTime;
         const hours = Math.floor(durationMs / (1000 * 60 * 60));
         const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-        
+
         if (hours > 0) {
           conversationData.duration = `${hours}h ${minutes}m`;
         } else {
@@ -344,7 +344,7 @@ export default function ConversationAudit({ provedorId }) {
         const durationMs = now - startTime;
         const hours = Math.floor(durationMs / (1000 * 60 * 60));
         const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-        
+
         if (hours > 0) {
           conversationData.duration = `${hours}h ${minutes}m`;
         } else {
@@ -353,17 +353,17 @@ export default function ConversationAudit({ provedorId }) {
       } else {
         conversationData.duration = 'N/A';
       }
-      
+
       // Mapear dados do CSAT corretamente
       if (conversationData.csat && conversationData.csat.rating_value) {
         conversationData.csat_rating = conversationData.csat.rating_value;
       }
-      
+
       setConversationDetails(conversationData);
-      
+
       // Verificar se há mensagens no response do backend
       let messages = conversationData.messages || [];
-      
+
       // Se não há mensagens do backend, buscar diretamente do Supabase
       if (!messages || messages.length === 0) {
         try {
@@ -375,9 +375,9 @@ export default function ConversationAudit({ provedorId }) {
           console.warn('Erro ao buscar mensagens do Supabase no frontend:', err);
         }
       }
-      
+
       setConversationMessages(messages);
-      
+
     } catch (err) {
       console.error('Erro ao buscar detalhes da conversa:', err);
       setConversationDetails(null);
@@ -426,41 +426,41 @@ export default function ConversationAudit({ provedorId }) {
   // Função para renderizar mensagens com links destacados (mesma do ChatArea)
   const renderMessageWithLinks = (text) => {
     if (!text || typeof text !== 'string') return text;
-    
+
     // Regex para detectar URLs completas
     const urlRegex = /(https?:\/\/[^\s\n<>"']+|www\.[^\s\n<>"']+)/gi;
-    
+
     // Dividir o texto em partes (texto e URLs)
     const parts = [];
     let lastIndex = 0;
     let match;
-    
+
     urlRegex.lastIndex = 0;
-    
+
     while ((match = urlRegex.exec(text)) !== null) {
       // Adicionar texto antes da URL
       if (match.index > lastIndex) {
         parts.push({ type: 'text', content: text.substring(lastIndex, match.index) });
       }
-      
+
       // Adicionar a URL (remover pontuação final se houver)
       let urlContent = match[0];
       urlContent = urlContent.replace(/[.,;:!?]+$/, '');
-      
+
       parts.push({ type: 'url', content: urlContent });
       lastIndex = match.index + match[0].length;
     }
-    
+
     // Adicionar texto restante
     if (lastIndex < text.length) {
       parts.push({ type: 'text', content: text.substring(lastIndex) });
     }
-    
+
     // Se não encontrou URLs, retornar texto original
     if (parts.length === 0) {
       return text;
     }
-    
+
     // Renderizar partes
     return parts.map((part, index) => {
       if (part.type === 'url') {
@@ -469,7 +469,7 @@ export default function ConversationAudit({ provedorId }) {
         if (!href.startsWith('http://') && !href.startsWith('https://')) {
           href = 'https://' + href;
         }
-        
+
         return (
           <a
             key={index}
@@ -478,7 +478,7 @@ export default function ConversationAudit({ provedorId }) {
             rel="noopener noreferrer"
             className="underline transition-colors break-all"
             onClick={(e) => e.stopPropagation()}
-            style={{ 
+            style={{
               wordBreak: 'break-all',
               color: '#7DD3FC',
               textDecoration: 'underline',
@@ -534,9 +534,9 @@ export default function ConversationAudit({ provedorId }) {
       4: { emoji: '🙂', text: 'Bom' },
       5: { emoji: '🤩', text: 'Excelente' }
     };
-    
+
     if (!csatRating) return { emoji: '-', text: 'Não avaliado' };
-    
+
     const rating = emojiMap[csatRating];
     return rating || { emoji: '-', text: 'Não avaliado' };
   };
@@ -558,7 +558,7 @@ export default function ConversationAudit({ provedorId }) {
         <div className="text-center text-red-600">
           <h2 className="text-xl font-semibold mb-2">Erro ao carregar auditoria</h2>
           <p className="text-sm">{error}</p>
-          <button 
+          <button
             onClick={() => {
               setError('');
               fetchConversations();
@@ -689,18 +689,18 @@ export default function ConversationAudit({ provedorId }) {
                       </td>
                     </tr>
                   )}
-                  
+
                   {filteredConversations.map((conv) => (
-                    <tr 
-                      key={conv.id} 
+                    <tr
+                      key={conv.id}
                       className="hover:bg-muted/50 cursor-pointer transition-colors"
                       onClick={() => openConversationModal(conv.conversation_id)}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           {conv.contact_photo && conv.channel_type === 'whatsapp' ? (
-                            <img 
-                              src={conv.contact_photo} 
+                            <img
+                              src={conv.contact_photo}
                               alt={conv.contact_name || 'Cliente'}
                               className="w-8 h-8 rounded-full object-cover border border-border"
                               onError={(e) => {
@@ -728,8 +728,8 @@ export default function ConversationAudit({ provedorId }) {
                         <div className="flex items-center gap-2">
                           {getActionIcon(conv.action)}
                           <div className="font-medium">
-                            {conv.action === 'conversation_closed_ai' ? 'Pela IA' : 
-                             (typeof conv.user === 'string' ? conv.user.split(' (')[0] : conv.user || 'Sistema')}
+                            {conv.action === 'conversation_closed_ai' ? 'Pela IA' :
+                              (typeof conv.user === 'string' ? conv.user.split(' (')[0] : conv.user || 'Sistema')}
                           </div>
                         </div>
                       </td>
@@ -746,9 +746,9 @@ export default function ConversationAudit({ provedorId }) {
                           {getChannelIcon(conv.channel_type)}
                           <span className="text-sm capitalize">
                             {conv.channel_type === 'whatsapp' ? 'WhatsApp' :
-                             conv.channel_type === 'telegram' ? 'Telegram' :
-                             conv.channel_type === 'email' ? 'Email' :
-                             conv.channel_type || 'WhatsApp'}
+                              conv.channel_type === 'telegram' ? 'Telegram' :
+                                conv.channel_type === 'email' ? 'Email' :
+                                  conv.channel_type || 'WhatsApp'}
                           </span>
                         </div>
                       </td>
@@ -761,10 +761,10 @@ export default function ConversationAudit({ provedorId }) {
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {conv.resolution_type === 'ai_resolved' ? 'IA resolveu automaticamente' :
-                           conv.resolution_type === 'problem_solved' ? 'Problema resolvido com sucesso' :
-                           conv.resolution_type === 'client_ended' ? 'Cliente encerrou a conversa' :
-                           conv.resolution_type === 'finalized_after_confirmation' ? 'Finalizado pela IA após confirmação do cliente' :
-                           'Conversa finalizada'}
+                            conv.resolution_type === 'problem_solved' ? 'Problema resolvido com sucesso' :
+                              conv.resolution_type === 'client_ended' ? 'Cliente encerrou a conversa' :
+                                conv.resolution_type === 'finalized_after_confirmation' ? 'Finalizado pela IA após confirmação do cliente' :
+                                  'Conversa finalizada'}
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -782,11 +782,11 @@ export default function ConversationAudit({ provedorId }) {
 
         {/* Modal de Detalhes */}
         {selectedConversation && (
-          <div 
+          <div
             className="fixed inset-0 bg-black/50 flex items-center justify-start z-[100] p-4 pl-[17rem] overflow-hidden"
             onClick={closeConversationModal}
           >
-            <div 
+            <div
               className="bg-background rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
@@ -867,13 +867,13 @@ export default function ConversationAudit({ provedorId }) {
                         {getChannelIcon(conversationDetails?.inbox?.channel_type)}
                         <span className="font-medium">
                           {conversationDetails?.inbox?.channel_type === 'whatsapp' ? 'WhatsApp' :
-                           conversationDetails?.inbox?.channel_type === 'telegram' ? 'Telegram' :
-                           conversationDetails?.inbox?.channel_type === 'email' ? 'Email' :
-                           conversationDetails?.inbox?.channel_type || 'WhatsApp'}
+                            conversationDetails?.inbox?.channel_type === 'telegram' ? 'Telegram' :
+                              conversationDetails?.inbox?.channel_type === 'email' ? 'Email' :
+                                conversationDetails?.inbox?.channel_type || 'WhatsApp'}
                         </span>
                         <span className="text-sm text-muted-foreground ml-auto">
-                          Início: {conversationDetails?.created_at ? 
-                            new Date(conversationDetails.created_at).toLocaleString('pt-BR') : 
+                          Início: {conversationDetails?.created_at ?
+                            new Date(conversationDetails.created_at).toLocaleString('pt-BR') :
                             'Data não disponível'}
                         </span>
                       </div>
@@ -888,7 +888,7 @@ export default function ConversationAudit({ provedorId }) {
                           {conversationMessages.length} mensagens
                         </span>
                       </div>
-                      
+
                       {loadingMessages ? (
                         <div className="text-center py-8">
                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
@@ -916,37 +916,36 @@ export default function ConversationAudit({ provedorId }) {
                               const hasQRCode = message.message_type === 'image' && message.content && message.content.includes('QR Code PIX');
                               const hasBoleto = message.content && message.content.includes('🔗') && message.content.includes('Link do Boleto:');
                               const hasButtons = message.additional_attributes?.has_buttons && message.additional_attributes?.button_choices;
-                              
+
                               // Determinar se é mensagem do cliente ou do sistema (IA/agente)
                               // Usar a mesma lógica do ChatArea: is_from_customer determina o lado e a cor
                               const isCustomer = message.is_from_customer === true;
-                              
+
                               // Identificar se é mensagem da IA (para exibir "Sistema" ou "IA")
                               const isFromAI = !isCustomer && (
-                                message.sender?.sender_type === 'ai' || 
+                                message.sender?.sender_type === 'ai' ||
                                 message.from_ai === true ||
                                 message.additional_attributes?.from_ai === true
                               );
-                              
+
                               return (
                                 <div key={index} className={`flex ${isCustomer ? 'justify-start' : 'justify-end'}`}>
-                                  <div className={`max-w-xs lg:max-w-md rounded-2xl px-4 py-3 shadow-sm ${
-                                    isCustomer 
-                                      ? 'bg-muted text-foreground' 
-                                      : 'bg-[#2196F3] text-white'
-                                  }`}>
+                                  <div className={`max-w-xs lg:max-w-md rounded-2xl px-4 py-3 shadow-sm ${isCustomer
+                                    ? 'bg-muted text-foreground'
+                                    : 'bg-blue-600 text-white'
+                                    }`}>
                                     <div className="text-sm font-medium mb-1">
-                                      {isCustomer 
+                                      {isCustomer
                                         ? (conversationDetails?.contact?.name || 'Cliente')
                                         : (isFromAI ? 'Sistema' : 'Agente')
                                       }
                                     </div>
-                                    
+
                                     {/* Conteúdo da mensagem com links destacados */}
                                     <div className="text-sm whitespace-pre-wrap">
                                       {renderMessageWithLinks(message.content || message.text || 'Mensagem sem conteúdo')}
                                     </div>
-                                    
+
                                     {/* Imagens */}
                                     {hasImage && message.file_url && (
                                       <div className="mb-2">
@@ -958,11 +957,11 @@ export default function ConversationAudit({ provedorId }) {
                                         />
                                       </div>
                                     )}
-                                    
+
                                     {/* Vídeos */}
                                     {hasVideo && message.file_url && (
                                       <div className="mb-2">
-                                        <video 
+                                        <video
                                           controls
                                           className="max-w-full h-auto rounded-lg"
                                           style={{ maxHeight: '200px' }}
@@ -972,7 +971,7 @@ export default function ConversationAudit({ provedorId }) {
                                         </video>
                                       </div>
                                     )}
-                                    
+
                                     {/* Documentos/PDFs */}
                                     {hasDocument && message.file_url && (
                                       <div className="mb-2">
@@ -989,7 +988,7 @@ export default function ConversationAudit({ provedorId }) {
                                         </a>
                                       </div>
                                     )}
-                                    
+
                                     {/* QR Codes PIX */}
                                     {hasQRCode && (
                                       <div className="mb-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
@@ -1010,7 +1009,7 @@ export default function ConversationAudit({ provedorId }) {
                                         )}
                                       </div>
                                     )}
-                                    
+
                                     {/* Links de boleto */}
                                     {hasBoleto && (
                                       <div className="mb-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
@@ -1038,8 +1037,8 @@ export default function ConversationAudit({ provedorId }) {
                                         })}
                                       </div>
                                     )}
-                                    
-                                    {/* Botões interativos */}
+
+                                    {/* Botões interativos do painel de controle (has_buttons legacy) */}
                                     {hasButtons && (
                                       <div className="mt-3 space-y-2">
                                         {message.additional_attributes.button_choices.map((choice, index) => {
@@ -1051,7 +1050,6 @@ export default function ConversationAudit({ provedorId }) {
                                                 key={index}
                                                 onClick={(event) => {
                                                   navigator.clipboard.writeText(textoParaCopiar);
-                                                  // Mostrar feedback visual
                                                   const btn = event.target;
                                                   const originalText = btn.textContent;
                                                   btn.textContent = 'Copiado!';
@@ -1072,6 +1070,46 @@ export default function ConversationAudit({ provedorId }) {
                                       </div>
                                     )}
 
+                                    {/* Lista interativa do chatbot (menu/planos) */}
+                                    {message.additional_attributes?.interactive_rows && message.additional_attributes.interactive_rows.length > 0 && (
+                                      <div className="mt-3 space-y-1.5">
+                                        <div className="text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">
+                                          Opções da lista do menu
+                                        </div>
+                                        {message.additional_attributes.interactive_rows.map((row, index) => (
+                                          <div
+                                            key={row.id || index}
+                                            className="px-3 py-2 bg-white/20 border border-white/10 rounded-lg"
+                                          >
+                                            <div className="text-xs font-semibold text-white">
+                                              {row.title}
+                                            </div>
+                                            {row.description && (
+                                              <div className="text-[10px] text-white/70 mt-0.5">
+                                                {row.description}
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {/* Botões interativos do chatbot engine */}
+                                    {message.additional_attributes?.interactive_buttons && message.additional_attributes.interactive_buttons.length > 0 && (
+                                      <div className="mt-3 space-y-1.5">
+                                        {message.additional_attributes.interactive_buttons.map((btn, index) => (
+                                          <div
+                                            key={btn.id || index}
+                                            className="px-3 py-2 bg-white/20 border border-white/10 rounded-lg text-center"
+                                          >
+                                            <span className="text-xs font-bold text-white">
+                                              {btn.title}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
                                     {/* Timestamp + status (igual ao ChatArea) */}
                                     <div className={`flex items-center justify-end mt-2 text-xs ${isCustomer ? 'text-muted-foreground' : 'text-white'}`}>
                                       <span>
@@ -1088,10 +1126,10 @@ export default function ConversationAudit({ provedorId }) {
                                           <AuditMessageStatusIcon message={message} />
                                         )}
                                     </div>
-                                    
+
                                     <div className="text-xs opacity-70 mt-1">
-                                      {message.created_at ? 
-                                        new Date(message.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'}) : 
+                                      {message.created_at ?
+                                        new Date(message.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) :
                                         'Horário não disponível'}
                                     </div>
                                   </div>

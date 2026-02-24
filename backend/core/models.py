@@ -366,3 +366,25 @@ class ChatbotFlow(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.provedor.nome})"
+
+
+class Plano(models.Model):
+    """Planos de internet cadastrados pelo provedor"""
+    provedor = models.ForeignKey(Provedor, on_delete=models.CASCADE, related_name='planos_cadastrados', verbose_name='Provedor')
+    nome = models.CharField(max_length=200, verbose_name='Nome do Plano')
+    descricao = models.TextField(blank=True, default='', verbose_name='Descrição')
+    velocidade_download = models.CharField(max_length=50, blank=True, default='', verbose_name='Velocidade Download')
+    velocidade_upload = models.CharField(max_length=50, blank=True, default='', verbose_name='Velocidade Upload')
+    preco = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name='Preço (R$)')
+    ativo = models.BooleanField(default=True, verbose_name='Ativo')
+    ordem = models.IntegerField(default=0, verbose_name='Ordem de Exibição')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Plano de Internet'
+        verbose_name_plural = 'Planos de Internet'
+        ordering = ['ordem', 'nome']
+
+    def __str__(self):
+        return f"{self.nome} - R${self.preco} ({self.provedor.nome})"

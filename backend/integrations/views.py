@@ -722,8 +722,8 @@ def evolution_webhook(request):
                         try:
                             from core.redis_memory_service import redis_memory_service
                             redis_memory_service.clear_conversation_memory_sync(
-                                existing_conversation.id,
-                                provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None
+                                provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None,
+                                conversation_id=existing_conversation.id
                             )
                         except Exception as e:
                             pass
@@ -1999,8 +1999,8 @@ def webhook_evolution_uazapi(request):
                     try:
                         from core.redis_memory_service import redis_memory_service
                         redis_memory_service.clear_conversation_memory_sync(
-                            existing_conversation.id,
-                            provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None
+                            provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None,
+                            conversation_id=existing_conversation.id
                         )
                     except Exception as e:
                         pass
@@ -2041,8 +2041,8 @@ def webhook_evolution_uazapi(request):
                     try:
                         from core.redis_memory_service import redis_memory_service
                         redis_memory_service.clear_conversation_memory_sync(
-                            existing_conversation.id,
-                            provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None
+                            provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None,
+                            conversation_id=existing_conversation.id
                         )
                     except Exception as e:
                         pass

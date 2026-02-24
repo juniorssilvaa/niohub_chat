@@ -36,6 +36,7 @@ const translations = {
     'recuperador': 'Recuperador de conversas (session)',
     'perfil': 'Perfil',
     'chatbot_builder': 'Chatbot',
+    'planos': 'Planos',
 
     // Perfil
     'informacoes_pessoais': 'Informações Pessoais',
@@ -213,6 +214,7 @@ const translations = {
     'recovery': 'Conversation Recovery',
     'session': 'session',
     'chatbot_builder': 'Chatbot',
+    'planos': 'Plans',
   },
   es: {
     // Navegación
@@ -339,6 +341,7 @@ const translations = {
     'digite_codigo_ou_escaneie': 'Ingrese el código o escanee el Código QR en WhatsApp',
     'usuario_nao_autenticado': 'Usuario no autenticado',
     'chatbot_builder': 'Chatbot',
+    'planos': 'Planes',
   },
   fr: {
     // Navigation
@@ -465,6 +468,7 @@ const translations = {
     'digite_codigo_ou_escaneie': 'Entrez le code ou scannez le Code QR sur WhatsApp',
     'usuario_nao_autenticado': 'Utilisateur non authentifié',
     'chatbot_builder': 'Chatbot',
+    'planos': 'Plans',
   },
   de: {
     // Navigation
@@ -591,6 +595,7 @@ const translations = {
     'digite_codigo_ou_escaneie': 'Geben Sie den Code ein oder scannen Sie den QR-Code auf WhatsApp',
     'usuario_nao_autenticado': 'Benutzer nicht authentifiziert',
     'chatbot_builder': 'Chatbot',
+    'planos': 'Pläne',
   },
   it: {
     // Navigazione
@@ -717,6 +722,7 @@ const translations = {
     'digite_codigo_ou_escaneie': 'Inserisci il codice o scansiona il Codice QR su WhatsApp',
     'usuario_nao_autenticado': 'Utente non autenticato',
     'chatbot_builder': 'Chatbot',
+    'planos': 'Piani',
   },
 };
 
