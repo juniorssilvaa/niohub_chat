@@ -274,7 +274,11 @@ class AIActionsHandler:
             )
 
             if function_name == "consultar_cliente_sgp":
-                cpf_cnpj = function_args.get('cpf_cnpj', '').replace('.', '').replace('-', '').replace('/', '')
+                # Priorizar CPF/CNPJ do input se fornecido
+                cpf_cnpj = function_args.get('cpf_cnpj') or conversation_state.get('cpf_cnpj') or ''
+                cpf_cnpj = str(cpf_cnpj).replace('.', '').replace('-', '').replace('/', '').strip()
+                
+                logger.info(f"[AIACTIONS] consultar_cliente_sgp | CPF={cpf_cnpj} (Input={function_args.get('cpf_cnpj')})")
                 
                 # 🚨 REGRA CRÍTICA: SEMPRE consultar o SGP - NUNCA usar dados da memória
                 # Isso garante que sempre usamos dados reais e atualizados do SGP
@@ -558,10 +562,22 @@ class AIActionsHandler:
                     res = {"success": True, "status_conexao": status, "mensagem_formatada": f"Verifiquei aqui e {msg_status}. Como posso ajudar?"}
 
             elif function_name == "gerar_fatura_completa":
-                cpf = function_args.get('cpf_cnpj', '')
+                # Priorizar input sobre contexto para evitar dados stale
+                cpf = function_args.get('cpf_cnpj') or conversation_state.get('cpf_cnpj')
                 tipo_pagamento = function_args.get('tipo_pagamento', 'pix')
-                contrato_id = function_args.get('contrato_id') or conversation_state.get('contrato_id')
-                if not self._is_valid_cpf_cnpj(cpf): return {"success": False, "erro": "CPF/CNPJ inválido."}
+                
+                # Se mudou o CPF, ignoramos o contrato antigo do contexto
+                input_cpf = function_args.get('cpf_cnpj')
+                if input_cpf and str(input_cpf).strip() != str(conversation_state.get('cpf_cnpj')).strip():
+                    contrato_id = function_args.get('contrato_id')
+                else:
+                    contrato_id = function_args.get('contrato_id') or conversation_state.get('contrato_id')
+
+                logger.info(f"[AIACTIONS] gerar_fatura_completa | CPF={cpf} | Contrato={contrato_id} | Tipo={tipo_pagamento}")
+
+                if not self._is_valid_cpf_cnpj(cpf): 
+                    logger.warn(f"[AIACTIONS] CPF inválido: {cpf}")
+                    return {"success": False, "erro": "CPF/CNPJ inválido."}
                 
                 fs = FaturaService()
                 dados = fs.buscar_fatura_sgp(provedor, cpf, contrato_id)

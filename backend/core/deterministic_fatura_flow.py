@@ -139,10 +139,11 @@ async def try_handle_fatura_flow(*, mensagem: str, provedor, contexto: Dict[str,
     provedor_id = provedor.id
     conversation_id = conversation.id
     
-    # Extrair canal e telefone do contexto com normalização estrita
     channel = redis_memory_service.normalize_channel((contexto or {}).get("canal", "whatsapp"))
     contact = (contexto or {}).get("contact")
     phone = contact.phone if contact else (contexto or {}).get("contact_phone", "unknown")
+
+    logger.info(f"[FATURA_FLOW] TRACE | conv={conversation_id} | msg='{mensagem}' | channel={channel}")
 
     # region agent log
     _debug_log(

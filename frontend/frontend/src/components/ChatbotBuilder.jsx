@@ -1084,13 +1084,10 @@ const ChatbotBuilder = () => {
                                                 { value: 'consultar_cliente', label: 'Consultar Cliente (CPF/CNPJ)', input: 'cpf', desc: 'Retorna dados e contratos do cliente. Variáveis: {{nome}}, {{contratos}}' },
                                                 { value: 'verifica_acesso', label: 'Verificar Acesso (Contrato)', input: 'contrato', desc: 'Verifica status da conexão do contrato. Variável: {{status_acesso}}' },
                                                 { value: 'listar_contratos', label: 'Listar Contratos (Cliente ID)', input: 'cliente_id', desc: 'Lista todos os contratos do cliente. Variável: {{contratos}}' },
-                                                { value: 'segunda_via_fatura', label: 'Segunda Via de Fatura (CPF)', input: 'cpf', desc: 'Retorna link do boleto. Variável: {{link_fatura}}' },
                                                 { value: 'listar_titulos', label: 'Listar Títulos/Faturas (CPF)', input: 'cpf', desc: 'Lista faturas em aberto. Variável: {{titulos}}' },
-                                                { value: 'gerar_pix', label: 'Gerar PIX (ID Fatura)', input: 'fatura_id', desc: 'Gera chave PIX para pagamento. Variável: {{pix_code}}' },
                                                 { value: 'liberar_por_confianca', label: 'Liberar por Confiança (Contrato)', input: 'contrato', desc: 'Faz liberação por promessa de pagamento. Variável: {{sucesso}}' },
                                                 { value: 'criar_chamado', label: 'Criar Chamado Técnico (Contrato)', input: 'contrato', desc: 'Abre chamado no SGP. Variável: {{protocolo}}' },
                                                 { value: 'listar_manutencoes', label: 'Listar Manutenções (CPF)', input: 'cpf', desc: 'Lista manutenções na área do cliente. Variável: {{manutencoes}}' },
-                                                { value: 'enviar_pagamento', label: 'Enviar Pagamento (PIX/Boleto)', input: 'cpf', desc: 'Envia métodos de pagamento. Variável: {{status_envio_pagamento}}' },
                                             ];
                                             const selectedEndpoint = SGP_ENDPOINTS.find(e => e.value === sgpAction) || SGP_ENDPOINTS[0];
                                             return (
@@ -1154,7 +1151,7 @@ const ChatbotBuilder = () => {
                                                         </div>
                                                     )}
 
-                                                    {sgpAction === 'enviar_pagamento' && (
+                                                    {sgpAction === 'listar_titulos' && (
                                                         <div>
                                                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-purple-500">Método de Pagamento</label>
                                                             <select
@@ -1170,7 +1167,7 @@ const ChatbotBuilder = () => {
                                                         </div>
                                                     )}
 
-                                                    {(sgpAction === 'listar_titulos' || sgpAction === 'criar_chamado' || sgpAction === 'liberar_por_confianca' || sgpAction === 'enviar_pagamento') && (
+                                                    {(sgpAction === 'listar_titulos' || sgpAction === 'criar_chamado' || sgpAction === 'liberar_por_confianca') && (
                                                         <div className="space-y-4">
                                                             <div>
                                                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-purple-500">Mensagem de Sucesso</label>
@@ -1180,8 +1177,7 @@ const ChatbotBuilder = () => {
                                                                     placeholder={
                                                                         sgpAction === 'criar_chamado' ? "Ex: Chamado aberto! Seu protocolo é {protocolo}." :
                                                                             sgpAction === 'liberar_por_confianca' ? "Ex: Liberado por {liberado_dias} dias! Protocolo: {protocolo}" :
-                                                                                sgpAction === 'enviar_pagamento' ? "Ex: Segue abaixo as opções para pagamento da sua fatura." :
-                                                                                    "Ex: Obrigado! Suas faturas foram enviadas acima."
+                                                                                "Ex: Segue abaixo as opções para pagamento da sua fatura."
                                                                     }
                                                                     rows={3}
                                                                     className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-purple-500 transition-all resize-none"
@@ -1189,11 +1185,24 @@ const ChatbotBuilder = () => {
                                                                 <p className="text-[9px] text-slate-400 mt-1 px-1 italic">
                                                                     {sgpAction === 'criar_chamado' ? "Será enviada após a criação. Use {protocolo}." :
                                                                         sgpAction === 'liberar_por_confianca' ? "Será enviada após a liberação. Use {liberado_dias} e {protocolo}." :
-                                                                            sgpAction === 'enviar_pagamento' ? "Será enviada após o envio do pagamento." :
-                                                                                "Será enviada após a listagem das faturas."
+                                                                            "Será enviada após o envio do pagamento."
                                                                     }
                                                                 </p>
                                                             </div>
+
+                                                            {sgpAction === 'liberar_por_confianca' && (
+                                                                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                                                    <label className="block text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">Mensagem de Limite Atingido</label>
+                                                                    <textarea
+                                                                        value={sgpNode?.data.limitReachedMessage || ''}
+                                                                        onChange={(e) => updateNodeData(selectedNode, { limitReachedMessage: e.target.value })}
+                                                                        placeholder="Ex: Ops! Você já utilizou sua liberação este mês. Por favor, realize o pagamento para normalizar seu sinal."
+                                                                        rows={2}
+                                                                        className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-red-200 dark:border-red-900/30 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-red-500 transition-all resize-none text-slate-800 dark:text-white"
+                                                                    />
+                                                                    <p className="text-[9px] text-red-400 mt-1 px-1 italic">Será enviada caso o SGP retorne que o limite de liberações foi atingido.</p>
+                                                                </div>
+                                                            )}
 
                                                             {sgpAction !== 'criar_chamado' && (
                                                                 <>

@@ -78,6 +78,8 @@ class ChatbotEngine:
         """
         Processa uma mensagem recebida e avança o fluxo.
         """
+        logger.info(f"[ChatbotEngine][TRACE] Iniciando process_message | conv={conversation_id} | texto='{message_content}' | button='{button_id}'")
+        logger.info(f"[ChatbotEngine][TRACE] Iniciando process_message | conv={conversation_id} | texto='{message_content}' | button='{button_id}'")
         # 1. Obter o fluxo ativo para o provedor
         flow = await ChatbotFlow.objects.filter(provedor_id=provedor_id).order_by('-updated_at').afirst()
         if not flow:
@@ -298,6 +300,9 @@ class ChatbotEngine:
         """
         node_id = node.get('id')
         node_type = node.get('type')
+        logger.info(f"[ChatbotEngine][TRACE] Executando nó {node_id} ({node_type}) para conv {conversation_id}")
+        node_id = node.get('id')
+        node_type = node.get('type')
         node_data = node.get('data', {})
 
         logger.info(f"[ChatbotEngine] Executando nó {node_id} ({node_type}) para conv {conversation_id}")
@@ -388,10 +393,40 @@ class ChatbotEngine:
                         await sync_to_async(closing_service.request_closing)(conversation)
                         logger.info(f"[ChatbotEngine] Encerramento solicitado para conv {conversation_id} (nó {node_id})")
                     else:
-                        # NÃO avançar automaticamente para o próximo nó!
-                        # Nós do tipo 'message' sem botões devem AGUARDAR input do usuário.
-                        # O avanço ocorre quando o usuário enviar a próxima mensagem.
-                        pass
+                        # Se for um nó de MENSAGEM pura (sem botões interativos) e não estiver configurado para aguardar,
+                        # avançamos automaticamente para o próximo nó para permitir encadeamento de balões.
+                        if node_type == 'message' and not buttons and not rows and not node_data.get('waitForInput', False):
+                            import asyncio
+                            await asyncio.sleep(0.8) # Pequeno delay para fluidez/legibilidade
+                            
+                            edge = next((e for e in flow.edges if e.get('source') == node_id), None)
+                            if edge:
+                                next_node = next((n for n in flow.nodes if n.get('id') == edge.get('target')), None)
+                                if next_node:
+                                    # Proteção para blocos que requerem input ativo do usuário
+                                    if next_node.get('type') == 'sgp':
+                                        n_data = next_node.get('data', {})
+                                        i_var = n_data.get('inputVar', 'cpf')
+                                        sgp_action_next = n_data.get('sgpAction', '')
+                                        # Se a variável requerida não está no contexto, NÃO avançar.
+                                        # Forçamos o bot a parar e esperar o usuário digitar especificamente após a pergunta.
+                                        if i_var and i_var != 'None' and i_var not in flow_context:
+                                            logger.info(f"[ChatbotEngine] Auto-avanço cancelado: Próximo nó {next_node.get('id')} (sgp) requer entrada do usuário para '{i_var}'.")
+                                            return
+                                        # Para liberação por confiança, o CPF do usuário é obrigatório e deve vir do usuário agora.
+                                        # Mesmo que 'contrato' já esteja no contexto (de consulta anterior), o CPF deve ter sido
+                                        # digitado pelo usuário recentemente. Se não estiver no contexto, bloquear o auto-avanço.
+                                        if sgp_action_next == 'liberar_por_confianca':
+                                            cpf_disponivel = flow_context.get('cpf') or flow_context.get('cpfcnpj')
+                                            if not cpf_disponivel:
+                                                logger.info(f"[ChatbotEngine] Auto-avanço cancelado: Nó {next_node.get('id')} (liberar_por_confianca) requer CPF/CNPJ do usuário, que ainda não foi fornecido.")
+                                                return
+
+                                    logger.info(f"[ChatbotEngine] Auto-avanço: De {node_id} para {next_node.get('id')}")
+                                    await ChatbotEngine.execute_node(provedor_id, conversation_id, next_node, flow)
+                        else:
+                            # Casos que devem realmente esperar input: Menu interativo ou Mensagem com botões/listas
+                            pass
             except Exception as e:
                 logger.error(f"[ChatbotEngine] Erro crítico ao executar nó {node_id}: {e}", exc_info=True)
 
@@ -443,6 +478,7 @@ class ChatbotEngine:
         elif node_type == 'sgp':
             try:
                 sgp_action = node_data.get('sgpAction', 'consultar_cliente')
+                logger.info(f"[ChatbotEngine][TRACE] Entrou nó SGP: conv={conversation_id} | action={sgp_action}")
                 input_var = node_data.get('inputVar', 'cpf')
                 error_message = node_data.get('errorMessage')
                 if not error_message or str(error_message).strip() == "":
@@ -457,22 +493,18 @@ class ChatbotEngine:
                 flow_context = current_state.get('flow_context', {})
                 input_value = flow_context.get(input_var) if input_var and input_var != 'None' else None
 
-                # Fallback Inteligente: Se não tem input_value, buscar contrato ou cpf no contexto
+                # Fallback Inteligente: Apenas se não houver NADA, buscar do contexto
                 if not input_value:
                     input_value = flow_context.get('contrato') or flow_context.get('cpf') or flow_context.get('cpfcnpj')
                 
-                # Fallback final: última mensagem de texto do usuário (apenas se parecer ID numérico)
-                if not input_value:
-                    last_msg = str(current_state.get('last_user_message', '')).strip()
-                    # Se a última mensagem for puramente numérica e tiver entre 4 e 14 dígitos, assumimos ser o dado buscado
-                    if re.match(r'^\d{4,14}$', last_msg):
-                        input_value = last_msg
+                # Removido fallback de last_user_message aqui para evitar que 
+                # seleções de menu (ex: "1", "2") sejam interpretadas como input do SGP acidentalmente.
+                # O input deve vir do flow_context (preenchido na mensagem anterior) ou ser digitado agora.
 
                 logger.info(f"[ChatbotEngine][SGP] Executando ação '{sgp_action}' com input='{input_value}' (var original: {input_var}) para conv {conversation_id}")
 
                 if not input_value:
-                    logger.warning(f"[ChatbotEngine][SGP] Variável '{input_var}' não encontrada no contexto. Enviando mensagem de erro.")
-                    await ChatbotEngine.send_message_agnostic(conv=conversation, text=f"Para continuar, preciso do valor de '{input_var}'. Por favor, informe.")
+                    logger.warning(f"[ChatbotEngine][SGP] Variável '{input_var}' não encontrada no contexto. Saindo silenciosamente para aguardar input.")
                     return
 
                 # Obter configurações do SGP do provedor (Robustez Unificada)
@@ -587,105 +619,81 @@ class ChatbotEngine:
                     result = await sync_to_async(sgp.listar_contratos)(input_value)
                     result_context = {'contratos': result, 'sgp_contratos': result}
 
-                elif sgp_action == 'segunda_via_fatura':
-                    result = await sync_to_async(sgp.segunda_via_fatura)(input_value)
-                    if result:
-                        # Tentar extrair link de boleto da resposta
-                        link = result.get('link') or result.get('url') or result.get('boleto_url', '')
-                        result_context = {'link_fatura': link, 'sgp_fatura': result}
 
                 elif sgp_action == 'listar_titulos':
-                    # Lógica Unificada de Faturas (Prioridade: Mais antiga primeiro)
                     from .fatura_service import FaturaService
                     fs = FaturaService()
                     
-                    contrato_id_ctx = flow_context.get('contrato') or flow_context.get('contrato_id')
-                    cpf_ctx = flow_context.get('cpf') or flow_context.get('cpfcnpj') or input_value
+                    # Prioridade: usar o input_value (que é o que o usuário acabou de informar no nó ou variável mapeada)
+                    # Se input_value parecer um CPF (11 dígitos), usamos ele primariamente como CPF
+                    input_limpo = ''.join(filter(str.isdigit, str(input_value))) if input_value else ''
+                    
+                    if len(input_limpo) == 11:
+                        cpf_ctx = input_limpo
+                        # Se o usuário informou um CPF novo, ignoramos qualquer contrato anterior no contexto
+                        # para buscar faturas de TODOS os contratos desse CPF.
+                        contrato_id_ctx = None
+                    else:
+                        # Se não for CPF, talvez seja Contrato ID. Fallback para context.
+                        contrato_id_ctx = input_limpo or flow_context.get('contrato') or flow_context.get('contrato_id')
+                        cpf_ctx = flow_context.get('cpf') or flow_context.get('cpfcnpj')
+
+                    logger.info(f"[ChatbotEngine][SGP] listar_titulos | CPF={cpf_ctx} | Contrato={contrato_id_ctx} (Input={input_value})")
                     
                     # Buscar fatura usando o serviço unificado
                     dados_fatura = await sync_to_async(fs.buscar_fatura_sgp)(provedor, cpf_ctx, contrato_id_ctx)
+                    logger.info(f"[ChatbotEngine][SGP] dados_fatura recebido: status={dados_fatura.get('status') if dados_fatura else 'None'}")
                     
-                    if dados_fatura and dados_fatura.get('status') == 1:
-                        f = dados_fatura['links'][0]
-                        vencimento = f.get('vencimento', '')
-                        valor = float(f.get('valor', 0.0))
-                        f_id = f.get('fatura', 'N/A')
-                        
-                        # Detectar se é atrasada ou aberta para a mensagem
-                        hoje = datetime.now().date()
-                        try:
-                            venc_orig = f.get('vencimento_original') or f.get('data_vencimento')
-                            if not venc_orig and '-' in str(vencimento):
-                                # Tentar converter DD/MM/YYYY para YYYY-MM-DD se necessário
-                                pts = vencimento.split('/')
-                                if len(pts) == 3:
-                                    venc_orig = f"{pts[2]}-{pts[1]}-{pts[0]}"
-                            
-                            dt_venc = datetime.strptime(venc_orig or '', '%Y-%m-%d').date()
-                            is_atrasada = dt_venc < hoje
-                        except:
-                            is_atrasada = False
-                            
-                        tipo_str = "VENCIDA" if is_atrasada else "EM ABERTO"
-                        venc_br = _formatar_data_br(vencimento)
-                        msg = f"\n💳 *Sua fatura {tipo_str}:*\n\nFatura ID: {f_id}\nVencimento: {venc_br}\nValor: R$ {valor:.2f}\n\nSegue abaixo as opções para pagamento."
-                        
-                        # Enviar PDF se link existir
-                        link_fatura = f.get('link')
-                        if link_fatura:
-                            await ChatbotEngine.send_message_agnostic_document(
-                                conv=conversation, 
-                                text=f"📄 Aqui está o PDF da sua fatura {f_id}:",
-                                file_url=link_fatura,
-                                file_name=f"fatura_{f_id}.pdf"
-                            )
+                    if dados_fatura:
+                        # Lógica de Encerramento Customizado / Mensagem de Sucesso (Solicitado pelo usuário: ENVIAR ANTES DA FATURA)
+                        success_msg = node_data.get('successMessage')
+                        if dados_fatura.get('status') == 1 or dados_fatura.get('mensagem_positiva'):
+                            if success_msg and str(success_msg).strip() != "":
+                                await ChatbotEngine.send_message_agnostic(conv=conversation, text=success_msg)
+                                logger.info(f"[ChatbotEngine][SGP] Mensagem de sucesso enviada ANTES da fatura: {success_msg[:30]}...")
 
-                        pix_code = f.get('codigopix')
-                        boleto_code = f.get('linhadigitavel')
-                        
-                        if pix_code or boleto_code:
-                            items = [{
-                                "retailer_id": str(f_id),
-                                "name": f"Fatura Internet - {venc_br}",
-                                "amount": {"value": int(valor * 100), "offset": 100},
-                                "quantity": 1
-                            }]
-                            merchant = (provedor.integracoes_externas or {}).get('pix_merchant_name', provedor.nome)
-
-                            await ChatbotEngine.send_order_details_payment(
-                                conv=conversation,
-                                content=msg,
-                                pix_code=pix_code,
-                                boleto_code=boleto_code,
-                                merchant_name=merchant,
-                                amount_value=valor,
-                                reference_id=str(f_id),
-                                items_list=items
+                        # Se encontramos faturas (status=1), enviar ao cliente IMEDIATAMENTE usando o serviço robusto
+                        if dados_fatura.get('status') == 1:
+                            # Tentar pegar preferência de pagamento do contexto (dinâmico) ou do nó (estático)
+                            tipo_pagamento = (
+                                flow_context.get('tipo_pagamento') or 
+                                flow_context.get('metodo_pagamento') or 
+                                node_data.get('tipoPagamento') or 
+                                'pix'
                             )
+                            numero_wa = conversation.contact.phone
+                            
+                            logger.info(f"[ChatbotEngine][SGP] BLOCO ENVIAR: conv={conversation_id} | WA={numero_wa} | tipo_pagamento={tipo_pagamento} (ctx={flow_context.get('tipo_pagamento')} node={node_data.get('tipoPagamento')})")
+                            # Enviar via serviço que suporta tanto Cloud API quanto Uazapi
+                            envio_res = await sync_to_async(fs.enviar_fatura)(provedor, numero_wa, dados_fatura, conversation=conversation, tipo_pagamento=tipo_pagamento)
+                            logger.info(f"[ChatbotEngine][SGP] BLOCO ENVIAR: Resultado final: {envio_res}")
+                            
+                            result_context = {
+                                'status_faturas': 'encontrada',
+                                'sgp_titulos': dados_fatura
+                            }
+                        elif dados_fatura.get('mensagem_positiva'):
+                            # Caso onde todas estão pagas (Parabéns!)
+                            msg_positiva = dados_fatura.get('mensagem', 'Parabéns! Todas as suas faturas estão pagas.')
+                            logger.info(f"[ChatbotEngine][SGP] BLOCO POSITIVO: {msg_positiva}")
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=msg_positiva)
+                            result_context = {
+                                'status_faturas': 'em_dia',
+                                'sgp_titulos': dados_fatura
+                            }
                         else:
-                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=msg)
-                        
-                        result_context = {
-                            'status_faturas': 'atrasada' if is_atrasada else 'aberta', 
-                            'fatura_ativa': f,
-                            'link_fatura': f.get('link')
-                        }
-                    elif dados_fatura and dados_fatura.get('mensagem_positiva'):
-                        await ChatbotEngine.send_message_agnostic(conv=conversation, text=dados_fatura.get('mensagem'))
-                        result_context = {'status_faturas': 'em_dia'}
+                            logger.info(f"[ChatbotEngine][SGP] BLOCO OUTRO: status={dados_fatura.get('status')}")
+                            result_context = {'status_faturas': 'error', 'sgp_titulos': dados_fatura}
                     else:
-                        result_context = {'status_faturas': 'error', 'msg': 'Não conseguimos acessar suas faturas no momento.'}
-                    
-                    result_context['sgp_titulos'] = dados_fatura
+                        logger.warn(f"[ChatbotEngine][SGP] dados_fatura é NONE para conv {conversation_id}")
+                        result_context = {'status_faturas': 'error', 'sgp_titulos': None}
 
-                    # Lógica de Encerramento Customizado (Solicitado pelo usuário)
-                    success_msg = node_data.get('successMessage')
+                    # Auto Close if applicable
                     auto_close = node_data.get('autoClose', False)
-                    
-                    if result_context.get('status_faturas') != 'error':
-                        if success_msg and str(success_msg).strip() != "":
-                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=success_msg)
-                            logger.info(f"[ChatbotEngine][SGP] Mensagem de sucesso enviada: {success_msg[:30]}...")
+                    if result_context.get('status_faturas') != 'error' and auto_close:
+                        closing_msg = node_data.get('closingMessage')
+                        if closing_msg and str(closing_msg).strip():
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=str(closing_msg))
                         
                         if auto_close:
                             closing_msg = node_data.get('closingMessage')
@@ -695,22 +703,27 @@ class ChatbotEngine:
                             await sync_to_async(closing_service.request_closing)(conversation)
                             logger.info(f"[ChatbotEngine][SGP] Encerramento solicitado para conv {conversation_id}")
 
-                elif sgp_action == 'gerar_pix':
-                    result = await sync_to_async(sgp.gerar_pix)(input_value)
-                    if result:
-                        pix = result.get('emv') or result.get('pix') or result.get('code', '')
-                        result_context = {'pix_code': pix, 'sgp_pix': result}
-
                 elif sgp_action == 'liberar_por_confianca':
-                    cpf_ctx = flow_context.get('cpf', '') or flow_context.get('cpfcnpj', '')
-                    
-                    # Garantir que o contrato seja apenas números se for liberação
+                    # Garantir que o CPF usado na liberação seja o mais atual
                     input_limpo = re.sub(r'[^\d]', '', str(input_value))
-                    contrato_final = input_limpo
-                    
-                    # Se o valor parece um CPF (11 dígitos), buscar o contrato ID real no SGP
-                    if len(input_limpo) == 11:
-                        logger.info(f"[ChatbotEngine][SGP] CPF detectado ({input_limpo}) na liberação. Buscando Contrato ID real...")
+
+                    # Verificação crítica: o CPF/CNPJ do usuário é obrigatório para a liberação.
+                    # O input_value pode vir do fallback com o número do contrato anterior.
+                    # Precisamos garantir que o CPF foi especificamente digitado pelo usuário.
+                    cpf_ctx_check = flow_context.get('cpf') or flow_context.get('cpfcnpj')
+                    if len(input_limpo) not in (11, 14) and not cpf_ctx_check:
+                        # Não temos CPF/CNPJ — aguardar input do usuário
+                        logger.warning(
+                            f"[ChatbotEngine][SGP] liberar_por_confianca: CPF/CNPJ não disponível no contexto "
+                            f"(input_limpo='{input_limpo}', cpf_ctx='{cpf_ctx_check}'). "
+                            f"Aguardando input do usuário."
+                        )
+                        return
+
+                    if len(input_limpo) in (11, 14):
+                        cpf_ctx = input_limpo
+                        logger.info(f"[ChatbotEngine][SGP] CPF/CNPJ detectado ({len(input_limpo)} dígitos) na liberação. Buscando Contrato ID real...")
+                        contrato_final = input_limpo
                         try:
                             # Tentar buscar via listagem de títulos (que retorna o contrato ID)
                             titulos_res = await sync_to_async(sgp.listar_titulos)(input_limpo, limit=1)
@@ -719,56 +732,13 @@ class ChatbotEngine:
                                 logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto para liberação: {contrato_final}")
                         except Exception as e:
                             logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF na liberação: {e}")
-                    
-                    result = await sync_to_async(sgp.liberar_por_confianca)(contrato_final, cpf_cnpj=cpf_ctx)
-                    result_context = {'sgp_liberacao': result}
-
-                elif sgp_action == 'enviar_pagamento':
-                    # Envia apenas o método de pagamento escolhido ou ambos se não especificado
-                    from .fatura_service import FaturaService
-                    fs = FaturaService()
-                    
-                    metodo = node_data.get('paymentMethod') or flow_context.get('metodo_pagamento') or 'ambos'
-                    fatura_ativa = flow_context.get('fatura_ativa')
-                    
-                    if not fatura_ativa:
-                        # Se não tem fatura no contexto, buscar a mais recente
-                        contrato_id_ctx = flow_context.get('contrato') or flow_context.get('contrato_id')
-                        cpf_ctx = flow_context.get('cpf') or flow_context.get('cpfcnpj')
-                        dados_fatura = await sync_to_async(fs.buscar_fatura_sgp)(provedor, cpf_ctx, contrato_id_ctx)
-                        if dados_fatura and dados_fatura.get('links'):
-                            fatura_ativa = dados_fatura['links'][0]
-
-                    if fatura_ativa:
-                        f_id = fatura_ativa.get('fatura') or fatura_ativa.get('id')
-                        valor = float(fatura_ativa.get('valor', 0))
-                        venc_br = _formatar_data_br(fatura_ativa.get('vencimento'))
-                        
-                        pix_code = fatura_ativa.get('codigopix') if metodo in ('pix', 'ambos') else None
-                        boleto_code = fatura_ativa.get('linhadigitavel') if metodo in ('boleto', 'ambos') else None
-                        
-                        msg = f"💳 *Pagamento Fatura {f_id}*\nVencimento: {venc_br}\nValor: R$ {valor:.2f}"
-                        items = [{
-                            "retailer_id": str(f_id),
-                            "name": f"Fatura {f_id} - {venc_br}",
-                            "amount": {"value": int(valor * 100), "offset": 100},
-                            "quantity": 1
-                        }]
-                        merchant = (provedor.integracoes_externas or {}).get('pix_merchant_name', provedor.nome)
-                        
-                        await ChatbotEngine.send_order_details_payment(
-                            conv=conversation,
-                            content=msg,
-                            pix_code=pix_code,
-                            boleto_code=boleto_code,
-                            merchant_name=merchant,
-                            amount_value=valor,
-                            reference_id=str(f_id),
-                            items_list=items
-                        )
-                        result_context = {'status_envio_pagamento': 'success'}
                     else:
-                        result_context = {'status_envio_pagamento': 'no_invoice'}
+                        cpf_ctx = cpf_ctx_check or ''
+                        contrato_final = input_limpo
+
+                    logger.info(f"[ChatbotEngine][SGP] liberar_por_confianca | Contrato={contrato_final} | CPF={cpf_ctx}")
+                    result = await sync_to_async(sgp.liberar_por_confianca)(contrato_final, cpf_cnpj=cpf_ctx)
+                    
                     if result:
                         sucesso = result.get('status') == 1 or result.get('liberado') == True
                         protocolo = result.get('protocolo', '')
@@ -799,6 +769,21 @@ class ChatbotEngine:
                                     logger.info(f"[ChatbotEngine][SGP] Mensagem de encerramento enviada após liberação para conv {conversation_id}")
                                 await sync_to_async(closing_service.request_closing)(conversation)
                                 logger.info(f"[ChatbotEngine][SGP] Encerramento solicitado após liberação para conv {conversation_id}")
+                        else:
+                            # Caso onde NÃO foi liberado (pode ser atingido o limite)
+                            limit_msg = node_data.get('limitReachedMessage')
+                            sgp_msg = result.get('mensagem') or result.get('msg')
+                            
+                            logger.info(f"[ChatbotEngine][SGP] Liberação negada. status={result.get('status')} | sgp_msg={sgp_msg}")
+                            
+                            if limit_msg and str(limit_msg).strip():
+                                await ChatbotEngine.send_message_agnostic(conv=conversation, text=str(limit_msg))
+                            elif sgp_msg:
+                                await ChatbotEngine.send_message_agnostic(conv=conversation, text=str(sgp_msg))
+                            else:
+                                await ChatbotEngine.send_message_agnostic(conv=conversation, text="Não foi possível realizar a liberação por confiança no momento.")
+                    else:
+                        result_context = {'sucesso': False, 'sgp_liberacao': None}
 
                 elif sgp_action == 'criar_chamado':
                     # Tentar pegar do context ou da configuração do nó

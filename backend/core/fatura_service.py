@@ -107,6 +107,8 @@ class FaturaService:
             cpf_cnpj_limpo = ''.join(filter(str.isdigit, str(cpf_cnpj)))
             
             resultado = sgp.listar_titulos(cpf_cnpj_limpo, limit=250)
+            titulos_brutos = len(resultado.get('titulos', [])) if resultado else 0
+            logger.info(f"[FATURA] Resposta SGP para CPF {cpf_cnpj_limpo[:3]}***: {bool(resultado)} (brutos: {titulos_brutos})")
 
             if not resultado or not isinstance(resultado, dict):
                 return None
@@ -116,7 +118,9 @@ class FaturaService:
             # FILTRO POR CONTRATO (se fornecido)
             if contrato_id:
                 cid_str = str(contrato_id).strip()
+                titulos_antes = len(titulos)
                 titulos = [t for t in titulos if str(t.get('contratoId', t.get('contrato_id', ''))).strip() == cid_str]
+                logger.info(f"[FATURA] Filtrando por contrato {cid_str}: {titulos_antes} -> {len(titulos)} titulos")
 
             if not titulos:
                 return {
@@ -367,18 +371,21 @@ class FaturaService:
             amount = float(valor) if valor else 0.0
             
             # Determinar pix_key, pix_type, pix_name e boleto_code
-            # 🚨 SEMPRE enviar ambos os botões (PIX e Boleto) quando disponíveis
+            # RESPEITAR tipo_pagamento: 'pix', 'boleto' ou 'ambos'/'todos'/'pix_boleto'
             pix_key = None
             pix_type = None
             boleto_code = None
             
-            # Sempre incluir PIX se disponível (independente do tipo_pagamento)
-            if codigo_pix:
+            # Determinar se mostra PIX/Boleto (Normalizar tipo_pagamento)
+            tp = str(tipo_pagamento).lower().strip()
+            show_pix = any(opt in tp for opt in ['pix', 'ambos', 'ambas', 'todos'])
+            show_boleto = any(opt in tp for opt in ['boleto', 'ambos', 'ambas', 'todos'])
+
+            if codigo_pix and show_pix:
                 pix_key = codigo_pix
                 pix_type = "EVP"  # Tipo padrão para chave PIX
             
-            # Sempre incluir Boleto se disponível (independente do tipo_pagamento)
-            if linha_digitavel:
+            if linha_digitavel and show_boleto:
                 boleto_code = linha_digitavel
             
             # Enviar fatura usando o formato invoice da Uazapi
@@ -544,11 +551,17 @@ class FaturaService:
             # Converter valor para centavos (valor * 100)
             valor_centavos = int(round(valor * 100))
             
+            # Determinar se mostra PIX/Boleto (Normalizar tipo_pagamento)
+            tp = str(tipo_pagamento).lower().strip()
+            show_pix = any(opt in tp for opt in ['pix', 'ambos', 'ambas', 'todos'])
+            show_boleto = any(opt in tp for opt in ['boleto', 'ambos', 'ambas', 'todos'])
+            logger.info(f"[FATURA] Normalização: input='{tipo_pagamento}' -> tp='{tp}' | show_pix={show_pix} | show_boleto={show_boleto}")
+            
             # Montar payment_settings
             payment_settings = []
             
-            # Adicionar PIX se disponível
-            if codigo_pix:
+            # Adicionar PIX se disponível e solicitado
+            if codigo_pix and show_pix:
                 # Tentar extrair informações do código PIX
                 pix_code = codigo_pix
                 pix_key = None
@@ -700,8 +713,8 @@ class FaturaService:
                 }
                 payment_settings.append(pix_payment)
             
-            # Adicionar Boleto se disponível
-            if linha_digitavel:
+            # Adicionar Boleto se disponível e solicitado
+            if linha_digitavel and show_boleto:
                 # Remover espaços e caracteres especiais, manter apenas números
                 linha_limpa = ''.join(filter(str.isdigit, linha_digitavel))
                 

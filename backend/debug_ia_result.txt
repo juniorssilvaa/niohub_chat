@@ -1,9 +1,0 @@
-
---- Testando provedor 1 em modo 'ia' ---
-Equipe IA obtida/criada: IA (ID: 18)
-Status resultante: snoozed
-Equipe resultante: IA
---- Testando provedor 1 em modo 'chatbot' ---
-Modo 'chatbot' detectado. Pultando criação da equipe IA.
-Status resultante: pending
-Equipe resultante: None
