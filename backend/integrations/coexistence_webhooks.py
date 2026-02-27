@@ -1349,26 +1349,32 @@ def process_incoming_messages(waba_id: str, value: dict):
                         logger.info(f"[WhatsAppWebhook] ChatbotEngine suprimido para conversa {conversation.id}: atribuída (assignee_id={conversation.assignee_id}), status ativo (status={conversation.status}) ou transferida para equipe humana (team={conversation.team.name if conversation.team else 'N/A'}).")
                         chatbot_handled = False
                     else:
-                        logger.info(f"[WhatsAppWebhook] Provador {provedor.id} em modo CHATBOT. Invocando ChatbotEngine.")
-                        try:
-                            from asgiref.sync import async_to_sync
-                            async def run_chatbot_engine():
-                                return await ChatbotEngine.process_message(
-                                    provedor_id=provedor.id,
-                                    conversation_id=conversation.id,
-                                    message_content=content or "",
-                                    button_id=additional_attrs.get("button_id")
-                                )
-                            
-                            # Sempre tenta processar pelo chatbot se estiver no modo chatbot
-                            result = async_to_sync(run_chatbot_engine)()
-                            chatbot_handled = result[0] if isinstance(result, tuple) else result
-                            if chatbot_handled:
-                                logger.info(f"[WhatsAppWebhook] Mensagem processada pelo Chatbot Engine na conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
-                            else:
-                                logger.warning(f"[WhatsAppWebhook] Provedor em modo CHATBOT mas nenhum nó foi executado para a conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
-                        except Exception as chatbot_err:
-                            logger.error(f"[WhatsAppWebhook] Erro ao invocar Chatbot Engine: {chatbot_err}", exc_info=True)
+                        # Verificar se o contato está bloqueado para atendimento (toggle ATENDER desativado)
+                        contact_bloqueado = getattr(contact, 'bloqueado_atender', False) if contact else False
+                        if contact_bloqueado:
+                            logger.info(f"[WhatsAppWebhook] ChatbotEngine suprimido para conversa {conversation.id}: contato {contact.phone} está BLOQUEADO para atendimento (ATENDER=OFF)")
+                            chatbot_handled = False
+                        else:
+                            logger.info(f"[WhatsAppWebhook] Provador {provedor.id} em modo CHATBOT. Invocando ChatbotEngine.")
+                            try:
+                                from asgiref.sync import async_to_sync
+                                async def run_chatbot_engine():
+                                    return await ChatbotEngine.process_message(
+                                        provedor_id=provedor.id,
+                                        conversation_id=conversation.id,
+                                        message_content=content or "",
+                                        button_id=additional_attrs.get("button_id")
+                                    )
+                                
+                                # Sempre tenta processar pelo chatbot se estiver no modo chatbot
+                                result = async_to_sync(run_chatbot_engine)()
+                                chatbot_handled = result[0] if isinstance(result, tuple) else result
+                                if chatbot_handled:
+                                    logger.info(f"[WhatsAppWebhook] Mensagem processada pelo Chatbot Engine na conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
+                                else:
+                                    logger.warning(f"[WhatsAppWebhook] Provedor em modo CHATBOT mas nenhum nó foi executado para a conversa {conversation.id}: {result[1] if isinstance(result, tuple) else ''}")
+                            except Exception as chatbot_err:
+                                logger.error(f"[WhatsAppWebhook] Erro ao invocar Chatbot Engine: {chatbot_err}", exc_info=True)
                 else:
                     # Se estiver em modo IA, ainda podemos tentar o chatbot como fallback ou se já houver um fluxo iniciado?
                     # Por simplicidade e seguindo a solicitação de "bot_mode", se for IA, pulamos o chatbot aqui.

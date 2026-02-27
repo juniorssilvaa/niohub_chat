@@ -1,6 +1,34 @@
 {
-  "current_version": "2.26.3",
+  "current_version": "2.26.4",
   "versions": [
+    {
+      "version": "2.26.4",
+      "version_type": "patch",
+      "date": "2026-02-27",
+      "title": "Correções no Chatbot SGP e Bloqueio de Contatos",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Bloqueio de Chatbot por Contato Específico",
+          "description": "Agora é possível desativar o chatbot para contatos específicos através do toggle 'ATENDER' na lista de contatos. Quando desativado (vermelho), o chatbot não responde mais aquele contato, tanto no modo IA quanto no modo Chatbot."
+        },
+        {
+          "type": "fix",
+          "title": "Correção na Busca de Faturas SGP (contratoId)",
+          "description": "Corrigido bug crítico onde o ID do contrato selecionado não era enviado ao SGP para buscar faturas. O campo correto do SGP é 'contratoId' e estava sendo buscado como 'contrato' (sempre None), resultando em resposta vazia."
+        },
+        {
+          "type": "fix",
+          "title": "Unificação do Endpoint de Faturas SGP",
+          "description": "O chatbot agora usa exclusivamente o endpoint /api/ura/fatura2via/ para buscar faturas, priorizando a fatura mais vencida quando o cliente tem múltiplos títulos em aberto."
+        },
+        {
+          "type": "fix",
+          "title": "Correção no Método listar_titulos do SGP",
+          "description": "O método listar_titulos havia ficado com corpo vazio após refatoração, retornando None implicitamente e causando 'nenhuma fatura encontrada'. Corrigido para redirecionar ao listar_faturas_v2."
+        }
+      ]
+    },
     {
       "version": "2.26.3",
       "version_type": "patch",

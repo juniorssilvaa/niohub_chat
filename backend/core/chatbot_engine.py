@@ -136,9 +136,11 @@ class ChatbotEngine:
                         selected_contrato = contratos_pendentes[idx]
 
                 if selected_contrato:
-                    logger.info(f"[ChatbotEngine][SGP] Contrato selecionado: {selected_contrato.get('contrato')}")
+                    # Campo real do SGP é 'contratoId'
+                    num_contrato_sel = str(selected_contrato.get('contratoId') or selected_contrato.get('contrato_id') or selected_contrato.get('contrato', ''))
+                    logger.warning(f"[ChatbotEngine][SGP] Contrato selecionado: {num_contrato_sel} | contratoId={selected_contrato.get('contratoId')}")
                     # Salva o contrato escolhido no contexto
-                    flow_context['contrato'] = str(selected_contrato.get('contrato', ''))
+                    flow_context['contrato'] = num_contrato_sel
                     flow_context['cliente_id'] = str(selected_contrato.get('cliente_id', ''))
                     flow_context['cidade'] = selected_contrato.get('popNome', '') or selected_contrato.get('endereco_cidade', '')
                     flow_context['endereco'] = _formatar_endereco(selected_contrato)
@@ -590,9 +592,9 @@ class ChatbotEngine:
                             return  # Aguardar seleção do usuário
 
                         # Contexto para 1 contrato (ou continuação após seleção)
-                        num_contrato = (
-                            primeiro.get('id') or primeiro.get('contratoId') or primeiro.get('contrato_id') or
-                            primeiro.get('contrato') or primeiro.get('numero') or primeiro.get('idContrato') or ''
+                        num_contrato = str(
+                            primeiro.get('contratoId') or primeiro.get('contrato_id') or
+                            primeiro.get('id') or primeiro.get('contrato') or primeiro.get('numero') or primeiro.get('idContrato') or ''
                         )
                         result_context = {
                             'nome': nome,
@@ -621,28 +623,31 @@ class ChatbotEngine:
 
 
                 elif sgp_action == 'listar_titulos':
-                    from .fatura_service import FaturaService
-                    fs = FaturaService()
+                    from .fatura_service import fatura_service as fs
                     
                     # Prioridade: usar o input_value (que é o que o usuário acabou de informar no nó ou variável mapeada)
                     # Se input_value parecer um CPF (11 dígitos), usamos ele primariamente como CPF
                     input_limpo = ''.join(filter(str.isdigit, str(input_value))) if input_value else ''
                     
-                    if len(input_limpo) == 11:
+                    if len(input_limpo) in (11, 14):
                         cpf_ctx = input_limpo
-                        # Se o usuário informou um CPF novo, ignoramos qualquer contrato anterior no contexto
-                        # para buscar faturas de TODOS os contratos desse CPF.
-                        contrato_id_ctx = None
+                        # Mantemos o contrato do contexto se existir, para filtrar faturas desse contrato específico
+                        contrato_id_ctx = flow_context.get('contrato') or flow_context.get('contrato_id')
                     else:
-                        # Se não for CPF, talvez seja Contrato ID. Fallback para context.
+                        # Se não for CPF, o valor digitado/mapeado é o próprio ID do contrato
                         contrato_id_ctx = input_limpo or flow_context.get('contrato') or flow_context.get('contrato_id')
                         cpf_ctx = flow_context.get('cpf') or flow_context.get('cpfcnpj')
 
-                    logger.info(f"[ChatbotEngine][SGP] listar_titulos | CPF={cpf_ctx} | Contrato={contrato_id_ctx} (Input={input_value})")
+                    logger.warning(f"[ChatbotEngine][DEBUG] listar_titulos | CPF={cpf_ctx} | Contrato={contrato_id_ctx} | flow_context_keys={list(flow_context.keys())} | input_var={input_var} | input_value='{input_value}'")
                     
-                    # Buscar fatura usando o serviço unificado
+                    # Buscar fatura usando o serviço unificado (síncrono, rodando via sync_to_async)
                     dados_fatura = await sync_to_async(fs.buscar_fatura_sgp)(provedor, cpf_ctx, contrato_id_ctx)
-                    logger.info(f"[ChatbotEngine][SGP] dados_fatura recebido: status={dados_fatura.get('status') if dados_fatura else 'None'}")
+                    
+                    if not dados_fatura:
+                        logger.error(f"[ChatbotEngine][SGP] buscar_fatura_sgp retornou None para CPF={cpf_ctx}")
+                        dados_fatura = {'status': -1, 'error': 'Erro na comunicação ou SGP fora do ar.'}
+
+                    logger.info(f"[ChatbotEngine][SGP] listar_titulos | Resultado status={dados_fatura.get('status')}")
                     
                     if dados_fatura:
                         # Lógica de Encerramento Customizado / Mensagem de Sucesso (Solicitado pelo usuário: ENVIAR ANTES DA FATURA)
@@ -679,6 +684,23 @@ class ChatbotEngine:
                             await ChatbotEngine.send_message_agnostic(conv=conversation, text=msg_positiva)
                             result_context = {
                                 'status_faturas': 'em_dia',
+                                'sgp_titulos': dados_fatura
+                            }
+                        elif dados_fatura.get('status') == 2:
+                            # Caso de múltiplas faturas vencidas -> Notificar e sugerir/fazer transferência
+                            msg_transfer = dados_fatura.get('mensagem', 'Você possui múltiplas faturas vencidas.')
+                            logger.info(f"[ChatbotEngine][SGP] BLOCO TRANSFERÊNCIA: {msg_transfer}")
+                            await ChatbotEngine.send_message_agnostic(conv=conversation, text=msg_transfer)
+                            
+                            if dados_fatura.get('solicitar_transferencia'):
+                                # Tentar transferir para o setor especificado
+                                setor = dados_fatura.get('setor', 'financeiro')
+                                logger.info(f"[ChatbotEngine][SGP] Solicitando transferência para o setor: {setor}")
+                                # Aqui poderíamos chamar um serviço de transferência se disponível
+                                # Por enquanto, o chatbot apenas avisou o usuário.
+                            
+                            result_context = {
+                                'status_faturas': 'multiplas_vencidas',
                                 'sgp_titulos': dados_fatura
                             }
                         else:
@@ -725,13 +747,13 @@ class ChatbotEngine:
                         logger.info(f"[ChatbotEngine][SGP] CPF/CNPJ detectado ({len(input_limpo)} dígitos) na liberação. Buscando Contrato ID real...")
                         contrato_final = input_limpo
                         try:
-                            # Tentar buscar via listagem de títulos (que retorna o contrato ID)
-                            titulos_res = await sync_to_async(sgp.listar_titulos)(input_limpo, limit=1)
-                            if titulos_res and titulos_res.get('titulos') and len(titulos_res['titulos']) > 0:
-                                contrato_final = str(titulos_res['titulos'][0].get('clienteContrato', input_limpo))
-                                logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto para liberação: {contrato_final}")
+                            # Tentar buscar via fatura2via (que retorna o contrato ID)
+                            faturas_res = await sync_to_async(sgp.listar_faturas_v2)(cpf_cnpj=input_limpo)
+                            if faturas_res and faturas_res.get('links') and len(faturas_res['links']) > 0:
+                                contrato_final = str(faturas_res['links'][0].get('contrato', input_limpo))
+                                logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto via fatura2via para liberação: {contrato_final}")
                         except Exception as e:
-                            logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF na liberação: {e}")
+                            logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF via fatura2via na liberação: {e}")
                     else:
                         cpf_ctx = cpf_ctx_check or ''
                         contrato_final = input_limpo
@@ -803,13 +825,14 @@ class ChatbotEngine:
                     if len(input_limpo) == 11:
                         logger.info(f"[ChatbotEngine][SGP] CPF detectado ({input_limpo}). Buscando Contrato ID real...")
                         try:
-                            # Tentar buscar via listagem de títulos (que retorna o contrato ID)
-                            titulos_res = await sync_to_async(sgp.listar_titulos)(input_limpo, limit=1)
-                            if titulos_res and titulos_res.get('titulos') and len(titulos_res['titulos']) > 0:
-                                contrato_final = str(titulos_res['titulos'][0].get('clienteContrato', input_limpo))
-                                logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto para o CPF: {contrato_final}")
+                            # Tentar buscar via fatura2via (que retorna o contrato ID)
+                            faturas_res = await sync_to_async(sgp.listar_faturas_v2)(cpf_cnpj=input_limpo)
+                            links = faturas_res.get('links', []) if faturas_res else []
+                            if links and len(links) > 0:
+                                contrato_final = str(links[0].get('contrato', input_limpo))
+                                logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto para o CPF via fatura2via: {contrato_final}")
                         except Exception as e:
-                            logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF: {e}")
+                            logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF via fatura2via: {e}")
                     
                     tipo = node_data.get('ocorrenciatipo', 1)
                     result = await sync_to_async(sgp.criar_chamado)(contrato_final, conteudo, ocorrenciatipo=tipo)

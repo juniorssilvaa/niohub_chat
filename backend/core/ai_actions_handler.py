@@ -579,7 +579,7 @@ class AIActionsHandler:
                     logger.warn(f"[AIACTIONS] CPF inválido: {cpf}")
                     return {"success": False, "erro": "CPF/CNPJ inválido."}
                 
-                fs = FaturaService()
+                from .fatura_service import fatura_service as fs
                 dados = fs.buscar_fatura_sgp(provedor, cpf, contrato_id)
                 
                 # Verificar se retornou mensagem positiva (todas as faturas pagas)

@@ -284,24 +284,42 @@ class SGPClient:
     # ==========================================================
     # FATURA / PAGAMENTOS
     # ==========================================================
-    def segunda_via_fatura(self, cpf_cnpj):
-        self.logger.debug("[SGP] segunda_via_fatura | POST %s/api/ura/fatura2via/ | cpfcnpj=%s", self.base_url, _mascarar_cpf_cnpj(cpf_cnpj))
+    def listar_faturas_v2(self, contrato_id=None, cpf_cnpj=None):
+        """
+        Lista faturas detalhadas via endpoint /api/ura/fatura2via/
+        Suporta busca por Contrato, CPF/CNPJ ou ambos.
+        """
+        self.logger.info("[SGP] listar_faturas_v2 | POST %s/api/ura/fatura2via/ | contrato=%s cpfcnpj=%s", 
+                          self.base_url, contrato_id, _mascarar_cpf_cnpj(cpf_cnpj))
         try:
             data = {
                 'token': self.token,
                 'app': self.app_name,
-                'cpfcnpj': str(cpf_cnpj)
             }
+            if contrato_id:
+                data['contrato'] = str(contrato_id)
+            if cpf_cnpj:
+                data['cpfcnpj'] = str(cpf_cnpj)
+            
+            self.logger.warning("[SGP][DEBUG] Enviando POST para /api/ura/fatura2via/ | Payload: %s", data)
+                
             r = requests.post(
                 f'{self.base_url}/api/ura/fatura2via/',
                 data=data,
-                timeout=30
+                timeout=30,
+                verify=False # Conforme script de referência
             )
-            self.logger.info("[SGP] segunda_via_fatura | HTTP %s | resumo=%s", r.status_code, _resumo_resposta(r.json() if r.text else None))
-            return r.json()
+            resp = r.json() if r.text else {}
+            self.logger.warning("[SGP][DEBUG] Resposta Bruta do SGP: %s", resp)
+            self.logger.info("[SGP] listar_faturas_v2 | HTTP %s | resumo=%s", r.status_code, _resumo_resposta(resp))
+            return resp
         except Exception as e:
-            self.logger.warning("[SGP] segunda_via_fatura | erro=%s", e)
-            raise
+            self.logger.warning("[SGP] listar_faturas_v2 | erro=%s", e)
+            return {}
+
+    def segunda_via_fatura(self, cpf_cnpj):
+        """Metodo legado para compatibilidade. Usa listar_faturas_v2."""
+        return self.listar_faturas_v2(cpf_cnpj=cpf_cnpj)
 
     def gerar_pix(self, fatura):
         self.logger.debug("[SGP] gerar_pix | GET %s/api/ura/pagamento/pix/%s", self.base_url, fatura)
@@ -318,36 +336,8 @@ class SGPClient:
             raise
 
     def listar_titulos(self, cpf_cnpj=None, contrato=None, limit=250):
-        """
-        Lista títulos (faturas) do cliente via endpoint /api/ura/titulos/
-        """
-        self.logger.info("[SGP] listar_titulos | POST %s/api/ura/titulos/ | cpfcnpj=%s contrato=%s limit=%s", 
-                          self.base_url, _mascarar_cpf_cnpj(cpf_cnpj), contrato, limit)
-        try:
-            data = {
-                'token': self.token,
-                'app': self.app_name,
-                'limit': min(limit, 250)
-            }
-            if contrato:
-                data['contrato'] = str(contrato)
-            elif cpf_cnpj:
-                data['cpfcnpj'] = str(cpf_cnpj)
-            else:
-                self.logger.warning("[SGP] listar_titulos | Nenhum identificador (cpfcnpj ou contrato) fornecido")
-                return {}
-
-            r = requests.post(
-                f'{self.base_url}/api/ura/titulos/',
-                data=data,
-                timeout=30
-            )
-            resp = r.json() if r.text else {}
-            self.logger.info("[SGP] listar_titulos | HTTP %s | resumo=%s", r.status_code, _resumo_resposta(resp))
-            return resp
-        except Exception as e:
-            self.logger.warning("[SGP] listar_titulos | erro=%s", e)
-            raise
+        """Metodo legado para compatibilidade. Usa listar_faturas_v2."""
+        return self.listar_faturas_v2(contrato_id=contrato, cpf_cnpj=cpf_cnpj)
 
     # ==========================================================
     # MANUTENÇÕES

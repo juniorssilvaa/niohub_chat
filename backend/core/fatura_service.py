@@ -68,31 +68,14 @@ class FaturaService:
 
     def buscar_fatura_sgp(self, provedor, cpf_cnpj: str, contrato_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Busca fatura mais atrasada no SGP via endpoint /api/ura/titulos/
-        Prioriza a fatura mais antiga em atraso. Se não houver atrasadas, a mais antiga em aberto.
-        Filtra por contrato_id se fornecido.
-        
-        Args:
-            provedor: Objeto Provedor com configurações SGP
-            cpf_cnpj: CPF ou CNPJ do cliente
-            contrato_id: Opcional ID do contrato para filtrar
-            
-        Returns:
-            Dados da fatura selecionada ou dict com mensagem positiva
+        Busca fatura no SGP usando o novo endpoint v2 (priorizando por contrato se disponível).
+        Regra de Priorização:
+        1. Se houver mais de uma vencida -> Setor Financeiro (status: 2)
+        2. Se houver exatamente uma vencida -> Retorna essa (status: 1)
+        3. Se não houver vencidas, mas houver abertas -> Retorna a mais recente (status: 1)
+        4. Se não houver nenhuma -> Parabéns (status: 0)
         """
         try:
-            # region agent log
-            _debug_log(
-                "buscar_fatura_sgp_entry",
-                {
-                    "provedor_id": getattr(provedor, "id", None),
-                    "cpf_len": len("".join(filter(str.isdigit, str(cpf_cnpj)))),
-                    "contrato_id": contrato_id,
-                },
-                location="fatura_service.py:buscar_fatura_sgp:entry",
-                hypothesis_id="H1",
-            )
-            # endregion
             from .sgp_client import SGPClient
             
             integracao = provedor.integracoes_externas or {}
@@ -101,93 +84,108 @@ class FaturaService:
             sgp_app = integracao.get('sgp_app')
             
             if not all([sgp_url, sgp_token, sgp_app]):
+                logger.warning(f"[FATURA] SGP não configurado para provedor {provedor.id}")
                 return None
             
             sgp = SGPClient(base_url=sgp_url, token=sgp_token, app_name=sgp_app)
-            cpf_cnpj_limpo = ''.join(filter(str.isdigit, str(cpf_cnpj)))
-            
-            resultado = sgp.listar_titulos(cpf_cnpj_limpo, limit=250)
-            titulos_brutos = len(resultado.get('titulos', [])) if resultado else 0
-            logger.info(f"[FATURA] Resposta SGP para CPF {cpf_cnpj_limpo[:3]}***: {bool(resultado)} (brutos: {titulos_brutos})")
 
+            # --- BUSCA DA FATURA (V2 UNIFICADA) ---
+            logger.warning(f"[FATURA][DEBUG] buscar_fatura_sgp | CPF={cpf_cnpj} | Contrato={contrato_id} | Usando fatura2via")
+            cpf_limpo = ''.join(filter(str.isdigit, str(cpf_cnpj)))
+            
+            # Chamar o novo método unificado do SGPClient
+            resultado = sgp.listar_faturas_v2(contrato_id=contrato_id, cpf_cnpj=cpf_limpo)
+            
             if not resultado or not isinstance(resultado, dict):
+                logger.error(f"[FATURA] Resposta inválida do SGP v2 para {contrato_id or cpf_cnpj}")
                 return None
+                
+            faturas = resultado.get('links', [])
+            if not isinstance(faturas, list): faturas = []
             
-            titulos = resultado.get('titulos', [])
-            
-            # FILTRO POR CONTRATO (se fornecido)
-            if contrato_id:
-                cid_str = str(contrato_id).strip()
-                titulos_antes = len(titulos)
-                titulos = [t for t in titulos if str(t.get('contratoId', t.get('contrato_id', ''))).strip() == cid_str]
-                logger.info(f"[FATURA] Filtrando por contrato {cid_str}: {titulos_antes} -> {len(titulos)} titulos")
-
-            if not titulos:
-                return {
-                    'status': 0,
-                    'mensagem_positiva': True,
-                    'mensagem': 'Parabéns! Todas as suas faturas estão pagas. Não há nenhuma fatura em aberto ou em atraso.'
-                }
-            
-            hoje = datetime.now().date()
-            
-            faturas_atrasadas = []
+            # Ordenar faturas por data de vencimento (mais antiga primeiro)
+            try:
+                # O SGP costuma retornar 'vencimento_original' ou 'data_vencimento'
+                faturas.sort(key=lambda x: str(x.get('vencimento_original') or x.get('data_vencimento') or '9999-12-31'))
+            except Exception as e:
+                logger.warning(f"[FATURA] Erro ao ordenar faturas: {e}")
+                
+            faturas_vencidas = []
             faturas_abertas = []
-
-            for titulo in titulos:
-                status = str(titulo.get('status', '')).lower()
-                data_vencimento_str = titulo.get('dataVencimento', '')
-                
-                if status != 'aberto':
-                    continue
-                
-                try:
-                    if data_vencimento_str:
-                        data_vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
-                        meta = {'titulo': titulo, 'data_vencimento': data_vencimento}
-                        if data_vencimento < hoje:
-                            faturas_atrasadas.append(meta)
-                        else:
-                            faturas_abertas.append(meta)
-                except (ValueError, TypeError):
-                    continue
             
-            fatura_selecionada = None
-
-            # REGRA: Priorizar a mais antiga ATRASADA
-            if faturas_atrasadas:
-                faturas_atrasadas.sort(key=lambda x: x['data_vencimento']) # Mais antiga primeiro
-                fatura_selecionada = faturas_atrasadas[0]['titulo']
-            # SENÃO: Priorizar a mais antiga ABERTA (futura)
-            elif faturas_abertas:
-                faturas_abertas.sort(key=lambda x: x['data_vencimento']) # Mais antiga (vencimento mais próximo) primeiro
-                fatura_selecionada = faturas_abertas[0]['titulo']
+            for f in faturas:
+                status = str(f.get('status', '')).lower()
+                if status == 'vencida':
+                    faturas_vencidas.append(f)
+                else:
+                    faturas_abertas.append(f)
             
-            if not fatura_selecionada:
+            logger.info(f"[FATURA] Resumo: Vencidas: {len(faturas_vencidas)} | Abertas: {len(faturas_abertas)}")
+
+            # 1. MÚLTIPLAS VENCIDAS -> TRANSFERIR FINANCEIRO
+            if len(faturas_vencidas) > 1:
                 return {
-                    'status': 0,
-                    'mensagem_positiva': True,
-                    'mensagem': 'Parabéns! Todas as suas faturas estão pagas. Não há nenhuma fatura em aberto ou em atraso.'
+                    'status': 2,
+                    'solicitar_transferencia': True,
+                    'setor': 'financeiro',
+                    'mensagem': 'Detectamos que você possui múltiplas faturas vencidas. Para garantir um melhor atendimento, estamos transferindo você para o setor financeiro.'
                 }
             
-            fatura_formatada = {
-                'status': 1,
-                'links': [{
-                    'fatura': str(fatura_selecionada.get('numeroDocumento', fatura_selecionada.get('id', 'N/A'))),
-                    'codigopix': fatura_selecionada.get('codigoPix', ''),
-                    'linhadigitavel': fatura_selecionada.get('linhaDigitavel', ''),
-                    'link': fatura_selecionada.get('link_cobranca') or fatura_selecionada.get('link', ''),
-                    'vencimento': fatura_selecionada.get('dataVencimento', ''),
-                    'vencimento_original': fatura_selecionada.get('dataVencimento', ''),
-                    'valor': float(fatura_selecionada.get('valorCorrigido', fatura_selecionada.get('valor', 0)))
-                }],
-                'nome_cliente': fatura_selecionada.get('clienteNome', '')
-            }
+            # 2. SELEÇÃO DA FATURA (1 vencida ou 1+ abertas)
+            f_selecionada = None
+            tipo_display = ""
+            if faturas_vencidas:
+                f_selecionada = faturas_vencidas[0]
+                tipo_display = "vencida"
+            elif faturas_abertas:
+                f_selecionada = faturas_abertas[0]
+                tipo_display = "em aberto"
             
-            return fatura_formatada
+            if f_selecionada:
+                # Normalizar chaves para compatibilidade com enviar_fatura
+                # enviar_fatura espera 'codigopix' e 'valor'
+                if 'codigopix' not in f_selecionada and f_selecionada.get('pix_copia_cola'):
+                    f_selecionada['codigopix'] = f_selecionada.get('pix_copia_cola')
                 
+                f_id = f_selecionada.get('fatura') or f_selecionada.get('id')
+                
+                # Tratar valor como float com segurança
+                try:
+                    valor_raw = f_selecionada.get('valor_original') or f_selecionada.get('valor') or f_selecionada.get('valor_total')
+                    valor = float(str(valor_raw).replace(',', '.')) if valor_raw else 0.0
+                    f_selecionada['valor'] = valor # injetar valor formatado para enviar_fatura
+                except:
+                    valor = 0.0
+                
+                venc_original = f_selecionada.get('vencimento_original') or f_selecionada.get('data_vencimento') or ''
+                
+                # Formatar data de vencimento (YYYY-MM-DD -> DD/MM/YYYY)
+                venc_exibicao = venc_original
+                try:
+                    if '-' in str(venc_original):
+                        dt = datetime.strptime(str(venc_original).split()[0], '%Y-%m-%d')
+                        venc_exibicao = dt.strftime('%d/%m/%Y')
+                except:
+                    pass
+                
+                return {
+                    'status': 1,
+                    'links': [f_selecionada], # ESSENCIAL para compatibility com enviar_fatura
+                    'fatura_id': f_id,
+                    'valor': valor,
+                    'vencimento': venc_exibicao,
+                    'pix_copia_cola': f_selecionada.get('codigopix'),
+                    'mensagem': f"💳 *Sua fatura {tipo_display}:*\n\nFatura ID: {f_id}\nVencimento: {venc_exibicao}\nValor: R$ {valor:.2f}\n\nSegue seu *QRcode PIX* para pagamento."
+                }
+
+            # 3. NADA ENCONTRADO
+            return {
+                'status': 0,
+                'mensagem_positiva': True,
+                'mensagem': 'Parabéns, você não possui faturas vencidas ou em aberto no momento. 😊'
+            }
         except Exception as e:
-            logger.exception(f"[FATURA] Erro ao buscar fatura SGP: {e}")
+            logger.exception(f"[FATURA] Erro crítico em buscar_fatura_sgp: {e}")
             return None
 
     def enviar_fatura(self, provedor, numero_whatsapp: str, dados_fatura: Dict[str, Any], conversation=None, tipo_pagamento: str = 'pix') -> Dict[str, Any]:

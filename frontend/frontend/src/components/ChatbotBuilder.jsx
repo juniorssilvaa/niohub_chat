@@ -1084,7 +1084,7 @@ const ChatbotBuilder = () => {
                                                 { value: 'consultar_cliente', label: 'Consultar Cliente (CPF/CNPJ)', input: 'cpf', desc: 'Retorna dados e contratos do cliente. Variáveis: {{nome}}, {{contratos}}' },
                                                 { value: 'verifica_acesso', label: 'Verificar Acesso (Contrato)', input: 'contrato', desc: 'Verifica status da conexão do contrato. Variável: {{status_acesso}}' },
                                                 { value: 'listar_contratos', label: 'Listar Contratos (Cliente ID)', input: 'cliente_id', desc: 'Lista todos os contratos do cliente. Variável: {{contratos}}' },
-                                                { value: 'listar_titulos', label: 'Listar Títulos/Faturas (CPF)', input: 'cpf', desc: 'Lista faturas em aberto. Variável: {{titulos}}' },
+                                                { value: 'listar_titulos', label: 'Enviar 2 Via Fatura', input: 'cpf', desc: 'Lista faturas seguindo a nova priorização. Variável: {{titulos}}' },
                                                 { value: 'liberar_por_confianca', label: 'Liberar por Confiança (Contrato)', input: 'contrato', desc: 'Faz liberação por promessa de pagamento. Variável: {{sucesso}}' },
                                                 { value: 'criar_chamado', label: 'Criar Chamado Técnico (Contrato)', input: 'contrato', desc: 'Abre chamado no SGP. Variável: {{protocolo}}' },
                                                 { value: 'listar_manutencoes', label: 'Listar Manutenções (CPF)', input: 'cpf', desc: 'Lista manutenções na área do cliente. Variável: {{manutencoes}}' },
