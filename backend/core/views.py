@@ -6652,3 +6652,68 @@ class PlanoViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+
+@login_required
+def super_admin_contacts(request):
+    """
+    View para o superadmin visualizar todos os contatos de todos os provedores.
+    """
+    if request.user.user_type != 'superadmin':
+        raise PermissionDenied("Apenas o superadmin pode acessar esta página.")
+    
+    contacts = Contact.objects.all().select_related('provedor')
+    
+    # Filtros
+    provedor_id = request.GET.get('provedor_id')
+    if provedor_id:
+        contacts = contacts.filter(provedor_id=provedor_id)
+        
+    query = request.GET.get('q')
+    if query:
+        contacts = contacts.filter(
+            Q(name__icontains=query) | 
+            Q(phone__icontains=query) | 
+            Q(email__icontains=query)
+        )
+    
+    all_provedores = Provedor.objects.all().order_by('nome')
+    
+    context = {
+        'contacts': contacts.order_by('-created_at'),
+        'all_provedores': all_provedores,
+        'request': request
+    }
+    
+    return render(request, 'super_admin/all_contacts.html', context)
+
+@login_required
+def super_admin_contact_delete(request, pk):
+    """
+    View para o superadmin excluir um contato permanentemente.
+    """
+    if request.user.user_type != 'superadmin':
+        raise PermissionDenied("Apenas o superadmin pode excluir contatos.")
+    
+    contact = get_object_or_404(Contact, pk=pk)
+    
+    if request.method == 'POST':
+        name = contact.name
+        provedor_nome = contact.provedor.nome if contact.provedor else "Nenhum"
+        contact.delete()
+        
+        # Registrar auditoria
+        AuditLog.objects.create(
+            user=request.user,
+            action='delete',
+            details=f"Superadmin excluiu cliente {name} do provedor {provedor_nome}",
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+        
+        messages.success(request, f"Cliente {name} excluído com sucesso.")
+        return redirect('super_admin_contacts')
+    
+    return redirect('super_admin_contacts')
+

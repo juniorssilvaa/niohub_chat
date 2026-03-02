@@ -45,4 +45,8 @@ urlpatterns = [
     
     # Incluir URLs do WhatsApp (UazAPI)
     path('whatsapp/', include('core.whatsapp_urls')),
+
+    # Rotas de Super Admin - Gestão de Contatos
+    path('super-admin/contacts/', views.super_admin_contacts, name='super_admin_contacts'),
+    path('super-admin/contacts/<int:pk>/delete/', views.super_admin_contact_delete, name='super_admin_contact_delete'),
 ]

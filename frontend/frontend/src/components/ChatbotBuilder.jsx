@@ -47,6 +47,7 @@ const ChatbotBuilder = () => {
 
     // Canvas & Context Menu State
     const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
+    const [canvasZoom, setCanvasZoom] = useState(1);
     const [isPanning, setIsPanning] = useState(false);
     const [contextMenu, setContextMenu] = useState({ show: false, x: 0, y: 0, type: null, targetId: null });
     const [availableTeams, setAvailableTeams] = useState([]);
@@ -214,17 +215,17 @@ const ChatbotBuilder = () => {
         setConnectionSourceHandle(handleId);
         const rect = canvasRef.current.getBoundingClientRect();
         setMousePos({
-            x: e.clientX - rect.left - canvasOffset.x,
-            y: e.clientY - rect.top - canvasOffset.y
+            x: (e.clientX - rect.left - canvasOffset.x) / canvasZoom,
+            y: (e.clientY - rect.top - canvasOffset.y) / canvasZoom
         });
     };
 
     const finalizeConnection = (targetId) => {
-        if (isConnecting && connectionSource && connectionSource !== targetId) {
+        if (isConnecting && connectionSource && connectionSource != targetId) {
             const exists = edges.some(e =>
-                e.source === connectionSource &&
-                e.target === targetId &&
-                e.sourceHandle === connectionSourceHandle
+                e.source == connectionSource &&
+                e.target == targetId &&
+                e.sourceHandle == connectionSourceHandle
             );
             if (!exists) {
                 setEdges(prev => [...prev, {
@@ -280,8 +281,8 @@ const ChatbotBuilder = () => {
 
         if (isConnecting) {
             setMousePos({
-                x: x - canvasOffset.x,
-                y: y - canvasOffset.y
+                x: (x - canvasOffset.x) / canvasZoom,
+                y: (y - canvasOffset.y) / canvasZoom
             });
         }
     };
@@ -568,6 +569,7 @@ const ChatbotBuilder = () => {
                             {isSaving ? 'Salvando...' : 'Salvar Fluxo'}
                         </button>
                     )}
+
                     <button
                         onClick={startSimulator}
                         className="flex items-center gap-2 px-6 py-2 text-sm font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl hover:opacity-90 transition-all active:scale-95 border-b-4 border-slate-700 dark:border-slate-300"
@@ -702,45 +704,51 @@ const ChatbotBuilder = () => {
 
                             <div
                                 style={{
-                                    transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px)`,
+                                    transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px) scale(${canvasZoom})`,
                                     transformOrigin: '0 0'
                                 }}
                                 className="absolute top-0 left-0"
                             >
                                 {/* SVG Layer for Edges */}
-                                <svg className="absolute inset-0 pointer-events-none w-full h-full z-10 overflow-visible">
+                                {console.log("Edges rendering:", edges.length)}
+                                <svg
+                                    className="absolute top-0 left-0 pointer-events-none z-10 overflow-visible"
+                                    style={{ width: '1px', height: '1px' }}
+                                >
                                     {edges.map((edge) => {
-                                        const sourceNode = nodes.find(n => n.id === edge.source);
-                                        const targetNode = nodes.find(n => n.id === edge.target);
+                                        // Usar comparação solta (==) para IDs caso haja mistura de string/int
+                                        const sourceNode = nodes.find(n => n.id == edge.source);
+                                        const targetNode = nodes.find(n => n.id == edge.target);
+
                                         if (!sourceNode || !targetNode) return null;
 
                                         // Side-to-side connections
                                         const x1 = sourceNode.position.x + 240;
                                         const x2 = targetNode.position.x - 5;
-                                        const y2 = targetNode.position.y + 35; // Alinhado com o input dot
+                                        const y2 = targetNode.position.y + 35; // Alinhado com o input dot (35px do topo)
 
                                         // Calcular y1 baseado no sourceHandle
-                                        let y1 = sourceNode.position.y + 35; // Alinhado com o dot de entrada/header
+                                        let y1 = sourceNode.position.y + 35; // Default: Ponto central do header
 
                                         if (edge.sourceHandle && !sourceNode.data.isCollapsed) {
                                             if (sourceNode.data.buttons) {
-                                                const bidx = sourceNode.data.buttons.findIndex(b => b.id === edge.sourceHandle);
+                                                const bidx = sourceNode.data.buttons.findIndex(b => b.id == edge.sourceHandle);
                                                 if (bidx !== -1) {
-                                                    // Header (~53px) + padding top do botão (8px) + metade do botão (18px)
-                                                    y1 = sourceNode.position.y + 53 + (bidx * 45) + 26;
+                                                    y1 = sourceNode.position.y + 53 + (bidx * 45) + 22;
                                                 }
                                             }
                                             if (sourceNode.data.rows) {
-                                                const ridx = sourceNode.data.rows.findIndex(r => r.id === edge.sourceHandle);
+                                                const ridx = sourceNode.data.rows.findIndex(r => r.id == edge.sourceHandle);
                                                 if (ridx !== -1) {
                                                     const btnOffset = (sourceNode.data.buttons?.length || 0) * 45;
-                                                    y1 = sourceNode.position.y + 53 + btnOffset + (ridx * 45) + 26;
+                                                    y1 = sourceNode.position.y + 53 + btnOffset + (ridx * 45) + 22;
                                                 }
                                             }
                                         }
 
                                         return (
                                             <g key={edge.id}>
+                                                {/* Hit area for context menu */}
                                                 <path
                                                     d={`M ${x1} ${y1} C ${x1 + 100} ${y1}, ${x2 - 100} ${y2}, ${x2} ${y2}`}
                                                     fill="none"
@@ -760,44 +768,49 @@ const ChatbotBuilder = () => {
                                                         });
                                                     }}
                                                 />
+                                                {/* Visible line - usando amarelo puro e maior espessura */}
                                                 <path
                                                     d={`M ${x1} ${y1} C ${x1 + 100} ${y1}, ${x2 - 100} ${y2}, ${x2} ${y2}`}
                                                     fill="none"
-                                                    stroke="#f59e0b"
-                                                    strokeWidth="2.5"
-                                                    strokeDasharray="8,5"
-                                                    className="opacity-70 drop-shadow-sm pointer-events-none transition-all"
+                                                    stroke="#ffff00"
+                                                    strokeWidth="4"
+                                                    strokeDasharray="none"
+                                                    className="opacity-100 drop-shadow-[0_0_10px_rgba(255,255,0,0.7)] pointer-events-none"
                                                 />
-                                                <circle cx={x2} cy={y2} r="4" fill="#f59e0b" className="pointer-events-none" />
+                                                <circle cx={x2} cy={y2} r="5" fill="#ffff00" className="pointer-events-none shadow-lg" />
                                             </g>
                                         );
                                     })}
 
                                     {isConnecting && connectionSource && (() => {
-                                        const sNode = nodes.find(n => n.id === connectionSource);
+                                        const sNode = nodes.find(n => n.id == connectionSource);
+                                        if (!sNode) return null;
+
                                         let sy = sNode.position.y + 35;
-                                        if (connectionSourceHandle) {
+                                        if (connectionSourceHandle && !sNode.data.isCollapsed) {
                                             if (sNode.data.buttons) {
-                                                const bidx = sNode.data.buttons.findIndex(b => b.id === connectionSourceHandle);
-                                                if (bidx !== -1) sy = sNode.position.y + 62 + (bidx * 53) + 26;
+                                                const bidx = sNode.data.buttons.findIndex(b => b.id == connectionSourceHandle);
+                                                if (bidx !== -1) sy = sNode.position.y + 53 + (bidx * 45) + 22;
                                             }
                                             if (sNode.data.rows) {
-                                                const ridx = sNode.data.rows.findIndex(r => r.id === connectionSourceHandle);
+                                                const ridx = sNode.data.rows.findIndex(r => r.id == connectionSourceHandle);
                                                 if (ridx !== -1) {
-                                                    const btnO = (sNode.data.buttons?.length || 0) * 53;
-                                                    sy = sNode.position.y + 62 + btnO + (ridx * 53) + 26;
+                                                    const btnO = (sNode.data.buttons?.length || 0) * 45;
+                                                    sy = sNode.position.y + 53 + btnO + (ridx * 45) + 22;
                                                 }
                                             }
                                         }
+
                                         return (
                                             <path
                                                 d={`M ${sNode.position.x + 240} ${sy} 
                                                     C ${sNode.position.x + 340} ${sy},
                                                       ${mousePos.x - 50} ${mousePos.y}, ${mousePos.x} ${mousePos.y}`}
                                                 fill="none"
-                                                stroke="#f59e0b"
-                                                strokeWidth="2"
-                                                strokeDasharray="8,5"
+                                                stroke="#ffff00"
+                                                strokeWidth="4"
+                                                strokeDasharray="none"
+                                                className="opacity-100 pointer-events-none drop-shadow-[0_0_10px_rgba(255,255,0,0.7)]"
                                             />
                                         );
                                     })()}
