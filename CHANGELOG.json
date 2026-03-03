@@ -1,6 +1,29 @@
 {
-  "current_version": "2.26.4",
+  "current_version": "2.26.5",
   "versions": [
+    {
+      "version": "2.26.5",
+      "version_type": "patch",
+      "date": "2026-03-03",
+      "title": "Melhorias no Pagamento WhatsApp e Chatbot",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Novo Layout de Pagamento Interativo",
+          "description": "Implementado layout profissional de duas mensagens para faturas: um resumo em texto seguido por um card interativo da Meta. Agora o cliente pode escolher receber apenas PIX, apenas Boleto ou Ambos (com anexo PDF incluso)."
+        },
+        {
+          "type": "improvement",
+          "title": "Unificação do Fluxo de Fatura",
+          "description": "O sistema agora padroniza as instruções de pagamento de acordo com o método escolhido, simplificando a jornada do cliente e garantindo que o PDF seja enviado apenas quando necessário."
+        },
+        {
+          "type": "fix",
+          "title": "Estabilidade do Motor do Chatbot",
+          "description": "Corrigido erro de processamento que interrompia o fluxo do chatbot em certas interações, garantindo maior fluidez no atendimento automático."
+        }
+      ]
+    },
     {
       "version": "2.26.4",
       "version_type": "patch",

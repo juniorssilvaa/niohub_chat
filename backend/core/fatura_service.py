@@ -520,6 +520,8 @@ class FaturaService:
             linha_digitavel = fatura.get('linhadigitavel')
             vencimento = fatura.get('vencimento_original') or fatura.get('vencimento', 'N/A')
             valor = float(fatura.get('valor', 0))
+            link_fatura = fatura.get('link') or fatura.get('link_cobranca')
+            logger.info(f"[FATURA] link_fatura extraído (prioridade link): {link_fatura}")
             
             # Formatar vencimento para dd/mm/yyyy
             vencimento_formatado = vencimento
@@ -551,8 +553,12 @@ class FaturaService:
             
             # Determinar se mostra PIX/Boleto (Normalizar tipo_pagamento)
             tp = str(tipo_pagamento).lower().strip()
-            show_pix = any(opt in tp for opt in ['pix', 'ambos', 'ambas', 'todos'])
+            # Se for 'ambos', 'ambas' ou 'todos', mostra os dois.
+            # Se for um valor específico, mostra só aquele.
+            # Caso contrário (ex: vazio), fallback para pix.
+            show_pix = any(opt in tp for opt in ['pix', 'ambos', 'ambas', 'todos']) or tp == ''
             show_boleto = any(opt in tp for opt in ['boleto', 'ambos', 'ambas', 'todos'])
+            
             logger.info(f"[FATURA] Normalização: input='{tipo_pagamento}' -> tp='{tp}' | show_pix={show_pix} | show_boleto={show_boleto}")
             
             # Montar payment_settings
@@ -738,9 +744,70 @@ class FaturaService:
                 logger.error(f"[FATURA] {erro_msg}")
                 return {"success": False, "error": erro_msg}
             
-            # Montar texto do body
+            # Obter nome do cliente para a mensagem
+            nome_cliente = "Cliente"
+            try:
+                if conversation and hasattr(conversation, 'contact') and conversation.contact:
+                    nome_cliente = conversation.contact.name.split()[0].upper()
+            except:
+                pass
+
+            # Montar texto do body personalizado conforme imagem
             valor_formatado = f"R$ {valor:.2f}".replace('.', ',')
-            body_text = f"Fatura {fatura_id}\n\nVencimento: {vencimento_formatado}\nValor: {valor_formatado}\n\nEscolha como deseja pagar:"
+            
+            # Layout Profissional (Texto antes + Card Meta) para TODOS os métodos
+            intro_text = (
+                "Aqui estão os dados para pagamento de sua fatura: 👇\n\n"
+                f"📅 Vencimento: {vencimento_formatado}\n"
+                f"💰 Valor: {valor_formatado}"
+            )
+            
+            # Enviar mensagem introdutória primeiro
+            intro_payload = {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": recipient_number,
+                "type": "text",
+                "text": {"body": intro_text}
+            }
+            
+            url_intro = f"https://graph.facebook.com/{PHONE_NUMBERS_API_VERSION}/{canal.phone_number_id}/messages"
+            headers_intro = {
+                "Authorization": f"Bearer {canal.token}",
+                "Content-Type": "application/json"
+            }
+            
+            try:
+                logger.info(f"[FATURA] Enviando introdução para {recipient_number} (TP={tp})")
+                requests.post(url_intro, json=intro_payload, headers=headers_intro, timeout=10)
+            except Exception as e:
+                logger.warning(f"[FATURA] Falha ao enviar mensagem de introdução: {e}")
+
+            # Definir Texto do Body e Instruções conforme o método
+            if show_pix and show_boleto:
+                body_text = (
+                    "Escolha como deseja pagar: 👇\n\n"
+                    "1. Copie o código PIX;\n"
+                    "2. Abra o aplicativo do seu banco;\n"
+                    "3. Cole o código e finalize o pagamento\n\n"
+                    "Toque abaixo para copiar o código:"
+                )
+            elif show_pix:
+                body_text = (
+                    "Pagar com PIX: 👇\n\n"
+                    "1. Copie o código PIX abaixo;\n"
+                    "2. Abra o aplicativo do seu banco;\n"
+                    "3. Cole o código e finalize o pagamento."
+                )
+            elif show_boleto:
+                body_text = (
+                    "Pagar com Boleto: 👇\n\n"
+                    "1. Copie o código do boleto abaixo;\n"
+                    "2. Use o aplicativo do seu banco para pagar."
+                )
+            else:
+                # Fallback genérico
+                body_text = "Selecione a forma de pagamento abaixo para visualizar os dados:"
             
             # Montar payload order_details
             payload = {
@@ -750,6 +817,13 @@ class FaturaService:
                 "type": "interactive",
                 "interactive": {
                     "type": "order_details",
+                    "header": {
+                        "type": "document",
+                        "document": {
+                            "link": link_fatura,
+                            "filename": "Fatura.pdf"
+                        }
+                    } if (link_fatura and show_pix and show_boleto) else None,
                     "body": {
                         "text": body_text
                     },
@@ -759,7 +833,7 @@ class FaturaService:
                     "action": {
                         "name": "review_and_pay",
                         "parameters": {
-                            "reference_id": f"fatura_{fatura_id}_{int(time.time())}",
+                            "reference_id": str(fatura_id),
                             "type": "digital-goods",
                             "payment_type": "br",
                             "currency": "BRL",
@@ -771,12 +845,13 @@ class FaturaService:
                                 "status": "pending",
                                 "tax": {
                                     "value": 0,
-                                    "offset": 100
+                                    "offset": 100,
+                                    "description": "Impostos"
                                 },
                                 "items": [
                                     {
                                         "retailer_id": str(fatura_id),
-                                        "name": f"Fatura {fatura_id}",
+                                        "name": str(fatura_id),
                                         "amount": {
                                             "value": valor_centavos,
                                             "offset": 100

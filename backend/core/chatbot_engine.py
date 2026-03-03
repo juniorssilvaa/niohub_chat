@@ -97,10 +97,10 @@ class ChatbotEngine:
         current_state = await redis_memory_service.get_ai_state(provedor_id, conversation_id, "whatsapp", "unknown")
         logger.info(f"[ChatbotEngine] Processando msg: conv={conversation_id}, content='{message_content}', button={button_id}")
         current_node_id = current_state.get("chatbot_node_id")
+        flow_context = current_state.get('flow_context', {})
 
         # Salvar última mensagem do usuário no contexto para uso nos nós SGP
         if message_content and message_content.strip():
-            flow_context = current_state.get('flow_context', {})
             flow_context['last_user_message'] = message_content.strip()
             # Se parece com CPF (11 dígitos) ou CNPJ (14 dígitos), guardar também como 'cpf'
             digits_only = ''.join(filter(str.isdigit, message_content.strip()))
@@ -252,13 +252,25 @@ class ChatbotEngine:
                     if button_id and current_node.get('type') == 'message':
                         btn = next((b for b in data.get('buttons', []) if b.get('id') == button_id), None)
                         if btn:
+                            titulo = btn.get('title', '').upper()
                             flow_context['conteudo'] = btn.get('title')
-                            logger.info(f"[ChatbotEngine] OPÇÃO ESCOLHIDA (Botão): {btn.get('title')}")
+                            # Mapeamento automático de tipo de pagamento
+                            if 'BOLETO' in titulo: flow_context['tipo_pagamento'] = 'boleto'
+                            elif 'PIX' in titulo: flow_context['tipo_pagamento'] = 'pix'
+                            elif 'AMBOS' in titulo or 'AMBAS' in titulo: flow_context['tipo_pagamento'] = 'ambos'
+                            
+                            logger.info(f"[ChatbotEngine] OPÇÃO ESCOLHIDA (Botão): {btn.get('title')} | tipo_pagamento mapped: {flow_context.get('tipo_pagamento')}")
                     elif button_id and current_node.get('type') == 'menu':
                         row = next((r for r in data.get('rows', []) if r.get('id') == button_id), None)
                         if row:
+                            titulo = row.get('title', '').upper()
                             flow_context['conteudo'] = row.get('title')
-                            logger.info(f"[ChatbotEngine] OPÇÃO ESCOLHIDA (Menu): {row.get('title')}")
+                            # Mapeamento automático de tipo de pagamento
+                            if 'BOLETO' in titulo: flow_context['tipo_pagamento'] = 'boleto'
+                            elif 'PIX' in titulo: flow_context['tipo_pagamento'] = 'pix'
+                            elif 'AMBOS' in titulo or 'AMBAS' in titulo: flow_context['tipo_pagamento'] = 'ambos'
+                            
+                            logger.info(f"[ChatbotEngine] OPÇÃO ESCOLHIDA (Menu): {row.get('title')} | tipo_pagamento mapped: {flow_context.get('tipo_pagamento')}")
                     
                     current_state['flow_context'] = flow_context
                     await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
@@ -650,19 +662,13 @@ class ChatbotEngine:
                     logger.info(f"[ChatbotEngine][SGP] listar_titulos | Resultado status={dados_fatura.get('status')}")
                     
                     if dados_fatura:
-                        # Lógica de Encerramento Customizado / Mensagem de Sucesso (Solicitado pelo usuário: ENVIAR ANTES DA FATURA)
-                        success_msg = node_data.get('successMessage')
-                        if dados_fatura.get('status') == 1 or dados_fatura.get('mensagem_positiva'):
-                            if success_msg and str(success_msg).strip() != "":
-                                await ChatbotEngine.send_message_agnostic(conv=conversation, text=success_msg)
-                                logger.info(f"[ChatbotEngine][SGP] Mensagem de sucesso enviada ANTES da fatura: {success_msg[:30]}...")
-
                         # Se encontramos faturas (status=1), enviar ao cliente IMEDIATAMENTE usando o serviço robusto
                         if dados_fatura.get('status') == 1:
                             # Tentar pegar preferência de pagamento do contexto (dinâmico) ou do nó (estático)
                             tipo_pagamento = (
                                 flow_context.get('tipo_pagamento') or 
                                 flow_context.get('metodo_pagamento') or 
+                                node_data.get('paymentMethod') or 
                                 node_data.get('tipoPagamento') or 
                                 'pix'
                             )
