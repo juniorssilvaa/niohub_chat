@@ -25,19 +25,19 @@ daphne==4.1.0
 distro==1.9.0
 dj-database-url==3.0.1
 Django==5.2.12
- djangorestframework==3.15.2
- django-cors-headers==4.4.0
- django-filter==25.2
- uvicorn==0.32.1
- websockets==13.1
- telethon==1.37.0
- cryptg>=0.4.0  # Acelera criptografia do Telethon usando OpenSSL nativo
- python-decouple==3.8
- psycopg2-binary==2.9.11
- Pillow==12.0.0
- dramatiq[rabbitmq]==1.18.0
- gunicorn==23.0.0
- django-csp==3.7
+djangorestframework==3.15.2
+django-cors-headers==4.4.0
+django-filter==25.2
+uvicorn==0.32.1
+websockets==13.1
+telethon==1.37.0
+cryptg>=0.4.0  # Acelera criptografia do Telethon usando OpenSSL nativo
+python-decouple==3.8
+psycopg2-binary==2.9.11
+Pillow==12.0.0
+dramatiq[rabbitmq]==1.18.0
+gunicorn==23.0.0
+django-csp==3.7
 django-timezone-field==7.1
 fastapi==0.121.0
 gevent==25.9.1
@@ -93,11 +93,9 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzlocal==5.3.1
 urllib3==2.5.0
-uvicorn==0.32.1
 vine==5.1.0
 watchdog==6.0.0
 watchdog_gevent==0.2.1
 wcwidth==0.2.14
-websockets==13.1
 zope.event==6.0
 zope.interface==8.0.1
