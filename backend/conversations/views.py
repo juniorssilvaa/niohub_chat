@@ -1,4 +1,5 @@
-from rest_framework import viewsets, permissions, status, serializers
+from rest_framework import viewsets, permissions, status, serializers, filters
+import django_filters.rest_framework
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
@@ -14,6 +15,7 @@ from .serializers import (
     ContactSerializer, InboxSerializer, ConversationSerializer,
     ConversationListSerializer, ConversationUpdateSerializer, MessageSerializer, TeamSerializer, TeamMemberSerializer
 )
+from .services import ConversationNotificationService
 from rest_framework.permissions import AllowAny
 from integrations.models import WhatsAppIntegration
 from integrations.whatsapp_cloud_send import send_via_whatsapp_cloud_api, send_reaction
@@ -216,6 +218,10 @@ class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [django_filters.rest_framework.DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'phone', 'email']
+    ordering_fields = ['name', 'created_at', 'updated_at']
+    ordering = ['-created_at']
     
     def get_queryset(self):
         user = self.request.user
@@ -1163,6 +1169,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if not phone_clean.startswith('55') and len(phone_clean) <= 11:
             phone_clean = '55' + phone_clean
         
+        # Manter o formato com '+' no banco para facilitar o envio direto à Meta
+        # No entanto, a busca deve ser flexível. Por segurança, vamos salvar sem '+' no banco 
+        # mas adicionar no envio. Se o usuário já informou com '+', phone_clean filtrado remove.
+        # Vamos garantir que buscas futuras considerem apenas dígitos.
+        
         contact, contact_created = Contact.objects.get_or_create(
             phone=phone_clean,
             provedor=provedor,
@@ -1199,10 +1210,17 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 inbox=inbox,
                 defaults={
                     'status': 'open',
+                    'assignee': request.user,
                 }
             )
             if conversation_created:
-                logger.info(f"[START_WITH_TEMPLATE] Nova conversa criada: {conversation.id}")
+                logger.info(f"[START_WITH_TEMPLATE] Nova conversa criada e atribuída a {request.user.username}: {conversation.id}")
+        else:
+            # Se a conversa já existia, garantir que está aberta e atribuída ao usuário que enviou o template
+            conversation.status = 'open'
+            conversation.assignee = request.user
+            conversation.save(update_fields=['status', 'assignee'])
+            logger.info(f"[START_WITH_TEMPLATE] Conversa existente {conversation.id} aberta e atribuída a {request.user.username}")
         
         # Se não foram fornecidos componentes, buscar o template para verificar se tem variáveis
         components_prepared = False
@@ -1310,6 +1328,18 @@ class ConversationViewSet(viewsets.ModelViewSet):
             logger.error(f"[START_WITH_TEMPLATE] Erro ao criar mensagem no banco: {str(e)}", exc_info=True)
             # Não falhar a requisição se houver erro ao criar mensagem
             # A mensagem será criada quando o webhook da Meta confirmar
+        
+        # Notificar via WebSocket para atualização em tempo real no frontend
+        try:
+            ConversationNotificationService.notify_conversation_updated(
+                provedor.id,
+                conversation.id,
+                'conversation_assigned', # Usar assigned para forçar ida para aba "Minhas"
+                {'assignee_id': request.user.id}
+            )
+            logger.info(f"[START_WITH_TEMPLATE] Notificação WebSocket enviada para conversa {conversation.id}")
+        except Exception as e:
+            logger.error(f"[START_WITH_TEMPLATE] Erro ao enviar notificação WebSocket: {str(e)}")
         
         # Serializar conversa
         serializer = ConversationSerializer(conversation)

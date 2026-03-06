@@ -444,11 +444,13 @@ def send_via_whatsapp_cloud_api(
         
         # Obter número do destinatário do contato
         contact = conversation.contact
-        recipient_number = contact.phone
-        if not canal or not canal.token or not canal.phone_number_id:
-            return False, "Canal WhatsApp Cloud não configurado corretamente"
-
         recipient_number = conversation.contact.phone.replace('@s.whatsapp.net', '').replace('@c.us', '')
+        
+        # Garantir formato com '+' para Meta Cloud API (conforme testes manuais do usuário)
+        if not recipient_number.startswith('+'):
+            if not recipient_number.startswith('55') and len(recipient_number) <= 11:
+                recipient_number = '55' + recipient_number
+            recipient_number = '+' + recipient_number
         
         payload: Dict[str, Any] = {
             "messaging_product": "whatsapp",
@@ -1087,12 +1089,16 @@ def send_template_message(
         if not canal.phone_number_id:
             return False, "Phone Number ID não configurado", None
         
-        # Remover caracteres não numéricos
-        recipient_number = ''.join(filter(str.isdigit, recipient_number))
+        # Manter apenas números e o sinal de '+' no início
+        has_plus = recipient_number.startswith('+')
+        recipient_number = ''.join(filter(lambda x: x.isdigit() or x == '+', recipient_number))
         
-        # Garantir que comece com código do país (se não tiver, assumir Brasil 55)
-        if not recipient_number.startswith('55') and len(recipient_number) <= 11:
-            recipient_number = '55' + recipient_number
+        # Se tinha '+' mas foi filtrado ou se não começa com '+', garantir formato correto
+        if not recipient_number.startswith('+'):
+            # Garantir que comece com código do país (se não tiver, assumir Brasil 55)
+            if not recipient_number.startswith('55') and len(recipient_number) <= 11:
+                recipient_number = '55' + recipient_number
+            recipient_number = '+' + recipient_number
         
         # IMPORTANTE: A API da Meta aceita o formato original (pt_BR com underscore)
         # Não precisamos converter, usar o formato que vem da API de listagem

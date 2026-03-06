@@ -2,7 +2,7 @@ import requests
 import logging
 from django.conf import settings
 from rest_framework import serializers
-from .models import Canal, Provedor, Label, User, AuditLog, SystemConfig, Company, CompanyUser, MensagemSistema, ChatbotFlow
+from .models import Canal, Provedor, Label, User, AuditLog, SystemConfig, Company, CompanyUser, MensagemSistema, ChatbotFlow, RespostaRapida
 
 logger = logging.getLogger(__name__)
 
@@ -1295,3 +1295,20 @@ class PlanoSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class RespostaRapidaSerializer(serializers.ModelSerializer):
+    criado_por_nome = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RespostaRapida
+        fields = ['id', 'provedor', 'titulo', 'conteudo', 'criado_por', 'criado_por_nome', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'criado_por', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'provedor': {'required': False}
+        }
+
+    def get_criado_por_nome(self, obj):
+        if obj.criado_por:
+            return f"{obj.criado_por.first_name} {obj.criado_por.last_name}".strip() or obj.criado_por.username
+        return None

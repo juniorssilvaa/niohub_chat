@@ -6652,6 +6652,43 @@ class PlanoViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+
+class RespostaRapidaViewSet(viewsets.ModelViewSet):
+    """CRUD de Respostas Rápidas por provedor"""
+    def get_serializer_class(self):
+        from core.serializers import RespostaRapidaSerializer
+        return RespostaRapidaSerializer
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        from core.models import RespostaRapida
+        user = self.request.user
+        queryset = RespostaRapida.objects.all()
+
+        if user.user_type != 'superadmin':
+            provedores = Provedor.objects.filter(admins=user)
+            queryset = queryset.filter(provedor__in=provedores)
+
+        provedor_id = self.request.query_params.get('provedor')
+        if provedor_id:
+            queryset = queryset.filter(provedor_id=provedor_id)
+
+        titulo = self.request.query_params.get('titulo')
+        if titulo:
+            queryset = queryset.filter(titulo__istartswith=titulo)
+
+        return queryset.order_by('titulo')
+
+    def perform_create(self, serializer):
+        provedor = serializer.validated_data.get('provedor')
+        if not provedor:
+            provedor = self.request.user.provedores_admin.first()
+        serializer.save(provedor=provedor, criado_por=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save()
+
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages

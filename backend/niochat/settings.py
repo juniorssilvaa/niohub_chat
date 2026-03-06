@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'corsheaders',
     'channels',
+    'django_filters',
 
     # Local apps
     'core',

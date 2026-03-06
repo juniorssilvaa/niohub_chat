@@ -35,7 +35,7 @@ export default function Login() {
         // Mantém a versão estática como fallback
       }
     };
-    
+
     fetchVersion();
   }, []);
 
@@ -44,15 +44,15 @@ export default function Login() {
     // #region agent log
     console.log('[AUTH-DEBUG] Login.jsx:42: handleSubmit chamado', { username, loading });
     try {
-      fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Login.jsx:42',message:'handleSubmit chamado',data:{username,loading},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    } catch (e) {}
+      fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'Login.jsx:42', message: 'handleSubmit chamado', data: { username, loading }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) }).catch(() => { });
+    } catch (e) { }
     // #endregion
     if (loading) {
       // #region agent log
       console.log('[AUTH-DEBUG] Login.jsx:42: handleSubmit bloqueado - já em loading', { username });
       try {
-        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Login.jsx:42',message:'handleSubmit bloqueado - já em loading',data:{username},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      } catch (e) {}
+        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'Login.jsx:42', message: 'handleSubmit bloqueado - já em loading', data: { username }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) }).catch(() => { });
+      } catch (e) { }
       // #endregion
       return;
     }
@@ -87,25 +87,25 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#1a1f2e] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4 dark">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="relative w-full max-w-4xl"
       >
-        <div className="bg-[#242b3d] rounded-2xl shadow-2xl overflow-hidden border border-[#2d3548]">
+        <div className="bg-card rounded-2xl shadow-2xl overflow-hidden border border-border">
           <div className="flex flex-col md:flex-row">
-            <div className="md:w-1/2 bg-[#1e2433] p-8 md:p-12 flex flex-col items-center justify-center relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#4a90d9]/5 to-transparent" />
+            <div className="md:w-1/2 bg-[#242424] p-8 md:p-12 flex flex-col items-center justify-center relative">
+              <div className="absolute inset-0 bg-[#ffffff]/0.02" />
               <div className="relative z-10 flex flex-col items-center">
                 <div className="w-48 h-48 md:w-56 md:h-56 mb-6">
                   <img src={logoImage} alt="NioChat Logo" className="w-full h-full object-contain" />
                 </div>
-                <h1 className="text-3xl md:text-4xl font-bold tracking-wide text-[#4a90d9]">
+                <h1 className="text-3xl md:text-4xl font-bold tracking-wide text-foreground">
                   NioChat
                 </h1>
-                <p className="text-[#6b7280] mt-3 text-sm text-center">
+                <p className="text-muted-foreground mt-3 text-sm text-center">
                   Sua plataforma inteligente de atendimento
                 </p>
               </div>
@@ -115,15 +115,15 @@ export default function Login() {
               <h2 className="text-2xl font-semibold text-white mb-2">
                 Bem-vindo de volta
               </h2>
-              <p className="text-[#6b7280] mb-8">
+              <p className="text-muted-foreground mb-8">
                 Faça login para continuar
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label className="text-[#9ca3af]">Usuário</Label>
+                  <Label className="text-muted-foreground">Usuário</Label>
                   <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6b7280]" />
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
@@ -134,9 +134,9 @@ export default function Login() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-[#9ca3af]">Senha</Label>
+                  <Label className="text-muted-foreground">Senha</Label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6b7280]" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
@@ -168,7 +168,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="text-center mt-6 text-sm text-[#6b7280] space-y-1">
+        <div className="text-center mt-6 text-sm text-muted-foreground space-y-1">
           <p>© 2026 NIOCHAT</p>
           <p>Versão {version}</p>
         </div>

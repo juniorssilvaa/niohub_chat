@@ -2,7 +2,7 @@
   <defs>
     <pattern id="chatPattern" x="0" y="0" width="200" height="200" patternUnits="userSpaceOnUse">
       <!-- Fundo preto -->
-      <rect width="200" height="200" fill="#000000"/>
+      <rect width="200" height="200" fill="none"/>
       
       <!-- Chat bubbles -->
       <path d="M15 25 Q15 15 25 15 L40 15 Q50 15 50 25 L50 40 Q50 50 40 50 L28 50 L20 58 L20 50 Q15 50 15 40 Z" fill="none" stroke="#4a5568" stroke-width="1.2" opacity="0.5"/>

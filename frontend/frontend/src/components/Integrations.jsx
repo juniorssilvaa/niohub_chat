@@ -99,7 +99,7 @@ function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onChe
   );
 
   return (
-    <div className="bg-[#23243a] p-6 rounded-xl shadow-lg border border-[#35365a] flex justify-between items-center relative">
+    <div className="bg-card p-6 rounded-xl shadow-lg border border-border flex justify-between items-center relative">
       <div className="flex items-center gap-4">
         {channel.tipo === 'whatsapp_session' ? (
           <div className={`w-12 h-12 rounded-full overflow-hidden flex items-center justify-center ${!shouldShowGif && profilePic ? 'bg-purple-500' : ''}`}>
@@ -136,12 +136,12 @@ function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onChe
             )}
           </div>
         ) : (
-          <div className="w-12 h-12 bg-gray-500 rounded-full flex items-center justify-center">
-            <Globe className="w-6 h-6 text-white" />
+          <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center">
+            <Globe className="w-6 h-6 text-primary-foreground" />
           </div>
         )}
         <div>
-          <div className="font-bold text-lg text-white capitalize">
+          <div className="font-bold text-lg text-foreground capitalize">
             {channel.tipo === 'whatsapp_session' ? 'WhatsApp QR code' :
               channel.tipo === 'telegram' ? 'Telegram' :
                 channel.tipo === 'whatsapp_oficial' ? 'WhatsApp Oficial' :
@@ -150,11 +150,11 @@ function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onChe
           {/* Mostrar número do WhatsApp Oficial quando conectado */}
           {isWhatsappOficial && (
             <div className="mt-1 space-y-0.5">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider">
-                Número: <span className="text-gray-300 font-medium">{channel.phone_number || channel.display_phone_number || 'Não definido'}</span>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                Número: <span className="text-foreground font-medium">{channel.phone_number || channel.display_phone_number || 'Não definido'}</span>
               </p>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider">
-                ID da Conta: <span className="text-gray-300 font-medium">{channel.waba_id || 'Não definido'}</span>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                ID da Conta: <span className="text-foreground font-medium">{channel.waba_id || 'Não definido'}</span>
               </p>
             </div>
           )}
@@ -172,8 +172,8 @@ function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onChe
       <div className="absolute top-2 right-2 flex items-center gap-2">
         {isConnected && (
           <div className="flex items-center gap-1.5">
-            <Bot className="w-4 h-4 text-gray-400" />
-            <span className="text-xs text-gray-400">ChatBot:</span>
+            <Bot className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">ChatBot:</span>
             <Switch
               checked={channel.ia_ativa !== false}
               onCheckedChange={(checked) => onToggleIA(channel.id, checked)}
@@ -214,7 +214,7 @@ function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onChe
 
         {/* Texto informativo quando em processing */}
         {isProcessingState && (
-          <span className="text-xs text-gray-400 ml-2">Aguardando confirmação da Meta</span>
+          <span className="text-xs text-muted-foreground ml-2">Aguardando confirmação da Meta</span>
         )}
 
         {/* Botões para WhatsApp */}
@@ -2523,7 +2523,7 @@ export default function Integrations({ provedorId }) {
     <div className="p-8">
       {/* Linha com título à esquerda e botão à direita */}
       <div className="flex items-center justify-between mb-10">
-        <h2 className="text-3xl font-bold text-white ml-2">{t('canais_configurados')}</h2>
+        <h2 className="text-3xl font-bold text-foreground ml-2">{t('canais_configurados')}</h2>
         <button
           onClick={handleAdd}
           className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 shadow"
@@ -2531,10 +2531,10 @@ export default function Integrations({ provedorId }) {
           <Plus className="w-5 h-5" /> {t('adicionar_canal')}
         </button>
       </div>
-      {loading && <div className="text-white">{t('carregando_canais')}</div>}
-      {error && <div className="text-red-400">{error}</div>}
+      {loading && <div className="text-muted-foreground">{t('carregando_canais')}</div>}
+      {error && <div className="text-destructive">{error}</div>}
       {!loading && !error && channels.length === 0 && (
-        <div className="text-[#b0b0c3]">{t('nenhum_canal_configurado')}</div>
+        <div className="text-muted-foreground">{t('nenhum_canal_configurado')}</div>
       )}
       {/* GRID DOS CANAIS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-10">
@@ -2607,13 +2607,13 @@ export default function Integrations({ provedorId }) {
 
       {/* MODAL DE ADICIONAR CANAL */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-[#23243a] p-8 rounded-xl shadow-lg border border-[#35365a] w-full max-w-md relative">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card p-8 rounded-xl shadow-lg border border-border w-full max-w-md relative">
             {/* Botão fechar no topo direito */}
-            <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 p-2 rounded hover:bg-[#2d2e4a] transition" title="Fechar">
-              <XCircle className="w-5 h-5 text-red-400" />
+            <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 p-2 rounded hover:bg-muted transition" title="Fechar">
+              <XCircle className="w-5 h-5 text-destructive" />
             </button>
-            <h3 className="text-xl font-bold text-white mb-6">{t('adicionar_canal')}</h3>
+            <h3 className="text-xl font-bold text-foreground mb-6">{t('adicionar_canal')}</h3>
             {!selectedType ? (
               <div className="flex flex-col gap-4 mb-6">
                 {availableTypes.map(opt => (
@@ -2801,13 +2801,13 @@ export default function Integrations({ provedorId }) {
 
       {/* MODAL "COMO DESEJA CONECTAR?" */}
       {showPairingMenu && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-[#23243a] p-8 rounded-xl shadow-lg border border-[#35365a] w-full max-w-md relative">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card p-8 rounded-xl shadow-lg border border-border w-full max-w-md relative">
             {/* Botão fechar no topo direito */}
-            <button onClick={() => setShowPairingMenu(false)} className="absolute top-4 right-4 p-2 rounded hover:bg-[#2d2e4a] transition" title="Fechar">
-              <XCircle className="w-5 h-5 text-red-400" />
+            <button onClick={() => setShowPairingMenu(false)} className="absolute top-4 right-4 p-2 rounded hover:bg-muted transition" title="Fechar">
+              <XCircle className="w-5 h-5 text-destructive" />
             </button>
-            <h3 className="text-xl font-bold text-white mb-6">{t('como_deseja_conectar')}</h3>
+            <h3 className="text-xl font-bold text-foreground mb-6">{t('como_deseja_conectar')}</h3>
             <button onClick={() => handlePairingMethod('qrcode')} className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white px-6 py-3 rounded-lg text-lg font-semibold shadow transition mb-4 w-full">QR Code</button>
             <button onClick={() => handlePairingMethod('paircode')} className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white px-6 py-3 rounded-lg text-lg font-semibold shadow transition w-full">{t('codigo_pareamento')}</button>
           </div>
@@ -2816,13 +2816,13 @@ export default function Integrations({ provedorId }) {
 
       {/* MODAL DE INPUT DE TELEFONE PARA PAREAMENTO */}
       {showPhoneInput && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-[#23243a] p-8 rounded-xl shadow-lg border border-[#35365a] w-full max-w-md relative">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card p-8 rounded-xl shadow-lg border border-border w-full max-w-md relative">
             {/* Botão fechar no topo direito */}
-            <button onClick={() => { setShowPhoneInput(false); setPairingResult(null); }} className="absolute top-4 right-4 p-2 rounded hover:bg-[#2d2e4a] transition" title="Fechar">
-              <XCircle className="w-5 h-5 text-red-400" />
+            <button onClick={() => { setShowPhoneInput(false); setPairingResult(null); }} className="absolute top-4 right-4 p-2 rounded hover:bg-muted transition" title="Fechar">
+              <XCircle className="w-5 h-5 text-destructive" />
             </button>
-            <h3 className="text-xl font-bold text-white mb-6">{t('digite_numero_telefone')}</h3>
+            <h3 className="text-xl font-bold text-foreground mb-6">{t('digite_numero_telefone')}</h3>
             <input
               type="text"
               value={pairingPhone}
@@ -2855,10 +2855,10 @@ export default function Integrations({ provedorId }) {
 
       {/* MODAL DE SUCESSO */}
       {showSuccess && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-[#23243a] p-8 rounded-xl shadow-lg border border-[#35365a] w-full max-w-md text-center">
-            <h3 className="text-xl font-bold text-white mb-4">{t('sucesso')}</h3>
-            <p className="text-white mb-6">{t('canal_adicionado_sucesso')}</p>
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card p-8 rounded-xl shadow-lg border border-border w-full max-w-md text-center">
+            <h3 className="text-xl font-bold text-foreground mb-4">{t('sucesso')}</h3>
+            <p className="text-muted-foreground mb-6">{t('canal_adicionado_sucesso')}</p>
             <button
               onClick={() => setShowSuccess(false)}
               className="bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
@@ -2871,16 +2871,16 @@ export default function Integrations({ provedorId }) {
 
       {/* MODAL DE VERIFICAÇÃO DE CÓDIGO TELEGRAM */}
       {showTelegramCodeModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-[#23243a] p-8 rounded-xl shadow-lg border border-[#35365a] w-full max-w-md">
-            <h3 className="text-xl font-bold text-white mb-4">Código de Verificação Telegram</h3>
-            <p className="text-gray-300 mb-2">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card p-8 rounded-xl shadow-lg border border-border w-full max-w-md">
+            <h3 className="text-xl font-bold text-foreground mb-4">Código de Verificação Telegram</h3>
+            <p className="text-muted-foreground mb-2">
               Um código de verificação foi enviado para o seu número do Telegram:
             </p>
-            <p className="text-blue-400 font-bold mb-4">
+            <p className="text-blue-500 font-bold mb-4">
               {telegramChannelData?.telegram_code_sent?.phone || telegramChannelData?.phone_number}
             </p>
-            <p className="text-gray-300 mb-4">
+            <p className="text-muted-foreground mb-4">
               Abra o Telegram e copie o código que você recebeu. Digite-o abaixo para completar a autenticação:
             </p>
 

@@ -14,7 +14,8 @@ import {
   Mic,
   MicOff,
   Square,
-  FileText
+  FileText,
+  Zap
 } from 'lucide-react';
 import axios from 'axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogPortal, DialogOverlay } from './ui/dialog';
@@ -147,6 +148,57 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
   //  ESTADO PARA CONTROLE DE MENSAGENS PENDENTES
   const [pendingMessages, setPendingMessages] = useState(new Set());
+
+  // Respostas Rápidas
+  const [quickReplies, setQuickReplies] = useState([]);
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [quickReplyFilter, setQuickReplyFilter] = useState('');
+  const [quickReplyIndex, setQuickReplyIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchQuickReplies = async () => {
+      try {
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+        const provedorId = user?.provedor_id || user?.provedores_admin?.[0]?.id;
+        if (!token || !provedorId) return;
+        const res = await axios.get(`/api/respostas-rapidas/?provedor=${provedorId}`, {
+          headers: { Authorization: `Token ${token}` }
+        });
+        setQuickReplies(res.data?.results || res.data || []);
+      } catch (err) {
+        console.error('Erro ao buscar respostas rápidas:', err);
+      }
+    };
+    if (user) fetchQuickReplies();
+  }, [user]);
+
+  const filteredQuickReplies = quickReplies.filter(r =>
+    r.titulo.toLowerCase().includes(quickReplyFilter.toLowerCase()) ||
+    r.conteudo.toLowerCase().includes(quickReplyFilter.toLowerCase())
+  );
+
+  const selectQuickReply = (qr) => {
+    setMessage(qr.conteudo);
+    setShowQuickReplies(false);
+    setTimeout(() => document.getElementById('message-input')?.focus(), 10);
+  };
+
+  const handleMessageChange = (e) => {
+    const val = e.target.value;
+    setMessage(val);
+
+    if (val === '/') {
+      setShowQuickReplies(true);
+      setQuickReplyFilter('');
+      setQuickReplyIndex(0);
+    } else if (val.startsWith('/')) {
+      setShowQuickReplies(true);
+      setQuickReplyFilter(val.substring(1));
+      setQuickReplyIndex(0);
+    } else {
+      setShowQuickReplies(false);
+    }
+  };
 
   // Ref para rastrear mensagens já marcadas como lidas nesta sessão
   const markedAsReadRef = useRef(new Set());
@@ -1352,6 +1404,30 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   };
 
   const handleKeyPress = (e) => {
+    if (showQuickReplies) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setQuickReplyIndex(prev => Math.min(prev + 1, filteredQuickReplies.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setQuickReplyIndex(prev => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (filteredQuickReplies.length > 0) {
+          selectQuickReply(filteredQuickReplies[quickReplyIndex]);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowQuickReplies(false);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -2610,7 +2686,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       <div
         ref={scrollContainerRef}
         onScroll={handleScrollContainer}
-        className="relative flex-1 overflow-y-auto overflow-x-hidden p-4 dark:bg-[#000000] bg-[#efeae2]"
+        className="relative flex-1 overflow-y-auto overflow-x-hidden p-4 dark:bg-background bg-[#efeae2]"
         style={{
           minHeight: '200px',
           // Tema de fundo estilo WhatsApp (imagem enviada)
@@ -3203,10 +3279,38 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               </div>
             ) : (
               <div className="relative w-full">
+                {showQuickReplies && filteredQuickReplies.length > 0 && (
+                  <div className="absolute bottom-full left-0 mb-2 w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="p-2 border-b border-border bg-muted/50">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                        <Zap className="w-3 h-3" /> Respostas Rápidas
+                      </p>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto p-1">
+                      {filteredQuickReplies.map((qr, idx) => (
+                        <button
+                          key={qr.id}
+                          onClick={() => selectQuickReply(qr)}
+                          className={`w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3 ${idx === quickReplyIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted text-foreground'}`}
+                          onMouseEnter={() => setQuickReplyIndex(idx)}
+                        >
+                          <div className={`mt-0.5 flex items-center justify-center flex-shrink-0 ${idx === quickReplyIndex ? 'text-accent-foreground' : 'text-muted-foreground'}`}>
+                            <Zap className="w-4 h-4" strokeWidth={2} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate">{qr.titulo}</p>
+                            <p className="text-xs opacity-70 line-clamp-1">{qr.conteudo}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <textarea
                   id="message-input"
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={handleMessageChange}
                   onKeyPress={handleKeyPress}
                   placeholder="Digite sua mensagem..."
                   className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"

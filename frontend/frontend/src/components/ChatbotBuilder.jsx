@@ -439,11 +439,11 @@ const ChatbotBuilder = () => {
                     e.stopPropagation();
                     setSelectedNode(node.id);
                 }}
-                className={`group flex flex-col w-[240px] bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl transition-all cursor-move z-20 ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-slate-900' : 'hover:border-slate-700'
+                className={`group flex flex-col w-[240px] bg-[#1a1a1a] border border-[#333333] rounded-3xl shadow-2xl transition-all cursor-move z-20 ${isSelected ? 'ring-2 ring-primary border-primary bg-[#242424]' : 'hover:border-[#444444]'
                     }`}
             >
                 {/* Header do Nó */}
-                <div className="flex items-center gap-3 p-4 border-b border-slate-900 bg-slate-950/50 rounded-t-3xl text-white">
+                <div className="flex items-center gap-3 p-4 border-b border-[#1a1a1a] bg-[#1a1a1a]/50 rounded-t-3xl text-white">
                     <div className={`${TypeConfig.color}`}>
                         <TypeConfig.icon size={20} strokeWidth={1.5} />
                     </div>
@@ -463,7 +463,7 @@ const ChatbotBuilder = () => {
                                 updateNodeData(node.id, { isCollapsed: !node.data.isCollapsed });
                                 setSelectedNode(node.id);
                             }}
-                            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all"
+                            className="p-1.5 hover:bg-[#2d2d2d] rounded-lg text-[#888888] hover:text-white transition-all"
                             title={node.data.isCollapsed ? "Mostrar conteúdo" : "Esconder conteúdo"}
                         >
                             {node.data.isCollapsed ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -481,13 +481,13 @@ const ChatbotBuilder = () => {
                     {(!node.data.buttons || node.data.buttons.length === 0) && (!node.data.rows || node.data.rows.length === 0) && node.type !== 'transfer' && node.type !== 'close' && node.type !== 'planos' && (
                         <div
                             onMouseDown={(e) => startConnection(e, node.id, null)}
-                            className="absolute -right-2 top-[35px] w-4 h-4 rounded-full bg-blue-500 border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30"
+                            className="absolute -right-2 top-[35px] w-4 h-4 rounded-full bg-primary border-4 border-[#1a1a1a] hover:scale-125 transition-all cursor-crosshair z-30"
                         />
                     )}
                 </div>
 
                 {/* Input Point (Left) */}
-                <div className="absolute -left-1.5 top-[35px] w-3 h-3 bg-slate-700 border-2 border-slate-950 rounded-full" />
+                <div className="absolute -left-1.5 top-[35px] w-3 h-3 bg-[#444444] border-2 border-[#1a1a1a] rounded-full" />
 
                 {/* Botões do Nó (Para Branching) */}
                 {
@@ -499,7 +499,7 @@ const ChatbotBuilder = () => {
                             {/* Dot por botão */}
                             <div
                                 onMouseDown={(e) => startConnection(e, node.id, btn.id)}
-                                className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-blue-500 border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30"
+                                className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary border-4 border-[#1a1a1a] hover:scale-125 transition-all cursor-crosshair z-30"
                             />
                         </div>
                     ))
@@ -526,7 +526,7 @@ const ChatbotBuilder = () => {
                 {
                     !node.data.isCollapsed && node.data.content && (
                         <div className="p-4 pt-2">
-                            <p className="text-[10px] text-slate-400 line-clamp-2 bg-slate-900/30 p-2 rounded-lg italic border border-slate-800/50">
+                            <p className="text-[10px] text-[#888888] line-clamp-2 bg-[#1a1a1a]/30 p-2 rounded-lg italic border border-[#333333]/50">
                                 "{node.data.content}"
                             </p>
                         </div>
@@ -538,18 +538,18 @@ const ChatbotBuilder = () => {
 
     if (loading) {
         return (
-            <div className="flex h-full items-center justify-center bg-slate-50 dark:bg-slate-900">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="flex h-full items-center justify-center bg-[#111111] dark:bg-[#0a0a0a]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
+        <div className="flex flex-col h-full bg-[#111111] dark:bg-[#0a0a0a] overflow-hidden">
             {/* Top Toolbar */}
-            <div className="flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 shadow-sm z-50">
+            <div className="flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-md border-b border-slate-200 dark:border-[#2d2d2d] shadow-sm z-50">
                 <div className="flex items-center gap-4">
-                    <div className="text-slate-600 dark:text-slate-400">
+                    <div className="text-foreground/70 dark:text-[#888888]">
                         <Bot size={28} strokeWidth={1.5} />
                     </div>
                     <h1 className="text-xl font-bold text-slate-800 dark:text-white leading-none tracking-tight">
@@ -562,7 +562,7 @@ const ChatbotBuilder = () => {
                         <button
                             onClick={handleSaveFlow}
                             disabled={isSaving}
-                            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-xl transition-all shadow-sm ${isSaving ? 'bg-slate-100 text-slate-400' : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg active:scale-95 border-b-4 border-blue-800'
+                            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-xl transition-all shadow-sm ${isSaving ? 'bg-[#242424] text-[#444444]' : 'bg-primary text-white hover:opacity-90 hover:shadow-lg active:scale-95 border-b-4 border-primary/50'
                                 }`}
                         >
                             <Save size={16} />
@@ -572,7 +572,7 @@ const ChatbotBuilder = () => {
 
                     <button
                         onClick={startSimulator}
-                        className="flex items-center gap-2 px-6 py-2 text-sm font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl hover:opacity-90 transition-all active:scale-95 border-b-4 border-slate-700 dark:border-slate-300"
+                        className="flex items-center gap-2 px-6 py-2 text-sm font-bold bg-[#1a1a1a] dark:bg-white text-white dark:text-[#1a1a1a] rounded-xl hover:opacity-90 transition-all active:scale-95 border-b-4 border-[#333333] dark:border-[#dddddd]"
                     >
                         <Play size={16} />
                         Testar
@@ -620,7 +620,7 @@ const ChatbotBuilder = () => {
                                         left: contextMenu.x,
                                         zIndex: 100
                                     }}
-                                    className="w-56 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl p-2"
+                                    className="w-56 bg-[#1a1a1a]/95 backdrop-blur-xl border border-[#333333]/50 rounded-2xl shadow-2xl p-2"
                                 >
                                     {contextMenu.type === 'edge' ? (
                                         <button
@@ -700,7 +700,7 @@ const ChatbotBuilder = () => {
                             }}
                         >
                             {/* Grid Background */}
-                            <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_2px,transparent_2px)] dark:bg-[radial-gradient(#1e293b_2px,transparent_2px)] [background-size:32px_32px] opacity-40" />
+                            <div className="absolute inset-0 bg-[radial-gradient(#333333_2px,transparent_2px)] dark:bg-[radial-gradient(#222222_2px,transparent_2px)] [background-size:32px_32px] opacity-40" />
 
                             <div
                                 style={{
@@ -830,9 +830,9 @@ const ChatbotBuilder = () => {
                                     initial={{ x: 400 }}
                                     animate={{ x: 0 }}
                                     exit={{ x: 400 }}
-                                    className="w-96 bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 z-50 shadow-2xl flex flex-col"
+                                    className="w-96 bg-white dark:bg-[#1a1a1a] border-l border-slate-200 dark:border-[#333333] z-50 shadow-2xl flex flex-col"
                                 >
-                                    <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+                                    <div className="p-6 border-b border-slate-100 dark:border-[#2d2d2d] flex items-center justify-between bg-slate-50/50 dark:bg-[#0a0a0a]/50">
                                         <div>
                                             <h3 className="font-black text-[10px] uppercase tracking-widest text-slate-400 mb-1">Configuração</h3>
                                             <p className="text-sm font-bold text-slate-800 dark:text-white">Editor de Propriedades</p>
@@ -847,7 +847,7 @@ const ChatbotBuilder = () => {
                                             <div className="flex items-center justify-between mb-3">
                                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Bloco (Apelido)</label>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[9px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-md">Identificação</span>
+                                                    <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">Identificação</span>
                                                 </div>
                                             </div>
                                             <input
@@ -855,7 +855,7 @@ const ChatbotBuilder = () => {
                                                 value={nodes.find(n => n.id === selectedNode)?.data.label || ''}
                                                 onChange={(e) => updateNodeData(selectedNode, { label: e.target.value })}
                                                 placeholder="Ex: Menu Principal, Boas-vindas"
-                                                className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-blue-500 transition-all outline-none text-slate-800 dark:text-white font-bold placeholder:font-normal shadow-inner"
+                                                className="w-full bg-slate-50 dark:bg-[#0a0a0a] border-2 border-slate-100 dark:border-[#2d2d2d] rounded-2xl px-5 py-4 text-sm focus:border-primary transition-all outline-none text-slate-800 dark:text-white font-bold placeholder:font-normal shadow-inner"
                                             />
                                             <p className="text-[9px] text-slate-400 mt-2 italic px-1">Este nome serve para você se organizar no canvas.</p>
                                         </div>
@@ -869,7 +869,7 @@ const ChatbotBuilder = () => {
                                                     value={nodes.find(n => n.id === selectedNode)?.data.content || ''}
                                                     onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
                                                     placeholder="Olá! Como posso te ajudar hoje?"
-                                                    className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-blue-500 transition-all outline-none text-slate-800 dark:text-white resize-none font-bold placeholder:font-normal"
+                                                    className="w-full bg-slate-50 dark:bg-[#0a0a0a] border-2 border-slate-100 dark:border-[#2d2d2d] rounded-2xl px-5 py-4 text-sm focus:border-primary transition-all outline-none text-slate-800 dark:text-white resize-none font-bold placeholder:font-normal"
                                                 />
                                             </div>
                                         )}
@@ -894,7 +894,7 @@ const ChatbotBuilder = () => {
                                                                     currentButtons[idx].title = e.target.value;
                                                                     updateNodeData(selectedNode, { buttons: currentButtons });
                                                                 }}
-                                                                className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-blue-500"
+                                                                className="flex-1 bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2d2d2d] rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-primary"
                                                             />
                                                             <button
                                                                 onClick={() => {
@@ -915,7 +915,7 @@ const ChatbotBuilder = () => {
                                                                 currentButtons.push({ id: 'btn_' + Date.now(), title: 'Novo Botão' });
                                                                 updateNodeData(selectedNode, { buttons: currentButtons });
                                                             }}
-                                                            className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl text-slate-400 hover:text-blue-500 hover:border-blue-500 transition-all font-bold text-xs flex items-center justify-center gap-2"
+                                                            className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-[#2d2d2d] rounded-2xl text-slate-400 hover:text-primary hover:border-primary transition-all font-bold text-xs flex items-center justify-center gap-2"
                                                         >
                                                             <Plus size={16} />
                                                             Adicionar Botão
@@ -942,7 +942,7 @@ const ChatbotBuilder = () => {
                                                         onChange={(e) => updateNodeData(selectedNode, { headerText: e.target.value })}
                                                         placeholder="Ex: MENU"
                                                         maxLength={60}
-                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-blue-500"
+                                                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2d2d2d] rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-primary"
                                                     />
                                                 </div>
 
@@ -953,7 +953,7 @@ const ChatbotBuilder = () => {
                                                         value={nodes.find(n => n.id === selectedNode)?.data.content || ''}
                                                         onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
                                                         placeholder="Escolha a opção desejada:"
-                                                        className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-blue-500 transition-all outline-none text-slate-800 dark:text-white resize-none font-bold placeholder:font-normal"
+                                                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] border-2 border-slate-100 dark:border-[#2d2d2d] rounded-2xl px-5 py-4 text-sm focus:border-primary transition-all outline-none text-slate-800 dark:text-white resize-none font-bold placeholder:font-normal"
                                                     />
                                                 </div>
 
@@ -965,7 +965,7 @@ const ChatbotBuilder = () => {
                                                         onChange={(e) => updateNodeData(selectedNode, { footerText: e.target.value })}
                                                         placeholder="Ex: Clique na lista abaixo..."
                                                         maxLength={60}
-                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-blue-500"
+                                                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2d2d2d] rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-primary"
                                                     />
                                                 </div>
 
@@ -977,7 +977,7 @@ const ChatbotBuilder = () => {
                                                         onChange={(e) => updateNodeData(selectedNode, { buttonText: e.target.value })}
                                                         placeholder="Ex: Abrir Menu"
                                                         maxLength={20}
-                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-blue-500"
+                                                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2d2d2d] rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-primary"
                                                     />
                                                 </div>
 
@@ -989,7 +989,7 @@ const ChatbotBuilder = () => {
                                                         onChange={(e) => updateNodeData(selectedNode, { sectionTitle: e.target.value })}
                                                         placeholder="Ex: Selecione uma opção"
                                                         maxLength={24}
-                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-blue-500"
+                                                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2d2d2d] rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-primary"
                                                     />
                                                 </div>
 
@@ -1433,7 +1433,7 @@ const ChatbotBuilder = () => {
                                                         value={nodes.find(n => n.id === selectedNode)?.data.content || ''}
                                                         onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
                                                         placeholder="Ex: Aguarde um momento, estamos te transferindo..."
-                                                        className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm focus:border-blue-500 transition-all outline-none text-slate-800 dark:text-white resize-none font-bold"
+                                                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] border-2 border-slate-100 dark:border-[#2d2d2d] rounded-2xl px-5 py-4 text-sm focus:border-primary transition-all outline-none text-slate-800 dark:text-white resize-none font-bold"
                                                     />
                                                 </div>
                                             </div>
@@ -1499,10 +1499,10 @@ const ChatbotBuilder = () => {
                         <motion.div
                             initial={{ scale: 0.9, y: 20 }}
                             animate={{ scale: 1, y: 0 }}
-                            className="bg-white dark:bg-slate-800 w-full max-w-lg h-[600px] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700"
+                            className="bg-white dark:bg-[#1a1a1a] w-full max-w-lg h-[600px] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-[#222222]"
                         >
                             {/* Simulator Header */}
-                            <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                            <div className="p-6 bg-slate-50 dark:bg-[#0a0a0a]/50 border-b border-slate-100 dark:border-[#2d2d2d] flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600">
                                         <Bot size={20} />
@@ -1518,7 +1518,7 @@ const ChatbotBuilder = () => {
                             </div>
 
                             {/* Chat Messages */}
-                            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30 dark:bg-slate-900/30">
+                            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30 dark:bg-[#0a0a0a]/30">
                                 {simMessages.map((msg, i) => (
                                     <motion.div
                                         key={i}

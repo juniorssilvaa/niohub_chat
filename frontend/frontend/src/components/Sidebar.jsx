@@ -20,7 +20,8 @@ import {
   Bot, // Ícone para Construtor de Chatbot
   Wifi, // Ícone para Planos
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Zap, // Ícone para Respostas Rápidas
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -68,6 +69,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
     { id: 'chatbot-builder', icon: Bot, label: t('chatbot_builder'), path: `/app/accounts/${provedorId}/chatbot-builder` },
     { id: 'planos', icon: Wifi, label: t('planos'), path: `/app/accounts/${provedorId}/planos` },
     { id: 'csat', icon: Smile, label: t('csat'), path: `/app/accounts/${provedorId}/csat` },
+    { id: 'respostas-rapidas', icon: Zap, label: 'Respostas Rápidas', path: `/app/accounts/${provedorId}/respostas-rapidas` },
   ];
 
   // Filtrar itens baseado no papel do usuário
@@ -192,7 +194,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
   // Desktop: sidebar fixo
   return (
     <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
-      <aside className={`bg-[#0F1C2E] h-screen ${isCollapsed ? 'w-16' : 'w-64'} transition-all duration-300 z-30 flex-shrink-0 flex flex-col`}>
+      <aside className={`h-screen ${isCollapsed ? 'w-16' : 'w-64'} transition-all duration-300 z-30 flex-shrink-0 flex flex-col`}>
         <div className={`bg-sidebar text-sidebar-foreground border-r border-border h-full flex flex-col ${mobileOpen ? 'mobile-open' : ''}`}>
           {/* TOPO FIXO - Logo e Botão */}
           <div className={`p-4 border-b border-border flex items-center flex-shrink-0 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>

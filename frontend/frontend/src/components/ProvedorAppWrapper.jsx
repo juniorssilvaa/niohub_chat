@@ -21,6 +21,7 @@ import ProviderScheduleForm from './ProviderScheduleForm';
 import Changelog from './Changelog';
 import ChatbotBuilder from './ChatbotBuilder';
 import PlanosPage from './PlanosPage';
+import RespostasRapidas from './RespostasRapidas';
 
 export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWhatsappDisconnected }) {
   const { provedorId } = useParams();
@@ -137,6 +138,7 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
               <Route path="csat" element={<CSATDashboard provedorId={provedorId} />} />
               <Route path="chatbot-builder" element={<ChatbotBuilder />} />
               <Route path="planos" element={<PlanosPage provedorId={provedorId} />} />
+              <Route path="respostas-rapidas" element={<RespostasRapidas provedorId={provedorId} />} />
               <Route path="integracoes" element={<Integrations provedorId={provedorId} />} />
               <Route path="perfil" element={<ProfilePage provedorId={provedorId} />} />
               <Route path="aparencia" element={<AppearancePage provedorId={provedorId} />} />

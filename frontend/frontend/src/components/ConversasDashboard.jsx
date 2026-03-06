@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Users, AlertTriangle, Flame, HelpCircle, Clock, MoreVertical, Bot, MessageCircle, User, X, Volume2 } from 'lucide-react';
+import { Users, AlertTriangle, Flame, HelpCircle, Clock, MoreVertical, Bot, MessageCircle, User, X, Volume2, BrainCircuit, Timer } from 'lucide-react';
 import axios from 'axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
@@ -84,7 +84,7 @@ export default function ConversasDashboard() {
     if (!content || typeof content !== 'string') {
       return content;
     }
-    
+
     // Se parece ser JSON, tentar parsear
     if (content.trim().startsWith('{')) {
       try {
@@ -106,23 +106,23 @@ export default function ConversasDashboard() {
         }
       }
     }
-    
+
     return content;
   };
 
   // Função para obter nome limpo do canal
   const getChannelDisplayName = (inbox) => {
     if (!inbox) return 'Canal';
-    
+
     const channelTypes = {
       'whatsapp': 'WhatsApp',
-      'email': 'Email', 
+      'email': 'Email',
       'telegram': 'Telegram',
       'webchat': 'Chat Web',
       'facebook': 'Facebook',
       'instagram': 'Instagram'
     };
-    
+
     return channelTypes[inbox.channel_type] || inbox.channel_type || 'Canal';
   };
   const [conversas, setConversas] = useState([]);
@@ -195,16 +195,16 @@ export default function ConversasDashboard() {
       const tokenBefore = localStorage.getItem('token');
       console.log('[AUTH-DEBUG] ConversasDashboard.jsx:189: removendo token', { authTokenExists: !!authTokenBefore, tokenExists: !!tokenBefore, error: error.message });
       try {
-        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversasDashboard.jsx:189',message:'ConversasDashboard removendo token',data:{authTokenExists:!!authTokenBefore,tokenExists:!!tokenBefore,error:error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      } catch (e) {}
+        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversasDashboard.jsx:189', message: 'ConversasDashboard removendo token', data: { authTokenExists: !!authTokenBefore, tokenExists: !!tokenBefore, error: error.message }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
+      } catch (e) { }
       // #endregion
       localStorage.removeItem('token');
       // #region agent log
       const authTokenAfter = localStorage.getItem('auth_token');
       console.log('[AUTH-DEBUG] ConversasDashboard.jsx:189: removeu token', { authTokenStillExists: !!authTokenAfter });
       try {
-        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversasDashboard.jsx:189',message:'ConversasDashboard removeu token',data:{authTokenStillExists:!!authTokenAfter},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      } catch (e) {}
+        fetch('http://127.0.0.1:7242/ingest/985f778c-eea1-40fb-8675-4607dc61316b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversasDashboard.jsx:189', message: 'ConversasDashboard removeu token', data: { authTokenStillExists: !!authTokenAfter }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
+      } catch (e) { }
       // #endregion
     }
 
@@ -233,7 +233,7 @@ export default function ConversasDashboard() {
         setHasInitialized(true);
       }
     };
-    
+
     initializeAuth();
   }, []);
 
@@ -249,21 +249,21 @@ export default function ConversasDashboard() {
       })
         .then(res => {
           const mensagens = res.data.results || res.data;
-          
+
           // Processar mensagens carregadas via API da mesma forma que as mensagens via WebSocket
           const processedMessages = mensagens.map(msg => {
             let processedContent = processMessageContent(msg.content, msg.is_from_customer);
-            
+
             // Remover assinatura do agente se presente
             if (processedContent && processedContent.match(/\*.*disse:\*\n/) && !msg.is_from_customer) {
               processedContent = processedContent.replace(/\*.*disse:\*\n/, '');
             }
-            
+
             // Identificar mensagens da IA de forma mais robusta
             const isFromAI = msg.from_ai === true ||
-                            msg.additional_attributes?.from_ai === true ||
-                            msg.sender?.sender_type === 'ai';
-            
+              msg.additional_attributes?.from_ai === true ||
+              msg.sender?.sender_type === 'ai';
+
             return {
               ...msg,
               content: processedContent,
@@ -271,7 +271,7 @@ export default function ConversasDashboard() {
               from_ai: isFromAI
             };
           });
-          
+
           setModalMensagens(processedMessages);
         })
         .catch(error => {
@@ -290,49 +290,49 @@ export default function ConversasDashboard() {
       // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       if (!token) return;
-      
+
       // Fechar conexão anterior se existir
       if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
         wsRef.current.close();
       }
-      
+
       const wsUrl = buildWebSocketUrl(`/ws/conversations/${modalConversa.id}/`, { token });
       const ws = new window.WebSocket(wsUrl);
       wsRef.current = ws;
-      
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           // WebSocket modal recebeu dados
-          
+
           // CORREÇÃO: Adicionar message_received que é o tipo usado para mensagens do cliente
           // O frontend deve verificar todos os tipos que o backend pode enviar
-          if (data.type === 'message' || 
-              data.type === 'new_message' || 
-              data.type === 'chat_message' || 
-              data.type === 'message_created' ||
-              data.type === 'message_received') {
+          if (data.type === 'message' ||
+            data.type === 'new_message' ||
+            data.type === 'chat_message' ||
+            data.type === 'message_created' ||
+            data.type === 'message_received') {
             // Nova mensagem recebida via WebSocket - adicionar diretamente ao estado
             if (data.message) {
               setModalMensagens(currentMessages => {
                 // Verificar se a mensagem já existe para evitar duplicatas
                 const messageExists = currentMessages.some(m => m.id === data.message.id);
-                
+
                 if (!messageExists) {
                   // Processar conteúdo da mensagem (parsear JSON se necessário)
                   let processedContent = processMessageContent(data.message.content, data.message.is_from_customer);
-                  
+
                   // Remover assinatura do agente se presente (WebSocket)
                   if (processedContent && processedContent.match(/\*.*disse:\*\n/) && !data.message.is_from_customer) {
                     processedContent = processedContent.replace(/\*.*disse:\*\n/, '');
                   }
-                  
+
                   // Identificar mensagens da IA de forma mais robusta
                   const isFromAI = data.message.from_ai === true ||
-                                  data.message.additional_attributes?.from_ai === true ||
-                                  data.message.sender?.sender_type === 'ai' ||
-                                  data.sender === 'ai';
-                  
+                    data.message.additional_attributes?.from_ai === true ||
+                    data.message.sender?.sender_type === 'ai' ||
+                    data.sender === 'ai';
+
                   // Criar mensagem processada
                   const processedMessage = {
                     ...data.message,
@@ -341,14 +341,14 @@ export default function ConversasDashboard() {
                     sender: data.message.sender || (isFromAI ? { sender_type: 'ai' } : { sender_type: 'agent' }),
                     from_ai: isFromAI
                   };
-                  
+
                   // Adicionar nova mensagem e ordenar por data
                   const newMessages = [...currentMessages, processedMessage].sort((a, b) => {
                     const dateA = new Date(a.created_at || a.timestamp || 0);
                     const dateB = new Date(b.created_at || b.timestamp || 0);
                     return dateA - dateB;
                   });
-                  
+
                   // Log para debug (apenas em desenvolvimento)
                   if (process.env.NODE_ENV === 'development') {
                     console.log('[ConversasDashboard] Nova mensagem via WebSocket no modal:', {
@@ -359,29 +359,29 @@ export default function ConversasDashboard() {
                       from_ai: isFromAI
                     });
                   }
-                  
+
                   return newMessages;
                 }
                 return currentMessages;
               });
-              
+
               // CORREÇÃO: NÃO atualizar o modalConversa aqui
               // Apenas adicionar a mensagem ao estado sem recarregar o modal
               // O modal deve permanecer estável e apenas receber novas mensagens
             }
           }
-        } catch (e) { 
+        } catch (e) {
           console.error('[ConversasDashboard] Erro ao processar WebSocket modal:', e);
         }
       };
-      
+
       ws.onopen = () => {
         // Log para debug (apenas em desenvolvimento)
         if (process.env.NODE_ENV === 'development') {
           console.log('[ConversasDashboard] WebSocket do modal conectado para conversa:', modalConversa.id);
         }
       };
-      
+
       ws.onclose = (event) => {
         // Log para debug
         if (process.env.NODE_ENV === 'development') {
@@ -392,14 +392,14 @@ export default function ConversasDashboard() {
             conversation_id: modalConversa?.id
           });
         }
-        
+
         wsRef.current = null;
-        
+
         // Tentar reconectar se não foi fechado intencionalmente e a conversa ainda está aberta
         // Não reconectar se foi fechado normalmente (code 1000) ou erro permanente (4001, 4003)
         if (event.code !== 1000 && modalConversa && modalConversa.id) {
           const permanentErrorCodes = [4001, 4003]; // Unauthorized, Forbidden
-          
+
           if (!permanentErrorCodes.includes(event.code)) {
             // Reconectar após 2 segundos
             setTimeout(() => {
@@ -409,13 +409,13 @@ export default function ConversasDashboard() {
                   const wsUrl = buildWebSocketUrl(`/ws/conversations/${modalConversa.id}/`, { token: reconnectToken });
                   const newWs = new window.WebSocket(wsUrl);
                   wsRef.current = newWs;
-                  
+
                   // Replicar handlers para manter comportamento consistente
                   newWs.onmessage = ws.onmessage;
                   newWs.onopen = ws.onopen;
                   newWs.onclose = ws.onclose;
                   newWs.onerror = ws.onerror;
-                  
+
                   if (process.env.NODE_ENV === 'development') {
                     console.log('[ConversasDashboard] Tentando reconectar WebSocket do modal...');
                   }
@@ -425,12 +425,12 @@ export default function ConversasDashboard() {
           }
         }
       };
-      
+
       ws.onerror = (error) => {
         console.error('[ConversasDashboard] Erro no WebSocket do modal:', error);
       };
-      
-      return () => { 
+
+      return () => {
         // Cleanup: fechar conexão quando o modal fechar ou a conversa mudar
         if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
           wsRef.current.close(1000); // Fechar normalmente (code 1000)
@@ -460,7 +460,7 @@ export default function ConversasDashboard() {
         setMenuOpenId(null);
       }
     }
-    
+
     if (menuOpenId) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
@@ -477,7 +477,7 @@ export default function ConversasDashboard() {
       const menuHeight = 140; // altura aproximada do menu com 4 itens
       const windowHeight = window.innerHeight;
       const windowWidth = window.innerWidth;
-      
+
       // Posição vertical - preferir mostrar embaixo, mas se não couber, mostrar em cima
       let top = rect.bottom + 4;
       if (top + menuHeight > windowHeight - 20) {
@@ -487,7 +487,7 @@ export default function ConversasDashboard() {
           top = rect.top + (rect.height / 2) - (menuHeight / 2);
         }
       }
-      
+
       // Posição horizontal - preferir à esquerda do botão (alinhado pela direita)
       let left = rect.right - menuWidth;
       if (left < 20) {
@@ -496,7 +496,7 @@ export default function ConversasDashboard() {
           left = windowWidth - menuWidth - 20; // último recurso: colar na direita da tela
         }
       }
-      
+
       setMenuPosition({
         top: Math.max(20, Math.min(top, windowHeight - menuHeight - 20)),
         left: Math.max(20, Math.min(left, windowWidth - menuWidth - 20))
@@ -518,7 +518,7 @@ export default function ConversasDashboard() {
   async function handleTransferirGrupo(conversa) {
     setModalTransferirEquipe(conversa);
     setMenuOpenId(null);
-    
+
     // Buscar equipes disponíveis
     // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -528,13 +528,13 @@ export default function ConversasDashboard() {
       setLoadingEquipes(false);
       return;
     }
-    
+
     setLoadingEquipes(true);
-    
+
     try {
       // O interceptor do axios já adiciona o token automaticamente
       const response = await axios.get('/api/teams/');
-      
+
       const equipes = response.data.results || response.data;
       // Equipes encontradas
       setEquipesTransferir(equipes || []);
@@ -551,7 +551,7 @@ export default function ConversasDashboard() {
       } else {
         console.debug('Erro ao buscar equipes:', error.message);
       }
-      
+
       // Sempre definir array vazio em caso de erro para não quebrar a UI
       setEquipesTransferir([]);
     } finally {
@@ -563,13 +563,13 @@ export default function ConversasDashboard() {
     if (!conversa?.id) return;
     // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    
+
     // Perguntar tipo de resolução
     const resolutionType = prompt('Tipo de resolução (ex: resolvido, transferido, cancelado):') || 'resolvido';
     const resolutionNotes = prompt('Observações sobre a resolução (opcional):') || '';
-    
+
     if (!window.confirm('Tem certeza que deseja encerrar este atendimento?')) return;
-    
+
     try {
       // Usar a API de encerramento por agente
       const response = await axios.post(`/api/conversations/${conversa.id}/close_conversation_agent/`, {
@@ -578,16 +578,16 @@ export default function ConversasDashboard() {
       }, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Encerramento realizado
-      
+
       // Atualizar a conversa na lista (mudar status para 'closed')
-      setConversas(prev => prev.map(c => 
-        c.id === conversa.id 
+      setConversas(prev => prev.map(c =>
+        c.id === conversa.id
           ? { ...c, status: 'closed' }
           : c
       ));
-      
+
       alert('Atendimento encerrado com sucesso!');
     } catch (e) {
       console.error('Erro ao encerrar atendimento:', e);
@@ -628,22 +628,22 @@ export default function ConversasDashboard() {
         const res = await axios.get(`/api/conversations/?page_size=500&ordering=-last_message_at&_t=${timestamp}`, { headers });
         const conversasData = res.data.results || res.data;
         setConversas(conversasData);
-        
+
         const userPermissions = user?.permissions || [];
         let filteredConversas = conversasData;
-        
+
         if (!userPermissions.includes('view_ai_conversations')) {
           filteredConversas = filteredConversas.filter(conv => !isComIA(conv));
         }
-        
+
         if (!userPermissions.includes('view_team_unassigned')) {
           filteredConversas = filteredConversas.filter(conv => !isEmEspera(conv));
         }
-        
+
         const ia = filteredConversas.filter(isComIA).length;
         const fila = filteredConversas.filter(isEmEspera).length;
         const atendimento = filteredConversas.filter(isEmAtendimento).length;
-        
+
         setCounts({ ia, fila, atendimento });
       } catch (e) {
         if (e.response?.status === 401) {
@@ -675,32 +675,32 @@ export default function ConversasDashboard() {
       // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       if (!token) return;
-      
+
       const wsUrl = buildWebSocketUrl('/ws/conversas_dashboard/', { token });
       ws = new window.WebSocket(wsUrl);
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           // WebSocket ConversasDashboard recebeu dados
-          
+
           // Processar qualquer evento relacionado a conversas
-          if (data.action === 'update_conversation' || 
-              data.action === 'new_message' ||
-              data.type === 'dashboard_event' ||
-              data.type === 'conversation_event' ||
-              data.event_type === 'new_message' ||
-              data.event_type === 'message_received') {
-            
+          if (data.action === 'update_conversation' ||
+            data.action === 'new_message' ||
+            data.type === 'dashboard_event' ||
+            data.type === 'conversation_event' ||
+            data.event_type === 'new_message' ||
+            data.event_type === 'message_received') {
+
             // Se o evento trouxe o objeto da conversa completo, atualizar localmente para ser instantâneo
             const convAtualizada = data.conversation || (data.data && data.data.conversation);
-            
+
             if (convAtualizada && convAtualizada.id) {
               setConversas(prev => {
                 // Filtrar a conversa antiga se existir
                 const listaSemAntiga = prev.filter(c => c.id !== convAtualizada.id);
                 // Adicionar a nova no topo (Ordenação em Tempo Real)
                 const novaLista = [convAtualizada, ...listaSemAntiga];
-                
+
                 // Recalcular contagens
                 let ia = 0, fila = 0, atendimento = 0;
                 novaLista.forEach(conv => {
@@ -709,7 +709,7 @@ export default function ConversasDashboard() {
                   else if (isEmAtendimento(conv)) atendimento++;
                 });
                 setCounts({ ia, fila, atendimento });
-                
+
                 return novaLista;
               });
             } else {
@@ -717,12 +717,12 @@ export default function ConversasDashboard() {
               fetchCounts();
             }
           }
-          
+
           // Remover lógica duplicada para update_conversation pois já está tratada acima
           if (data.action === 'update_conversation' && data.conversation && !data.type) {
-             // ... mantido apenas por segurança caso venha sem type
+            // ... mantido apenas por segurança caso venha sem type
           }
-        } catch (e) { 
+        } catch (e) {
           // Erro WebSocket (silenciado)
         }
       };
@@ -741,13 +741,13 @@ export default function ConversasDashboard() {
   useEffect(() => {
     const handlePermissionsUpdate = (event) => {
       // Permissões do usuário atualizadas
-      
+
       // Atualizar o usuário local com as novas permissões
       setUser(prevUser => ({
         ...prevUser,
         permissions: event.detail.permissions
       }));
-      
+
       // Recarregar contagens para aplicar as novas permissões
       setTimeout(() => {
         if (authReady && hasInitialized) {
@@ -757,7 +757,7 @@ export default function ConversasDashboard() {
     };
 
     window.addEventListener('userPermissionsUpdated', handlePermissionsUpdate);
-    
+
     return () => {
       window.removeEventListener('userPermissionsUpdated', handlePermissionsUpdate);
     };
@@ -773,20 +773,20 @@ export default function ConversasDashboard() {
         .then(res => {
           const users = res.data.results || res.data;
           setUsuariosTransferir(users);
-          
+
           // Conectar ao WebSocket para atualizações de status em tempo real
           // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+          const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
           if (!token) return;
           const wsUrl = buildWebSocketUrl('/ws/user_status/', { token });
           const statusWs = new WebSocket(wsUrl);
-          
+
           statusWs.onmessage = (event) => {
             try {
               const data = JSON.parse(event.data);
               if (data.type === 'user_status_update' && data.users) {
                 // Atualizar status dos usuários na lista
-                setUsuariosTransferir(prev => 
+                setUsuariosTransferir(prev =>
                   prev.map(user => {
                     const updatedUser = data.users.find(u => u.id === user.id);
                     return updatedUser ? { ...user, is_online: updatedUser.is_online } : user;
@@ -795,7 +795,7 @@ export default function ConversasDashboard() {
               }
             } catch (e) { /* ignore */ }
           };
-          
+
           // Limpar WebSocket ao fechar modal
           return () => {
             if (statusWs.readyState === WebSocket.OPEN) {
@@ -827,7 +827,7 @@ export default function ConversasDashboard() {
 
   async function transferirParaEquipe(equipe) {
     if (!modalTransferirEquipe?.id) return;
-    
+
     // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     try {
@@ -838,11 +838,11 @@ export default function ConversasDashboard() {
       }, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Transferência para equipe realizada
       setModalTransferirEquipe(null);
       setEquipesTransferir([]);
-      
+
       alert(`Transferido para equipe "${equipe.name}" com sucesso! Agora está visível para todos os membros da equipe.`);
       // O WebSocket já vai atualizar a lista automaticamente através do Dashboard
     } catch (error) {
@@ -865,17 +865,17 @@ export default function ConversasDashboard() {
     if (conversa.assignee) {
       return conversa.assignee.first_name || conversa.assignee.username || 'Atendente';
     }
-    
+
     // Se transferido para equipe (sem atendente individual), NÃO mostrar no campo atendente
     if (conversa.additional_attributes?.assigned_team) {
       return ''; // Campo atendente vazio quando transferido para equipe
     }
-    
+
     // Se não tem atendente mas está "Com IA", mostrar "IA"
     if (conversa.status === 'snoozed') {
       return 'IA';
     }
-    
+
     // Se não tem atendente e está em espera: deixar vazio
     return '';
   }
@@ -886,18 +886,18 @@ export default function ConversasDashboard() {
     if (conversa.team?.name) {
       return conversa.team.name;
     }
-    
+
     // Segundo, verificar se há informação da equipe específica da transferência
     if (conversa.additional_attributes?.assigned_team?.name) {
       return conversa.additional_attributes.assigned_team.name;
     }
-    
+
     // Se tem assignee, tentar obter da equipe do usuário
     if (conversa.assignee?.team?.name) {
       // Retornando equipe do assignee
       return conversa.assignee.team.name;
     }
-    
+
     // Nenhuma equipe encontrada, retornando string vazia
     return ''; // Não usar mais fallback fixo
   }
@@ -909,9 +909,9 @@ export default function ConversasDashboard() {
     let num = phone.replace(/(@.*$)/, '');
     // Formata para +55 99999-9999
     if (num.length >= 13) {
-      return `+${num.slice(0,2)} ${num.slice(2,7)}-${num.slice(7,11)}`;
+      return `+${num.slice(0, 2)} ${num.slice(2, 7)}-${num.slice(7, 11)}`;
     } else if (num.length >= 11) {
-      return `+${num.slice(0,2)} ${num.slice(2,7)}-${num.slice(7)}`;
+      return `+${num.slice(0, 2)} ${num.slice(2, 7)}-${num.slice(7)}`;
     }
     return num;
   }
@@ -924,7 +924,7 @@ export default function ConversasDashboard() {
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
-    
+
     if (diffMins < 60) {
       return `${diffMins}min`;
     } else if (diffHours < 24) {
@@ -946,7 +946,7 @@ export default function ConversasDashboard() {
         return 'Em Espera';
       }
     }
-    
+
     // Fallback para status padrão
     switch (status) {
       case 'snoozed': return 'Em Espera';
@@ -973,42 +973,42 @@ export default function ConversasDashboard() {
   // Função para renderizar mensagem com links clicáveis
   const renderMessageWithLinks = (text) => {
     if (!text || typeof text !== 'string') return text;
-    
+
     // Regex para detectar URLs completas
     const urlRegex = /(https?:\/\/[^\s\n<>"']+|www\.[^\s\n<>"']+)/gi;
-    
+
     // Dividir o texto em partes (texto e URLs)
     const parts = [];
     let lastIndex = 0;
     let match;
-    
+
     urlRegex.lastIndex = 0;
-    
+
     while ((match = urlRegex.exec(text)) !== null) {
       // Adicionar texto antes da URL
       if (match.index > lastIndex) {
         parts.push({ type: 'text', content: text.substring(lastIndex, match.index) });
       }
-      
+
       // Adicionar a URL (remover caracteres inválidos no final se houver)
       let urlContent = match[0];
       urlContent = urlContent.replace(/[.,;:!?]+$/, '');
-      
+
       parts.push({ type: 'url', content: urlContent });
-      
+
       lastIndex = match.index + match[0].length;
     }
-    
+
     // Adicionar texto restante
     if (lastIndex < text.length) {
       parts.push({ type: 'text', content: text.substring(lastIndex) });
     }
-    
+
     // Se não encontrou URLs, retornar texto original
     if (parts.length === 0) {
       return text;
     }
-    
+
     // Renderizar partes como elementos React
     return parts.map((part, index) => {
       if (part.type === 'url') {
@@ -1017,7 +1017,7 @@ export default function ConversasDashboard() {
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
           url = 'https://' + url;
         }
-        
+
         return (
           <a
             key={index}
@@ -1026,7 +1026,7 @@ export default function ConversasDashboard() {
             rel="noopener noreferrer"
             className="underline transition-colors break-all"
             onClick={(e) => e.stopPropagation()}
-            style={{ 
+            style={{
               wordBreak: 'break-all',
               color: '#7DD3FC',
               textDecoration: 'underline',
@@ -1110,20 +1110,20 @@ export default function ConversasDashboard() {
     const isCliente = msg.is_from_customer === true;
     const isAtendente = msg.is_from_customer === false && !msg.sender_type?.includes('bot');
     const isBot = msg.is_from_customer === false && (msg.sender_type?.includes('bot') || msg.message_type === 'outgoing');
-    
+
     const align = isCliente ? 'justify-start' : 'justify-end';
-    
+
     // Cores correspondentes ao ChatArea: cliente = cinza-azulado escuro, sistema/agente = azul
     const bg = (isBot || isAtendente) ? 'bg-[#2196F3] text-white' : 'bg-[#4A5568] text-white';
-    
+
     return (
       <div key={msg.id} className={`flex ${align} mb-4`}>
         {isCliente && (
           <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3 flex-shrink-0 overflow-hidden bg-gray-300">
             {/*  CORRIGIDO: Foto de perfil do cliente */}
             {modalConversa?.contact?.avatar ? (
-              <img 
-                src={modalConversa.contact.avatar} 
+              <img
+                src={modalConversa.contact.avatar}
                 alt={modalConversa.contact.name || 'Cliente'}
                 className="w-full h-full object-cover"
                 onError={(e) => {
@@ -1132,7 +1132,7 @@ export default function ConversasDashboard() {
                 }}
               />
             ) : null}
-            <div 
+            <div
               className={`w-full h-full flex items-center justify-center text-white font-medium text-sm bg-gradient-to-br from-blue-500 to-purple-600 ${modalConversa?.contact?.avatar ? 'hidden' : 'flex'}`}
             >
               {(modalConversa?.contact?.name || modalConversa?.contact?.phone || 'U').charAt(0).toUpperCase()}
@@ -1152,16 +1152,15 @@ export default function ConversasDashboard() {
             )}
           </div>
           <div
-            className={`flex items-center mt-2 space-x-1 text-xs text-muted-foreground ${
-              (isAtendente || isBot) ? 'justify-end' : 'justify-start'
-            }`}
+            className={`flex items-center mt-2 space-x-1 text-xs text-muted-foreground ${(isAtendente || isBot) ? 'justify-end' : 'justify-start'
+              }`}
           >
             <span className="bg-background/80 px-2 py-1 rounded-full">
               {(msg.created_at || msg.timestamp)
                 ? new Date(msg.created_at || msg.timestamp).toLocaleTimeString('pt-BR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
                 : ''}
             </span>
             {(isAtendente || isBot) &&
@@ -1178,7 +1177,7 @@ export default function ConversasDashboard() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">Conversas</h1>
-      
+
       {/* Verificação de autenticação */}
       {!hasInitialized ? (
         <div className="flex items-center justify-center py-20">
@@ -1195,7 +1194,7 @@ export default function ConversasDashboard() {
             </svg>
             <h3 className="text-lg font-medium mb-2">Acesso Restrito</h3>
             <p className="text-muted-foreground mb-4">Você precisa estar logado para acessar as conversas.</p>
-            <button 
+            <button
               onClick={() => window.location.href = '/admin/login/'}
               className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
             >
@@ -1214,43 +1213,37 @@ export default function ConversasDashboard() {
         <>
           {/* Dashboard de Métricas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow-md p-4">
+            <div className="bg-[#242424] border border-[#333333] rounded-[2rem] p-6 shadow-2xl relative group transition-all hover:bg-[#2d2d2d] active:scale-[0.98]">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">Com IA</p>
-                  <p className="text-2xl font-bold text-purple-600">{conversas.filter(isComIA).length}</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Inteligência Artificial</p>
+                  <p className="text-4xl font-black text-white tracking-tighter">{conversas.filter(isComIA).length}</p>
                 </div>
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Bot className="w-6 h-6 text-purple-600" />
-                </div>
+                <BrainCircuit className="w-9 h-9 text-purple-400" strokeWidth={1.2} />
               </div>
             </div>
-            
-            <div className="bg-white rounded-lg shadow-md p-4">
+
+            <div className="bg-[#242424] border border-[#333333] rounded-[2rem] p-6 shadow-2xl relative group transition-all hover:bg-[#2d2d2d] active:scale-[0.98]">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">Em Espera</p>
-                  <p className="text-2xl font-bold text-yellow-600">{conversas.filter(isEmEspera).length}</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Fila de Espera</p>
+                  <p className="text-4xl font-black text-white tracking-tighter">{conversas.filter(isEmEspera).length}</p>
                 </div>
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Clock className="w-6 h-6 text-yellow-600" />
-                </div>
+                <Timer className="w-9 h-9 text-amber-500" strokeWidth={1.2} />
               </div>
             </div>
-            
-            <div className="bg-white rounded-lg shadow-md p-4">
+
+            <div className="bg-[#242424] border border-[#333333] rounded-[2rem] p-6 shadow-2xl relative group transition-all hover:bg-[#2d2d2d] active:scale-[0.98]">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">Em Atendimento</p>
-                  <p className="text-2xl font-bold text-green-600">{conversas.filter(isEmAtendimento).length}</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Em Atendimento</p>
+                  <p className="text-4xl font-black text-white tracking-tighter">{conversas.filter(isEmAtendimento).length}</p>
                 </div>
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Users className="w-6 h-6 text-green-600" />
-                </div>
+                <Users className="w-9 h-9 text-emerald-400" strokeWidth={1.2} />
               </div>
             </div>
           </div>
-          
+
           {/* Blocos de fases */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Bloco 1: Com IA */}
@@ -1261,10 +1254,10 @@ export default function ConversasDashboard() {
                   {conversas.filter(isComIA).map((conv) => (
                     <div key={conv.id} className="bg-background rounded-lg p-3 relative">
                       <div className="flex items-start gap-3">
-                        <img 
-                          src={getAvatar(conv.contact)} 
-                          alt="avatar" 
-                          className="w-10 h-10 rounded-full object-cover border-2 border-border" 
+                        <img
+                          src={getAvatar(conv.contact)}
+                          alt="avatar"
+                          className="w-10 h-10 rounded-full object-cover border-2 border-border"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
@@ -1326,10 +1319,10 @@ export default function ConversasDashboard() {
                   {conversas.filter(isEmEspera).map((conv) => (
                     <div key={conv.id} className="bg-background rounded-lg p-3 relative">
                       <div className="flex items-start gap-3">
-                        <img 
-                          src={getAvatar(conv.contact)} 
-                          alt="avatar" 
-                          className="w-10 h-10 rounded-full object-cover border-2 border-border" 
+                        <img
+                          src={getAvatar(conv.contact)}
+                          alt="avatar"
+                          className="w-10 h-10 rounded-full object-cover border-2 border-border"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
@@ -1391,10 +1384,10 @@ export default function ConversasDashboard() {
                   {conversas.filter(isEmAtendimento).map((conv) => (
                     <div key={conv.id} className="bg-background rounded-lg p-3 relative">
                       <div className="flex items-start gap-3">
-                        <img 
-                          src={getAvatar(conv.contact)} 
-                          alt="avatar" 
-                          className="w-10 h-10 rounded-full object-cover border-2 border-border" 
+                        <img
+                          src={getAvatar(conv.contact)}
+                          alt="avatar"
+                          className="w-10 h-10 rounded-full object-cover border-2 border-border"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
@@ -1414,7 +1407,7 @@ export default function ConversasDashboard() {
                           </div>
                         </div>
                       </div>
-                      <button 
+                      <button
                         ref={el => (menuBtnRefs.current[conv.id] = el)}
                         className="absolute bottom-2 right-2 p-1 text-muted-foreground hover:text-card-foreground"
                         onClick={e => handleMenuOpen(conv.id, e)}
@@ -1476,14 +1469,14 @@ export default function ConversasDashboard() {
                     scrollbar-color: #9ca3af #e5e7eb;
                   }
                 `}</style>
-                
+
                 {/* Header do modal secundário */}
                 <div className="flex items-center justify-between p-4 border-b border-border bg-card rounded-t-lg">
                   <div className="flex items-center space-x-3">
                     <div className="relative">
                       {modalConversa?.contact?.avatar ? (
-                        <img 
-                          src={modalConversa.contact.avatar} 
+                        <img
+                          src={modalConversa.contact.avatar}
                           alt={modalConversa.contact.name || 'Cliente'}
                           className="w-10 h-10 rounded-full object-cover"
                           onError={(e) => {
@@ -1492,13 +1485,13 @@ export default function ConversasDashboard() {
                           }}
                         />
                       ) : null}
-                      <div 
+                      <div
                         className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-sm ${modalConversa?.contact?.avatar ? 'hidden' : 'flex'}`}
                       >
                         {(modalConversa?.contact?.name || modalConversa?.contact?.phone || 'U').charAt(0).toUpperCase()}
                       </div>
                     </div>
-                    
+
                     <div className="flex-1">
                       <div className="text-lg font-semibold text-foreground">{modalConversa?.contact?.name || 'Contato'}</div>
                       <div className="text-sm text-muted-foreground">
@@ -1513,7 +1506,7 @@ export default function ConversasDashboard() {
                           const diffMinutos = Math.floor(diffMs / (1000 * 60));
                           const diffHoras = Math.floor(diffMinutos / 60);
                           const diffDias = Math.floor(diffHoras / 24);
-                          
+
                           if (diffDias > 0) {
                             return `${diffDias} dia${diffDias > 1 ? 's' : ''}`;
                           } else if (diffHoras > 0) {
@@ -1526,11 +1519,11 @@ export default function ConversasDashboard() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Área de mensagens com scroll */}
-                <div 
-                  className="messages-container flex-1 overflow-y-auto flex flex-col gap-3 p-4 dark:bg-[#000000] bg-[#efeae2] rounded-b-lg"
-                  style={{ 
+                <div
+                  className="messages-container flex-1 overflow-y-auto flex flex-col gap-3 p-4 dark:bg-background bg-[#efeae2] rounded-b-lg"
+                  style={{
                     backgroundImage: `url(${isDarkTheme ? chatBgPattern : chatBgPatternLight})`,
                     backgroundRepeat: 'repeat',
                     backgroundSize: '200px 200px',
@@ -1538,25 +1531,25 @@ export default function ConversasDashboard() {
                     opacity: 1
                   }}
                 >
-                {modalLoading ? (
+                  {modalLoading ? (
                     <div className="text-muted-foreground text-center py-8">
                       <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                       Carregando mensagens...
                     </div>
-                ) : modalMensagens.length === 0 ? (
+                  ) : modalMensagens.length === 0 ? (
                     <div className="text-muted-foreground text-center py-8">
                       <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
                       Nenhuma mensagem nesta conversa.
                     </div>
-                ) : (
-                  <>
+                  ) : (
+                    <>
                       <div className="text-xs text-muted-foreground text-center py-2 border-b border-border mb-2">
                         {modalMensagens.length} mensagem{modalMensagens.length !== 1 ? 's' : ''} • Atualizações em tempo real ativas
                       </div>
-                    {modalMensagens.map(renderMensagem)}
-                    <div ref={mensagensEndRef} />
-                  </>
-                )}
+                      {modalMensagens.map(renderMensagem)}
+                      <div ref={mensagensEndRef} />
+                    </>
+                  )}
                 </div>
               </div>
             </DialogContent>

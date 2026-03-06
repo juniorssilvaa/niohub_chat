@@ -20,6 +20,7 @@ export default function Contacts({ provedorId }) {
   const [editingContact, setEditingContact] = useState(null);
   const [novoContato, setNovoContato] = useState({ nome: '', telefone: '+55', canal: 'WhatsApp', email: '' });
   const [contatos, setContatos] = useState([]);
+  const [pagination, setPagination] = useState({ next: null, previous: null, count: 0 });
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBloqueados, setFilterBloqueados] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -27,31 +28,52 @@ export default function Contacts({ provedorId }) {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    async function fetchContacts() {
-      setLoading(true);
-      setError('');
-      try {
-        const token = localStorage.getItem('token');
-        const url = provedorId 
-          ? `/api/contacts/?provedor_id=${provedorId}`
-          : '/api/contacts/';
-        const res = await axios.get(url, {
-          headers: { Authorization: `Token ${token}` }
-        });
-        
-        const contactsData = res.data.results || res.data;
-        setContatos(contactsData);
-      } catch (err) {
-        console.error('Erro ao carregar contatos:', err);
-        setError('Erro ao carregar contatos');
-        setContatos([]);
-      } finally {
-        setLoading(false);
-      }
-    }
+    const delayDebounceFn = setTimeout(() => {
+      fetchContacts();
+    }, 500);
 
-    fetchContacts();
-  }, [provedorId]);
+    return () => clearTimeout(delayDebounceFn);
+  }, [provedorId, searchTerm]);
+
+  async function fetchContacts(urlToFetch = null) {
+    setLoading(true);
+    setError('');
+    try {
+      const token = localStorage.getItem('token');
+      let url = urlToFetch;
+
+      if (!url) {
+        url = provedorId
+          ? `/api/contacts/?provedor_id=${provedorId}&page_size=1000`
+          : '/api/contacts/?page_size=1000';
+
+        if (searchTerm.trim()) {
+          url += `&search=${encodeURIComponent(searchTerm.trim())}`;
+        }
+      }
+
+      const res = await axios.get(url, {
+        headers: { Authorization: `Token ${token}` }
+      });
+
+      const contactsData = res.data.results || res.data;
+      setContatos(contactsData);
+
+      if (res.data.results) {
+        setPagination({
+          next: res.data.next,
+          previous: res.data.previous,
+          count: res.data.count
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao carregar contatos:', err);
+      setError('Erro ao carregar contatos');
+      setContatos([]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // Função para limpar telefone (remover @s.whatsapp.net)
   const cleanPhone = (phone) => {
@@ -65,7 +87,7 @@ export default function Contacts({ provedorId }) {
       alert('Não há contatos para exportar');
       return;
     }
-    
+
     const header = ['Nome', 'Email', 'Telefone', 'Canal', 'Último Contato', 'Status'];
     const rows = contatos.map(c => [
       c.name || '',
@@ -90,7 +112,7 @@ export default function Contacts({ provedorId }) {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      
+
       // Mapear os campos do frontend para o formato esperado pelo backend
       const contactData = {
         name: novoContato.nome.trim() || 'Sem nome',
@@ -98,11 +120,11 @@ export default function Contacts({ provedorId }) {
         email: (novoContato.email || '').trim() || null
       };
       if (provedorId) contactData.provedor = parseInt(provedorId, 10);
-      
+
       const res = await axios.post('/api/contacts/', contactData, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       setContatos(prev => [...prev, res.data]);
       setShowModal(false);
       setNovoContato({ nome: '', telefone: '+55', canal: 'WhatsApp', email: '' });
@@ -158,7 +180,7 @@ export default function Contacts({ provedorId }) {
   const handleEditContact = async (e) => {
     e.preventDefault();
     if (!editingContact) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       await axios.patch(`/api/contacts/${editingContact.id}/`, {
@@ -171,9 +193,9 @@ export default function Contacts({ provedorId }) {
       }, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Atualizar lista de contatos
-      setContatos(prev => prev.map(c => 
+      setContatos(prev => prev.map(c =>
         c.id === editingContact.id ? {
           ...c,
           name: editingContact.name,
@@ -185,7 +207,7 @@ export default function Contacts({ provedorId }) {
           }
         } : c
       ));
-      
+
       setShowEditModal(false);
       setEditingContact(null);
       setMessage('Contato atualizado com sucesso!');
@@ -216,12 +238,12 @@ export default function Contacts({ provedorId }) {
       const res = await axios.patch(`/api/contacts/${contactId}/toggle-block-atender/`, {}, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Atualizar estado local
-      setContatos(prev => prev.map(c => 
+      setContatos(prev => prev.map(c =>
         c.id === contactId ? { ...c, bloqueado_atender: res.data.bloqueado_atender } : c
       ));
-      
+
       setMessage(res.data.message);
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
@@ -235,16 +257,16 @@ export default function Contacts({ provedorId }) {
   const toggleSelect = (id) => {
     setSelected((prev) => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   };
-  
+
   // Filtrar contatos por busca (nome ou número) e por bloqueio
   const filteredContatos = useMemo(() => {
     let filtered = contatos;
-    
+
     // Filtrar por bloqueio primeiro
     if (filterBloqueados) {
       filtered = filtered.filter(contato => contato.bloqueado_atender === true);
     }
-    
+
     // Depois filtrar por busca
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase().trim();
@@ -255,10 +277,10 @@ export default function Contacts({ provedorId }) {
         return name.includes(searchLower) || phone.includes(searchLower) || email.includes(searchLower);
       });
     }
-    
+
     return filtered;
   }, [contatos, searchTerm, filterBloqueados]);
-  
+
   const selectAll = () => {
     const allFilteredIds = filteredContatos.map(c => c.id);
     const allSelected = allFilteredIds.every(id => selected.includes(id));
@@ -279,7 +301,7 @@ export default function Contacts({ provedorId }) {
         </div>
       );
     }
-    
+
     if (canal === 'telegram') {
       return (
         <div className="flex flex-col items-center gap-1">
@@ -288,7 +310,7 @@ export default function Contacts({ provedorId }) {
         </div>
       );
     }
-    
+
     if (canal === 'email') {
       return (
         <div className="flex flex-col items-center gap-1">
@@ -297,7 +319,7 @@ export default function Contacts({ provedorId }) {
         </div>
       );
     }
-    
+
     if (canal === 'webchat') {
       return (
         <div className="flex flex-col items-center gap-1">
@@ -306,7 +328,7 @@ export default function Contacts({ provedorId }) {
         </div>
       );
     }
-    
+
     if (canal === 'instagram') {
       return (
         <div className="flex flex-col items-center gap-1">
@@ -315,7 +337,7 @@ export default function Contacts({ provedorId }) {
         </div>
       );
     }
-    
+
     return (
       <div className="flex flex-col items-center gap-1">
         <MessageCircle className="w-6 h-6 text-muted-foreground" />
@@ -355,7 +377,7 @@ export default function Contacts({ provedorId }) {
         >
           {actions.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
         </select>
-        <button 
+        <button
           onClick={handleExecuteAction}
           className="bg-primary text-primary-foreground px-3 py-1 rounded text-sm font-medium hover:bg-primary/90"
         >
@@ -392,10 +414,10 @@ export default function Contacts({ provedorId }) {
         </button>
         <label className="flex items-center gap-1 bg-gradient-to-r from-orange-400 to-yellow-400 hover:from-orange-500 hover:to-yellow-500 text-white px-3 py-1 rounded text-sm font-medium cursor-pointer shadow-lg hover:shadow-xl transition-all duration-200">
           <Download className="w-4 h-4 rotate-180" /> Importar CSV
-          <input type="file" accept=".csv" className="hidden" onChange={() => alert('Funcionalidade em desenvolvimento')}/>
+          <input type="file" accept=".csv" className="hidden" onChange={() => alert('Funcionalidade em desenvolvimento')} />
         </label>
       </div>
-      
+
       {/* Modal Novo Contato */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -425,14 +447,14 @@ export default function Contacts({ provedorId }) {
           </div>
         </div>
       )}
-      
+
 
       {message && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
           {message}
         </div>
       )}
-      
+
       {/* Modal Editar Contato */}
       {showEditModal && editingContact && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -457,16 +479,16 @@ export default function Contacts({ provedorId }) {
           </div>
         </div>
       )}
-      
+
       {/* Tabela de contatos */}
       <div className="overflow-x-auto rounded-lg shadow bg-card">
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-muted">
             <tr>
               <th className="px-4 py-3 w-12">
-                <input 
-                  type="checkbox" 
-                  checked={selected.length === filteredContatos.length && filteredContatos.length > 0} 
+                <input
+                  type="checkbox"
+                  checked={selected.length === filteredContatos.length && filteredContatos.length > 0}
                   onChange={selectAll}
                   className="rounded border-gray-300"
                 />
@@ -490,9 +512,9 @@ export default function Contacts({ provedorId }) {
               filteredContatos.map(contato => (
                 <tr key={contato.id} className="hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-3">
-                    <input 
-                      type="checkbox" 
-                      checked={selected.includes(contato.id)} 
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(contato.id)}
                       onChange={() => toggleSelect(contato.id)}
                       className="rounded border-gray-300"
                     />
@@ -528,21 +550,19 @@ export default function Contacts({ provedorId }) {
                     <div className="flex justify-center">
                       <button
                         onClick={() => handleToggleBlockAtender(contato.id, contato.bloqueado_atender)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                          !contato.bloqueado_atender 
-                            ? 'bg-green-500' 
-                            : 'bg-red-700'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${!contato.bloqueado_atender
+                          ? 'bg-green-500'
+                          : 'bg-red-700'
+                          }`}
                         role="switch"
                         aria-checked={!contato.bloqueado_atender}
                         title={contato.bloqueado_atender ? 'Contato bloqueado - IA não responde' : 'Contato ativo - IA pode responder'}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            !contato.bloqueado_atender 
-                              ? 'translate-x-6' 
-                              : 'translate-x-1'
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${!contato.bloqueado_atender
+                            ? 'translate-x-6'
+                            : 'translate-x-1'
+                            }`}
                         />
                       </button>
                     </div>
@@ -561,6 +581,37 @@ export default function Contacts({ provedorId }) {
           </tbody>
         </table>
       </div>
+
+      {/* Paginação */}
+      {pagination.count > 0 && (
+        <div className="flex items-center justify-between mt-4 px-2">
+          <div className="text-sm text-muted-foreground">
+            Mostrando <span className="font-medium">{contatos.length}</span> de <span className="font-medium">{pagination.count}</span> contatos
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchContacts(pagination.previous)}
+              disabled={!pagination.previous}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${!pagination.previous
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                }`}
+            >
+              Anterior
+            </button>
+            <button
+              onClick={() => fetchContacts(pagination.next)}
+              disabled={!pagination.next}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${!pagination.next
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                }`}
+            >
+              Próxima
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

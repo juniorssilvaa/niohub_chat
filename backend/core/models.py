@@ -388,3 +388,40 @@ class Plano(models.Model):
 
     def __str__(self):
         return f"{self.nome} - R${self.preco} ({self.provedor.nome})"
+
+
+class RespostaRapida(models.Model):
+    """Respostas rápidas pré-cadastradas para uso no atendimento"""
+    provedor = models.ForeignKey(
+        Provedor,
+        on_delete=models.CASCADE,
+        related_name='respostas_rapidas',
+        verbose_name='Provedor'
+    )
+    titulo = models.CharField(
+        max_length=100,
+        verbose_name='Título / Atalho',
+        help_text='Ex: Fatura, Saudação, Horário — usado para filtrar com /'
+    )
+    conteudo = models.TextField(
+        verbose_name='Conteúdo da Resposta',
+        help_text='Texto completo que será enviado ao cliente'
+    )
+    criado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='respostas_rapidas_criadas',
+        verbose_name='Criado por'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Resposta Rápida'
+        verbose_name_plural = 'Respostas Rápidas'
+        ordering = ['titulo']
+
+    def __str__(self):
+        return f"{self.titulo} ({self.provedor.nome})"

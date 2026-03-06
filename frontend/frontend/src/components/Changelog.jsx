@@ -1,35 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { X, Calendar, Package, Sparkles, Shield, Zap, Database, Bug, Plus, Settings } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Calendar, Package } from 'lucide-react';
 
 const Changelog = ({ isOpen, onClose }) => {
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currentVersion, setCurrentVersion] = useState('2.24.0');
 
   useEffect(() => {
     const loadChangelog = async () => {
       try {
         setLoading(true);
-        // Carregar dados do backend
         const response = await fetch('/api/changelog/');
         if (response.ok) {
-          let data = null;
-          try {
-            data = await response.json();
-          } catch (e) {
-            console.error('Erro ao interpretar JSON do changelog:', e);
-          }
-          // API pode retornar um array direto ou um objeto { versions: [...] }
+          const data = await response.json();
           const versionsData = Array.isArray(data) ? data : (data?.versions || []);
-          setVersions(Array.isArray(versionsData) ? versionsData : []);
-          setCurrentVersion((data && (data.current_version || data.version)) || '2.24.0');
-        } else {
-          console.error('Erro ao carregar changelog do backend');
-          setVersions([]);
+          setVersions(versionsData);
         }
       } catch (error) {
         console.error('Erro ao carregar changelog:', error);
-        setVersions([]);
       } finally {
         setLoading(false);
       }
@@ -40,174 +27,127 @@ const Changelog = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  // Agrupa mudanças por módulo para uma versão específica
+  const groupByModule = (changes) => {
+    if (!Array.isArray(changes)) return {};
+    return changes.reduce((acc, change) => {
+      const module = change.module || 'Geral';
+      if (!acc[module]) acc[module] = [];
+      acc[module].push(change);
+      return acc;
+    }, {});
+  };
 
-  const getTypeColor = (type) => {
+  const getBadgeStyles = (type) => {
     switch (type) {
       case 'feature':
-        return 'text-green-400 bg-green-400/10';
+        return 'bg-blue-600 text-white'; // Novo (Azul)
       case 'improvement':
-        return 'text-blue-400 bg-blue-400/10';
+        return 'bg-teal-500 text-white'; // Atualização (Teal/Ciano)
       case 'fix':
-        return 'text-yellow-400 bg-yellow-400/10';
+        return 'bg-yellow-500 text-black'; // Correção (Amarelo)
       default:
-        return 'text-gray-400 bg-gray-400/10';
+        return 'bg-gray-600 text-white';
     }
   };
 
-  const getVersionTypeColor = (type) => {
+  const getBadgeLabel = (type) => {
     switch (type) {
-      case 'major':
-        return 'text-purple-400 bg-purple-400/10 border-purple-400/20';
-      case 'minor':
-        return 'text-blue-400 bg-blue-400/10 border-blue-400/20';
-      case 'patch':
-        return 'text-green-400 bg-green-400/10 border-green-400/20';
-      default:
-        return 'text-gray-400 bg-gray-400/10 border-gray-400/20';
-    }
-  };
-
-  const getChangeIcon = (type) => {
-    switch (type) {
-      case 'feature':
-        return <Sparkles className="w-4 h-4" />;
-      case 'improvement':
-        return <Zap className="w-4 h-4" />;
-      case 'fix':
-        return <Bug className="w-4 h-4" />;
-      case 'security':
-        return <Shield className="w-4 h-4" />;
-      default:
-        return <Plus className="w-4 h-4" />;
-    }
-  };
-
-  const getTypeLabel = (type) => {
-    switch (type) {
-      case 'feature':
-        return 'Novo';
-      case 'improvement':
-        return 'Melhoria';
-      case 'fix':
-        return 'Correção';
-      case 'security':
-        return 'Segurança';
-      default:
-        return 'Outro';
+      case 'feature': return 'Novo';
+      case 'improvement': return 'Atualização';
+      case 'fix': return 'Correção';
+      default: return 'Outro';
     }
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'Data não informada';
-    // Evitar deslocamento por fuso quando vier em formato YYYY-MM-DD
-    const parts = String(dateString).split('-').map(Number);
-    if (parts.length === 3 && parts.every(n => !Number.isNaN(n))) {
-      const [year, month, day] = parts;
-      const localDate = new Date(year, month - 1, day); // Data local sem UTC
-      return localDate.toLocaleDateString('pt-BR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+    if (!dateString) return '';
+    const parts = dateString.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
-    const fallback = new Date(dateString);
-    return isNaN(fallback.getTime())
-      ? String(dateString)
-      : fallback.toLocaleDateString('pt-BR', { year: 'numeric', month: 'long', day: 'numeric' });
+    return dateString;
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+      <div className="bg-background rounded-xl border border-border w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+
+        {/* Header Fixo */}
+        <div className="flex items-center justify-between p-5 border-b border-border bg-card">
           <div className="flex items-center gap-3">
-            <Package className="w-6 h-6 text-blue-400" />
-            <div>
-              <h2 className="text-xl font-semibold text-white">Changelog</h2>
-              <p className="text-sm text-gray-400">Histórico de atualizações do sistema</p>
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Package className="w-5 h-5 text-primary" />
             </div>
+            <h2 className="text-lg font-semibold text-foreground uppercase tracking-wider">Histórico de Versões</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            className="p-2 hover:bg-muted rounded-full transition-colors group"
           >
-            <X className="w-5 h-5 text-gray-400" />
+            <X className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+        {/* Scrolling Content */}
+        <div className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-muted-foreground/20">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-              <span className="ml-3 text-gray-400">Carregando changelog...</span>
-            </div>
-          ) : versions.length === 0 ? (
-            <div className="text-center py-12">
-              <Package className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-400">Nenhuma versão encontrada</p>
+            <div className="flex flex-col items-center justify-center py-24 gap-4">
+              <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
+              <p className="text-muted-foreground font-light tracking-wide">Sincronizando melhorias...</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {versions.map((version, index) => (
-                <div key={version.version} className="relative">
-                  {/* Version Header */}
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className={`px-3 py-1 rounded-full text-xs font-medium border ${getVersionTypeColor(version?.version_type || version?.type)}`}>
-                      {(version?.version_type || version?.type || 'patch').toUpperCase()}
+            <div className="divide-y divide-border">
+              {versions.map((v) => (
+                <div key={v.version} className="p-8 last:border-b-0 space-y-8 bg-card/30">
+
+                  {/* Versão Header (Estilo Imagem Referência) */}
+                  <div className="flex items-center justify-between border-b border-border pb-3">
+                    <h3 className="text-xl font-bold text-foreground">
+                      Versão: {v.version}
+                    </h3>
+                    <div className="flex items-center gap-2 text-muted-foreground font-medium bg-muted px-3 py-1 rounded-full text-sm border border-border">
+                      <Calendar className="w-4 h-4" />
+                      <span>{formatDate(v.date)}</span>
                     </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">{version?.version || 'v0.0.0'}</h3>
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <Calendar className="w-4 h-4" />
-                        <span>{version?.date ? formatDate(version.date) : 'Data não informada'}</span>
-                      </div>
-                    </div>
-                    {index === 0 && (
-                      <div className="ml-auto">
-                        <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full border border-blue-500/30">
-                          Atual
-                        </span>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Version Title */}
-                  <h4 className="text-base font-medium text-gray-200 mb-3">{version?.title || 'Atualizações'}</h4>
+                  {/* Grupos por Módulo */}
+                  <div className="space-y-10">
+                    {Object.entries(groupByModule(v.changes)).map(([module, changes]) => (
+                      <div key={module} className="space-y-4">
+                        <h4 className="text-muted-foreground font-bold text-xs uppercase tracking-widest flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(59,130,246,0.8)]"></span>
+                          {module}
+                        </h4>
 
-                  {/* Changes */}
-                  <div className="space-y-3">
-                    {(Array.isArray(version?.changes) ? version.changes : []).map((change, changeIndex) => (
-                      <div key={changeIndex} className="flex items-start gap-3 p-3 bg-gray-800/50 rounded-lg">
-                        <div className={`p-1.5 rounded-lg ${getTypeColor(change?.type)}`}>
-                          {getChangeIcon(change?.type)}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${getTypeColor(change?.type)}`}>
-                              {getTypeLabel(change?.type)}
-                            </span>
-                            {change?.title && (
-                              <span className="text-sm font-medium text-gray-200">{change.title}</span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-300">
-                            {typeof change === 'string' ? change : (change?.description || change?.text || 'Atualização')}
-                          </p>
+                        <div className="space-y-5 pl-4 border-l border-border ml-0.5">
+                          {changes.map((change, idx) => (
+                            <div key={idx} className="group relative">
+                              <div className="flex items-start gap-4">
+                                <span className={`shrink-0 px-2 py-0.5 mt-0.5 rounded text-[10px] uppercase font-bold tracking-tighter shadow-sm ${getBadgeStyles(change.type)}`}>
+                                  {getBadgeLabel(change.type)}
+                                </span>
+
+                                <div className="flex-1">
+                                  <div className="text-[15px] leading-relaxed text-foreground/90 group-hover:text-foreground transition-colors">
+                                    <span className="font-medium">{change.title}</span>
+                                    {change.description && (
+                                      <span className="text-muted-foreground text-sm ml-2 font-normal italic">
+                                        — {change.description}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
-                    {(!Array.isArray(version?.changes) || version.changes.length === 0) && (
-                      <div className="text-sm text-gray-400">Sem itens listados nesta versão.</div>
-                    )}
                   </div>
-
-                  {/* Separator */}
-                  {index < versions.length - 1 && (
-                    <div className="mt-6 mb-6 border-t border-gray-700"></div>
-                  )}
                 </div>
               ))}
             </div>
@@ -215,18 +155,13 @@ const Changelog = ({ isOpen, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-700 bg-gray-800/50">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-400">
-              Versão atual: <span className="text-blue-400 font-medium">{currentVersion}</span>
-            </div>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              Fechar
-            </button>
-          </div>
+        <div className="p-5 bg-card border-t border-border text-center">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-muted hover:bg-muted/80 text-foreground text-sm font-semibold rounded-lg border border-border transition-all duration-300"
+          >
+            Continuar navegando
+          </button>
         </div>
       </div>
     </div>

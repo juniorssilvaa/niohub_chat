@@ -51,7 +51,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   const [contatoExistente, setContatoExistente] = useState({
     busca: '',
     contato: null,
-    mensagem: ''
+    mensagem: '',
+    usarTemplate: false,
+    templateSelecionado: null,
+    canalId: null
   });
 
   const [enviandoAtendimento, setEnviandoAtendimento] = useState(false);
@@ -90,12 +93,15 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   useEffect(() => {
     if (modalNovoContato && novoContato.canal === 'whatsapp') {
       buscarCanalWhatsApp();
-    } else if (!modalNovoContato) {
+    } else if (modalContatoExistente) {
+      buscarCanalWhatsApp();
+    } else if (!modalNovoContato && !modalContatoExistente) {
       // Limpar templates quando fechar modal
       setTemplates([]);
       setNovoContato(prev => ({ ...prev, usarTemplate: false, templateSelecionado: null, canalId: null }));
+      setContatoExistente(prev => ({ ...prev, usarTemplate: false, templateSelecionado: null, canalId: null }));
     }
-  }, [modalNovoContato, novoContato.canal]);
+  }, [modalNovoContato, modalContatoExistente, novoContato.canal]);
 
   // Função para buscar templates do canal WhatsApp
   const buscarTemplates = async (canalId) => {
@@ -170,6 +176,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
       if (canalWhatsApp) {
         setNovoContato(prev => ({ ...prev, canalId: canalWhatsApp.id }));
+        setContatoExistente(prev => ({ ...prev, canalId: canalWhatsApp.id }));
         buscarTemplates(canalWhatsApp.id);
       } else {
         console.warn('Nenhum canal WhatsApp Oficial ativo encontrado para o provedor');
@@ -322,8 +329,19 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
   //  Função para criar atendimento com contato existente
   const handleContatoExistente = async () => {
-    if (!contatoExistente.contato || !contatoExistente.mensagem) {
-      alert('Por favor, selecione um contato e digite a mensagem');
+    if (!contatoExistente.contato) {
+      alert('Por favor, selecione um contato');
+      return;
+    }
+
+    if (!contatoExistente.usarTemplate && !contatoExistente.mensagem) {
+      alert('Por favor, digite uma mensagem ou selecione um template');
+      return;
+    }
+
+    // Se usar template, deve ter template selecionado
+    if (contatoExistente.usarTemplate && !contatoExistente.templateSelecionado) {
+      alert('Por favor, selecione um template');
       return;
     }
 
@@ -332,7 +350,42 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
     try {
-      //  USAR ENDPOINT COMPLETO para contato existente
+      // Se usar template, usar endpoint de template
+      if (contatoExistente.usarTemplate && contatoExistente.canalId) {
+        const template = templates.find(t => t.name === contatoExistente.templateSelecionado);
+
+        if (!template) {
+          alert('Template não encontrado');
+          setEnviandoAtendimento(false);
+          return;
+        }
+
+        const response = await axios.post('/api/conversations/start-with-template/', {
+          phone: contatoExistente.contato.phone,
+          template_name: template.name,
+          template_language: template.language || 'pt_BR',
+          template_components: [],
+          canal_id: contatoExistente.canalId,
+          contact_name: contatoExistente.contato.name
+        }, {
+          headers: { Authorization: `Token ${token}` }
+        });
+
+        if (response.data.success) {
+          alert('Template enviado com sucesso! A conversa aparecerá no painel em instantes.');
+          setContatoExistente({ busca: '', contato: null, mensagem: '', usarTemplate: false, templateSelecionado: null, canalId: null });
+          setModalContatoExistente(false);
+          setContatosEncontrados([]);
+          setTimeout(() => fetchConversations(true), 1000);
+        } else {
+          throw new Error(response.data.error || 'Erro ao enviar template');
+        }
+
+        setEnviandoAtendimento(false);
+        return;
+      }
+
+      // Fluxo original para mensagem normal
       const userResponse = await axios.get('/api/auth/me/', {
         headers: { Authorization: `Token ${token}` }
       });
@@ -350,7 +403,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         throw new Error('Nenhum inbox encontrado');
       }
 
-      // 2. Criar conversa
+      // 2. Criar conversa (incluindo assignee_id para inibir IA)
       const conversationResponse = await axios.post('/api/conversations/', {
         contact_id: contatoExistente.contato.id,
         inbox_id: inbox.id,
@@ -369,7 +422,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       });
 
       alert('Atendimento criado com contato existente! Aparecerá no painel em instantes.');
-      setContatoExistente({ busca: '', contato: null, mensagem: '' });
+      setContatoExistente({ busca: '', contato: null, mensagem: '', usarTemplate: false, templateSelecionado: null, canalId: null });
       setModalContatoExistente(false);
       setContatosEncontrados([]);
 
@@ -378,7 +431,8 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
     } catch (error) {
       // Erro ao enviar para contato existente
-      alert('Erro ao enviar mensagem: ' + (error.response?.data?.detail || error.message));
+      const errorMessage = error.response?.data?.error || error.response?.data?.detail || error.message;
+      alert('Erro ao enviar mensagem: ' + errorMessage);
     } finally {
       setEnviandoAtendimento(false);
     }
@@ -1115,8 +1169,8 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === tab.id
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
                 }`}
             >
               {tab.label}
@@ -1357,11 +1411,11 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                   <select
                     value={novoContato.templateSelecionado || ''}
                     onChange={(e) => setNovoContato(prev => ({ ...prev, templateSelecionado: e.target.value }))}
-                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground"
                   >
-                    <option value="">Selecione um template</option>
+                    <option value="" className="bg-background text-foreground">Selecione um template</option>
                     {templates.map((template, index) => (
-                      <option key={template.id || template.name || `template-${index}`} value={template.name}>
+                      <option key={template.id || template.name || `template-${index}`} value={template.name} className="bg-background text-foreground">
                         {template.name} ({template.language || 'pt_BR'})
                       </option>
                     ))}
@@ -1456,15 +1510,58 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             )}
 
             <div>
-              <label className="block text-sm font-medium mb-2">Mensagem</label>
-              <textarea
-                value={contatoExistente.mensagem}
-                onChange={(e) => setContatoExistente(prev => ({ ...prev, mensagem: e.target.value }))}
-                placeholder="Digite a mensagem a ser enviada"
-                rows={3}
-                className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-              />
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={contatoExistente.usarTemplate}
+                  onChange={(e) => setContatoExistente(prev => ({
+                    ...prev,
+                    usarTemplate: e.target.checked,
+                    templateSelecionado: e.target.checked ? prev.templateSelecionado : null,
+                    mensagem: e.target.checked ? '' : prev.mensagem
+                  }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-medium">Usar template de mensagem (para iniciar conversa após 24h)</span>
+              </label>
             </div>
+
+            {contatoExistente.usarTemplate ? (
+              <div>
+                <label className="block text-sm font-medium mb-2">Template</label>
+                {carregandoTemplates ? (
+                  <div className="text-sm text-muted-foreground">Carregando templates...</div>
+                ) : templates.length > 0 ? (
+                  <select
+                    value={contatoExistente.templateSelecionado || ''}
+                    onChange={(e) => setContatoExistente(prev => ({ ...prev, templateSelecionado: e.target.value }))}
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground"
+                  >
+                    <option value="" className="bg-background text-foreground">Selecione um template</option>
+                    {templates.map((template, index) => (
+                      <option key={template.id || template.name || `template-${index}`} value={template.name} className="bg-background text-foreground">
+                        {template.name} ({template.language || 'pt_BR'})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Nenhum template aprovado encontrado. Crie templates em Configurações → Integrações → WhatsApp Oficial
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium mb-2">Mensagem</label>
+                <textarea
+                  value={contatoExistente.mensagem}
+                  onChange={(e) => setContatoExistente(prev => ({ ...prev, mensagem: e.target.value }))}
+                  placeholder="Digite a mensagem a ser enviada"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-end space-x-2 pt-4">
               <button
