@@ -97,7 +97,7 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
   };
 
   return (
-    <div className="h-screen bg-background text-foreground flex overflow-hidden w-full">
+    <div className="fixed inset-0 bg-background text-foreground flex overflow-hidden w-full">
       <Sidebar
         userRole={userRole}
         userPermissions={user?.permissions || []}
@@ -106,14 +106,14 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
         onClose={() => setSidebarOpen(false)}
         onCollapseChange={setSidebarCollapsed}
       />
-      <div className="flex-1 flex flex-col overflow-hidden transition-all duration-300 min-w-0 w-full">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 w-full h-full">
         <Topbar
           onLogout={handleLogout}
           onChangelog={handleChangelog}
           onNotifications={handleNotifications}
           onMenuClick={() => setSidebarOpen(true)}
         />
-        <div className="flex-1 overflow-y-auto w-full overflow-x-hidden">
+        <div className="flex-1 overflow-y-auto w-full overflow-x-hidden min-h-0 relative">
           <div className="w-full h-full">
             <Routes>
               <Route path="dashboard" element={<DashboardPrincipal provedorId={provedorId} />} />

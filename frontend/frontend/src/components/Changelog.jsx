@@ -153,16 +153,6 @@ const Changelog = ({ isOpen, onClose }) => {
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="p-5 bg-card border-t border-border text-center">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-muted hover:bg-muted/80 text-foreground text-sm font-semibold rounded-lg border border-border transition-all duration-300"
-          >
-            Continuar navegando
-          </button>
-        </div>
       </div>
     </div>
   );

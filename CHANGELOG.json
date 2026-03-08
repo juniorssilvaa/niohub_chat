@@ -1,6 +1,26 @@
 {
-  "current_version": "2.26.6",
+  "current_version": "2.26.7",
   "versions": [
+    {
+      "version": "2.26.7",
+      "version_type": "patch",
+      "date": "2026-03-07",
+      "title": "Configuração de Sons e Melhorias Visuais",
+      "changes": [
+        {
+          "type": "feature",
+          "module": "Atendimento",
+          "title": "Configuração de Sons",
+          "description": "Agora é possível configurar som para novas mensagens e novos atendimentos."
+        },
+        {
+          "type": "improvement",
+          "module": "Interface",
+          "title": "Novas Cores de Status",
+          "description": "Atualização das cores dos cards de status para melhor visualização (Indigo, Laranja e Verde)."
+        }
+      ]
+    },
     {
       "version": "2.26.6",
       "version_type": "minor",

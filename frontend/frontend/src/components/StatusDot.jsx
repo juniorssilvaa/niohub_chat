@@ -54,7 +54,7 @@ const StatusDot = ({ className = '' }) => {
   
   return (
     <div 
-      className={`p-2 rounded-lg transition-colors text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative flex items-center justify-center flex-shrink-0 ${className}`}
+      className={`p-2 rounded-lg transition-colors text-topbar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative flex items-center justify-center flex-shrink-0 ${className}`}
       title={getTooltip()}
       aria-label={getTooltip()}
       role="status"

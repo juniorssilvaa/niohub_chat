@@ -194,8 +194,8 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
   // Desktop: sidebar fixo
   return (
     <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
-      <aside className={`h-screen ${isCollapsed ? 'w-16' : 'w-64'} transition-all duration-300 z-30 flex-shrink-0 flex flex-col`}>
-        <div className={`bg-sidebar text-sidebar-foreground border-r border-border h-full flex flex-col ${mobileOpen ? 'mobile-open' : ''}`}>
+      <aside className={`h-full ${isCollapsed ? 'w-16' : 'w-64'} z-30 flex-shrink-0 flex flex-col`}>
+        <div className={`bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-full flex flex-col ${mobileOpen ? 'mobile-open' : ''}`}>
           {/* TOPO FIXO - Logo e Botão */}
           <div className={`p-4 border-b border-border flex items-center flex-shrink-0 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
             <img src={logo} alt="NioChat" className={`h-8 transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'block'}`} />

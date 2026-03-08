@@ -402,7 +402,7 @@ const NotificationBell = () => {
       {/* Sino de notificações */}
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="relative p-2 rounded-lg transition-colors text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        className="relative p-2 rounded-lg transition-colors text-topbar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
       >
         <Bell size={20} />
         {unreadCount > 0 && (

@@ -26,9 +26,6 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   const isFaviconBlinkingRef = useRef(false);
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const authReady = useMemo(() => !!user, [user]);
-  const audioRef = useRef(null);
-  const prevConversationsRef = useRef({}); // { [id]: lastMessageIdOrTime }
-  const hasSoundInitRef = useRef(false);
 
   //  Estados para novo atendimento
   const [showMenuAtendimento, setShowMenuAtendimento] = useState(false);
@@ -87,7 +84,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   };
 
   // Removido prompt de desbloqueio (UX simplificada)
-  useEffect(() => { }, [authReady, user?.sound_notifications_enabled]);
+  useEffect(() => { }, [authReady]);
 
   // Buscar templates quando modal abrir e canal for WhatsApp
   useEffect(() => {
@@ -468,38 +465,6 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     localStorage.setItem('conversationListActiveTab', activeTab);
   }, [activeTab]);
 
-  // Preferências de som
-  const isSoundEnabled = () => {
-    if (typeof user?.sound_notifications_enabled === 'boolean') return user.sound_notifications_enabled;
-    return localStorage.getItem('sound_notifications_enabled') === 'true';
-  };
-  const getNewMessageSound = () => {
-    return user?.new_message_sound || localStorage.getItem('sound_new_message') || 'mixkit-bell-notification-933.wav';
-  };
-  const getNewConversationSound = () => {
-    return user?.new_conversation_sound || localStorage.getItem('sound_new_conversation') || 'mixkit-digital-quick-tone-2866.wav';
-  };
-  const playSound = (fileName) => {
-    if (!isSoundEnabled()) return;
-    try {
-      const src = `/sounds/${fileName}`;
-      if (!audioRef.current) {
-        audioRef.current = new Audio(src);
-      } else {
-        audioRef.current.pause();
-        audioRef.current.src = src;
-      }
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch((error) => {
-        // Autoplay bloqueado: silenciar erro
-        // Log removido('Autoplay bloqueado pelo navegador:', error);
-      });
-    } catch (e) {
-      // Silenciar erros de autoplay
-      // Log removido('Erro ao reproduzir som:', e);
-    }
-  };
-
   const setFavicon = (hrefBase) => {
     try {
       const href = `${hrefBase}?v=${Date.now()}`; // cache-busting
@@ -546,19 +511,6 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     }
     isFaviconBlinkingRef.current = false;
     setFavicon('/favicon.ico');
-  };
-
-  const unlockAudio = () => {
-    try {
-      const src = `/sounds/${getNewMessageSound()}`;
-      if (!audioRef.current) {
-        audioRef.current = new Audio(src);
-      }
-      audioRef.current.currentTime = 0;
-      audioRef.current.play()
-        .then(() => setShowSoundPrompt(false))
-        .catch(() => setShowSoundPrompt(true));
-    } catch (_) { }
   };
 
   const fetchTimeoutRef = useRef(null);
@@ -632,29 +584,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           }
         }
 
-        try {
-          const prevMap = prevConversationsRef.current || {};
-          const nextMap = {};
-
-          activeConversations.forEach(conv => {
-            const convId = conv.id;
-            const lastMsgKey = conv.last_message?.id || conv.last_message?.created_at || conv.updated_at || conv.created_at || 'none';
-            nextMap[convId] = lastMsgKey;
-
-            if (hasSoundInitRef.current) {
-              if (!(convId in prevMap)) {
-                playSound(getNewConversationSound());
-              } else if (prevMap[convId] !== lastMsgKey) {
-                playSound(getNewMessageSound());
-              }
-            }
-          });
-
-          prevConversationsRef.current = nextMap;
-          if (!hasSoundInitRef.current) {
-            hasSoundInitRef.current = true;
-          }
-        } catch (_) { }
+        // Lógica de som removida (centralizada no NotificationContext)
 
         setConversations(activeConversations);
         setHasInitialized(true);
@@ -795,24 +725,12 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             data.event_type === 'messages';
 
           if (isConversationEvent || isMessageEvent) {
-            // Tocar som e piscar favicon conforme o tipo de evento
+            // Piscar favicon conforme o tipo de evento (som centralizado no NotificationContext)
             try {
-              const evt = data.type || data.event_type;
               if (isMessageEvent) {
-                playSound(getNewMessageSound());
                 startBlinkingFavicon();
               } else if (isConversationEvent) {
-                const conv = data.conversation || data.payload || data.data;
-                const status = conv?.status || conv?.additional_attributes?.status;
-                const assignedToMe = conv?.assignee && user && (
-                  (conv.assignee.id && conv.assignee.id === user.id) ||
-                  (conv.assignee.username && conv.assignee.username === user.username)
-                );
-                const isUnassignedPending = !conv?.assignee && status === 'pending';
-                if (!conv || assignedToMe || isUnassignedPending) {
-                  playSound(getNewConversationSound());
-                  startBlinkingFavicon();
-                }
+                startBlinkingFavicon();
               }
             } catch (_) { }
 
@@ -1164,23 +1082,38 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
         {/* Tabs */}
         <div className="flex space-x-1 bg-muted rounded-lg p-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === tab.id
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-                }`}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span className="ml-1 bg-primary text-primary-foreground text-xs px-1 py-0.5 rounded-full">
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            let activeClass = 'bg-background text-foreground shadow-sm';
+
+            if (isActive) {
+              if (tab.id === 'mine') {
+                activeClass = 'bg-gradient-premium-blue shadow-md scale-[1.02]';
+              } else if (tab.id === 'unassigned') {
+                activeClass = 'bg-gradient-premium-orange shadow-md scale-[1.02]';
+              } else if (tab.id === 'all') {
+                activeClass = 'bg-gradient-premium-purple shadow-md scale-[1.02]';
+              }
+            }
+
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${isActive
+                  ? activeClass
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10'
+                  }`}
+              >
+                {tab.label}
+                {tab.count > 0 && (
+                  <span className={`ml-1 text-xs px-1 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-primary text-primary-foreground'}`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -1254,85 +1187,99 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             )}
           </div>
         ) : (
-          filteredConversations.map((conversation) => (
-            <div
-              key={conversation.id}
-              onClick={() => onConversationSelect(conversation)}
-              className={`p-3 border-b border-border cursor-pointer transition-colors hover:bg-muted/50 ${selectedConversation?.id === conversation.id ? 'bg-muted' : ''
-                }`}
-            >
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0">
-                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                    {conversation.contact?.avatar ? (
-                      <img
-                        src={conversation.contact.avatar}
-                        alt={conversation.contact.name}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <User size={20} className="text-primary" />
-                    )}
-                  </div>
-                </div>
+          filteredConversations.map((conversation) => {
+            const status = conversation.status || conversation.additional_attributes?.status;
+            let statusBorder = '';
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-foreground truncate">
-                      {conversation.contact?.name || 'Contato sem nome'}
-                    </h3>
-                    <span className="text-xs text-muted-foreground">
-                      {conversation.last_message?.created_at ?
-                        new Date(conversation.last_message.created_at).toLocaleTimeString('pt-BR', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }) : ''
-                      }
-                    </span>
+            if (status === 'snoozed') {
+              statusBorder = 'status-border-ia'; // IA
+            } else if (status === 'pending') {
+              statusBorder = 'status-border-espera'; // Espera
+            } else if (status === 'open' || !status) {
+              statusBorder = 'status-border-atendimento'; // Atendimento
+            }
+
+            return (
+              <div
+                key={conversation.id}
+                onClick={() => onConversationSelect(conversation)}
+                className={`p-3 border-b border-border border-l-4 cursor-pointer transition-all duration-200 hover:bg-muted/50 ${statusBorder} ${selectedConversation?.id === conversation.id ? 'bg-topbar text-topbar-foreground shadow-inner' : ''
+                  }`}
+              >
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${selectedConversation?.id === conversation.id ? 'bg-white/20' : 'bg-primary/10'}`}>
+                      {conversation.contact?.avatar ? (
+                        <img
+                          src={conversation.contact.avatar}
+                          alt={conversation.contact.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User size={20} className={selectedConversation?.id === conversation.id ? 'text-white' : 'text-primary'} />
+                      )}
+                    </div>
                   </div>
 
-                  <p className="text-sm text-muted-foreground truncate mt-1">
-                    {(() => {
-                      const msg = conversation.last_message;
-                      if (!msg) return 'Nenhuma mensagem';
-
-                      // Se o conteúdo for vazio ou apenas pontos, verificar se é mensagem interativa
-                      if (!msg.content || msg.content === '...') {
-                        const attrs = msg.additional_attributes;
-                        if (attrs?.interactive_rows?.length > 0) return '📋 Menu de Opções';
-                        if (attrs?.interactive_buttons?.length > 0) return '🔘 Botões Interativos';
-                      }
-
-                      return msg.content || 'Nenhuma mensagem';
-                    })()}
-                  </p>
-
-                  {/*  Tempo de atendimento em aberto */}
-                  <div className="mt-2">
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-600 text-white">
-                      <Clock size={12} className="mr-1" />
-                      Há {(() => {
-                        const agora = new Date();
-                        const inicio = new Date(conversation.created_at);
-                        const diffMs = agora - inicio;
-                        const diffMinutos = Math.floor(diffMs / (1000 * 60));
-                        const diffHoras = Math.floor(diffMinutos / 60);
-                        const diffDias = Math.floor(diffHoras / 24);
-
-                        if (diffDias > 0) {
-                          return `${diffDias} dia${diffDias > 1 ? 's' : ''}`;
-                        } else if (diffHoras > 0) {
-                          return `${diffHoras}h ${diffMinutos % 60}min`;
-                        } else {
-                          return `${diffMinutos} min`;
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className={`text-sm font-medium truncate ${selectedConversation?.id === conversation.id ? 'text-topbar-foreground' : 'text-foreground'}`}>
+                        {conversation.contact?.name || 'Contato sem nome'}
+                      </h3>
+                      <span className={`text-xs ${selectedConversation?.id === conversation.id ? 'text-topbar-foreground/70' : 'text-muted-foreground'}`}>
+                        {conversation.last_message?.created_at ?
+                          new Date(conversation.last_message.created_at).toLocaleTimeString('pt-BR', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : ''
                         }
+                      </span>
+                    </div>
+
+                    <p className={`text-sm truncate mt-1 ${selectedConversation?.id === conversation.id ? 'text-topbar-foreground/80' : 'text-muted-foreground'}`}>
+                      {(() => {
+                        const msg = conversation.last_message;
+                        // ... código existente ...
+                        if (!msg) return 'Nenhuma mensagem';
+
+                        // Se o conteúdo for vazio ou apenas pontos, verificar se é mensagem interativa
+                        if (!msg.content || msg.content === '...') {
+                          const attrs = msg.additional_attributes;
+                          if (attrs?.interactive_rows?.length > 0) return '📋 Menu de Opções';
+                          if (attrs?.interactive_buttons?.length > 0) return '🔘 Botões Interativos';
+                        }
+
+                        return msg.content || 'Nenhuma mensagem';
                       })()}
-                    </span>
+                    </p>
+
+                    {/*  Tempo de atendimento em aberto */}
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${selectedConversation?.id === conversation.id ? 'bg-white/20 text-white' : 'bg-gray-600 text-white'}`}>
+                        <Clock size={12} className="mr-1" />
+                        Há {(() => {
+                          const agora = new Date();
+                          const inicio = new Date(conversation.created_at);
+                          const diffMs = agora - inicio;
+                          const diffMinutos = Math.floor(diffMs / (1000 * 60));
+                          const diffHoras = Math.floor(diffMinutos / 60);
+                          const diffDias = Math.floor(diffHoras / 24);
+
+                          if (diffDias > 0) {
+                            return `${diffDias} dia${diffDias > 1 ? 's' : ''}`;
+                          } else if (diffHoras > 0) {
+                            return `${diffHoras}h ${diffMinutos % 60}min`;
+                          } else {
+                            return `${diffMinutos} min`;
+                          }
+                        })()}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

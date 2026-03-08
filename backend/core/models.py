@@ -50,12 +50,12 @@ class User(AbstractUser):
     )
     new_message_sound = models.CharField(
         max_length=200,
-        default='mixkit-bell-notification-933.wav',
+        default='01.mp3',
         verbose_name='Som para Novas Mensagens'
     )
     new_conversation_sound = models.CharField(
         max_length=200,
-        default='mixkit-digital-quick-tone-2866.wav',
+        default='02.mp3',
         verbose_name='Som para Novas Conversas'
     )
     session_timeout = models.IntegerField(

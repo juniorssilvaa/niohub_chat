@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.permissions import AllowAny
 from rest_framework.decorators import permission_classes
 from . import views
+from .views_provider_config import ProviderConfigView
 
 # Router apenas com viewsets existentes em core.views
 router = DefaultRouter()
@@ -36,6 +37,7 @@ urlpatterns = [
     path('supabase-config/', views.supabase_config_view, name='supabase-config'),
     path('system-config/', views.SystemConfigView.as_view(), name='system-config'),
     path('system-config/<int:pk>/', views.SystemConfigView.as_view(), name='system-config-detail'),
+    path('provider/config/', ProviderConfigView.as_view(), name='provider-config'),
 
     # Router com viewsets (deve vir depois das rotas específicas)
     path('', include(router.urls)),

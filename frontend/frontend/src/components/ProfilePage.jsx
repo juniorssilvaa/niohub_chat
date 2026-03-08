@@ -30,8 +30,8 @@ export default function ProfilePage() {
     },
     notifications: {
       soundNotifications: false,
-      newMessageSound: 'message_in_01.mp3',
-      newConversationSound: 'chat_new_01.mp3'
+      newMessageSound: '01.mp3',
+      newConversationSound: '02.mp3'
     },
     security: {
       twoFactorAuth: false,
@@ -50,44 +50,20 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadAvailableSounds = async () => {
       try {
-        // Lista de sons disponíveis baseada nos arquivos na pasta /sounds
-        const allSounds = [
-          'message_in_01.mp3',
-          'message_in_02.mp3',
-          'message_in_03.mp3',
-          'message_in_04.mp3',
-          'message_in_05.mp3',
-          'message_in_06.mp3',
-          'message_in_07.mp3',
-          'message_in_08.mp3',
-          'message_in_09.mp3',
-          'message_in_010.mp3',
-          'message_in_011.mp3',
-          'chat_new_01.mp3',
-          'chat_new_02.mp3',
-          'chat_new_03.mp3',
-          'chat_new_04.mp3',
-          'chat_new_05.mp3',
-          'chat_new_06.mp3',
-          'chat_new_07.mp3',
-          'chat_new_08.mp3',
-          'chat_new_09.mp3',
-          'chat_new_010.mp3',
-          'chat_new_011.mp3'
-        ];
-        
-        // Filtrar sons por categoria
-        const messageSoundsList = allSounds.filter(sound => sound.startsWith('message_in_'));
-        const conversationSoundsList = allSounds.filter(sound => sound.startsWith('chat_new_'));
-        
+        // Lista de sons disponíveis baseada nos arquivos na pasta /sounds (01.mp3 até 14.mp3)
+        const allSounds = Array.from({ length: 14 }, (_, i) => {
+          const num = (i + 1).toString().padStart(2, '0');
+          return `${num}.mp3`;
+        });
+
         setAvailableSounds(allSounds);
-        setMessageSounds(messageSoundsList);
-        setConversationSounds(conversationSoundsList);
+        setMessageSounds(allSounds); // Usar os mesmos sons para ambos
+        setConversationSounds(allSounds);
       } catch (error) {
         console.error('Erro ao carregar sons:', error);
       }
     };
-    
+
     loadAvailableSounds();
   }, []);
 
@@ -99,14 +75,14 @@ export default function ProfilePage() {
         const response = await axios.get('/api/auth/me/', {
           headers: { Authorization: `Token ${token}` }
         });
-        
+
         const user = response.data;
         setUserData(user);
         const storedSoundEnabled = localStorage.getItem('sound_notifications_enabled');
         const storedMsgSound = localStorage.getItem('sound_new_message');
         const storedConvSound = localStorage.getItem('sound_new_conversation');
         const userLanguage = user.language || 'pt';
-        
+
         setSettings({
           ...settings,
           profile: {
@@ -118,8 +94,8 @@ export default function ProfilePage() {
           },
           notifications: {
             ...settings.notifications,
-            soundNotifications: typeof user.sound_notifications_enabled === 'boolean' 
-              ? user.sound_notifications_enabled 
+            soundNotifications: typeof user.sound_notifications_enabled === 'boolean'
+              ? user.sound_notifications_enabled
               : (storedSoundEnabled ? storedSoundEnabled === 'true' : settings.notifications.soundNotifications),
             newMessageSound: user.new_message_sound || storedMsgSound || settings.notifications.newMessageSound,
             newConversationSound: user.new_conversation_sound || storedConvSound || settings.notifications.newConversationSound
@@ -145,12 +121,12 @@ export default function ProfilePage() {
   const handleSaveProfile = async () => {
     setLoading(true);
     setMessage('');
-    
+
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       const [firstName, ...lastNameParts] = settings.profile.name.split(' ');
       const lastName = lastNameParts.join(' ') || '';
-      
+
       await axios.patch('/api/auth/me/', {
         first_name: firstName,
         last_name: lastName,
@@ -162,12 +138,12 @@ export default function ProfilePage() {
       }, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Atualizar idioma no contexto
       if (settings.profile.language !== language) {
         changeLanguage(settings.profile.language);
       }
-      
+
       // Atualizar timeout da sessão
       try {
         await axios.patch('/api/auth/me/', {
@@ -175,13 +151,13 @@ export default function ProfilePage() {
         }, {
           headers: { Authorization: `Token ${token}` }
         });
-        
+
         // Atualizar o timeout no frontend
         await updateTimeout();
       } catch (error) {
         console.error('Erro ao atualizar timeout da sessão:', error);
       }
-      
+
       setMessage(t('perfil_atualizado'));
       setMessageType('success');
       setTimeout(() => {
@@ -204,13 +180,13 @@ export default function ProfilePage() {
   const formatSoundLabel = (fileName) => {
     // Remover extensão e prefixos, formatar nome
     let base = fileName.replace(/\.(mp3|wav)$/i, '');
-    
+
     // Remover prefixos específicos
     base = base.replace(/^(message_in_|chat_new_)/, '');
-    
+
     // Converter para formato legível
     base = base.replace(/_/g, ' ');
-    
+
     // Capitalizar primeira letra
     return base.charAt(0).toUpperCase() + base.slice(1);
   };
@@ -238,8 +214,8 @@ export default function ProfilePage() {
             audioRef.current.src = src;
           }
           audioRef.current.currentTime = 0;
-          await audioRef.current.play().catch(() => {});
-        } catch (_) {}
+          await audioRef.current.play().catch(() => { });
+        } catch (_) { }
       }
     } catch (e) {
       console.error('Erro ao salvar preferência de som no servidor:', e);
@@ -275,10 +251,10 @@ export default function ProfilePage() {
         console.warn('Nenhum arquivo de som selecionado');
         return;
       }
-      
+
       const src = `/sounds/${fileName}`;
       console.log('Tentando reproduzir som:', src);
-      
+
       // Verificar se o arquivo existe fazendo uma requisição HEAD
       try {
         const response = await fetch(src, { method: 'HEAD' });
@@ -291,35 +267,35 @@ export default function ProfilePage() {
         alert(`Arquivo de som não encontrado: ${fileName}`);
         return;
       }
-      
+
       // Pausar som atual se estiver tocando
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
       }
-      
+
       // Criar novo elemento de áudio
       const audio = new Audio(src);
       audioRef.current = audio;
-      
+
       // Configurar eventos de erro
       audio.onerror = (e) => {
         console.error('Erro ao carregar arquivo de som:', e);
         alert('Erro ao carregar arquivo de som. Verifique se o arquivo existe.');
       };
-      
+
       audio.onloadstart = () => {
         console.log('Iniciando carregamento do som...');
       };
-      
+
       audio.oncanplay = () => {
         console.log('Som carregado e pronto para reproduzir');
       };
-      
+
       // Tentar reproduzir
       await audio.play();
       console.log('Som reproduzido com sucesso');
-      
+
     } catch (error) {
       console.error('Erro ao reproduzir som:', error);
       if (error.name === 'NotAllowedError') {
@@ -410,7 +386,7 @@ export default function ProfilePage() {
           {loading ? t('salvando') : t('salvar')}
         </button>
       </div>
-      
+
       <div className="p-4 border border-border rounded-lg">
         <textarea
           value={settings.assignment.message}
@@ -440,7 +416,7 @@ export default function ProfilePage() {
           {loading ? t('salvando') : t('salvar')}
         </button>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-card-foreground mb-2">
@@ -533,7 +509,7 @@ export default function ProfilePage() {
               onChange={(e) => handleToggleSoundNotifications(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            <div className="w-11 h-6 bg-red-500/80 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
           </label>
         </div>
       </div>
@@ -626,7 +602,7 @@ export default function ProfilePage() {
                 })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              <div className="w-11 h-6 bg-red-500/80 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
             </label>
           </div>
         </div>
@@ -705,14 +681,13 @@ export default function ProfilePage() {
         <h1 className="text-3xl font-bold text-foreground mb-6 flex items-center gap-3">
           <User className="w-8 h-8 text-muted-foreground" /> {t('perfil')}
         </h1>
-        
+
         {/* Mensagem de feedback global */}
         {message && (
-          <div className={`mb-4 p-4 rounded-lg border ${
-            messageType === 'success'
-              ? 'bg-green-50 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' 
-              : 'bg-red-50 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
-          }`}>
+          <div className={`mb-4 p-4 rounded-lg border ${messageType === 'success'
+            ? 'bg-green-50 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+            : 'bg-red-50 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
+            }`}>
             <div className="flex items-center gap-2">
               {messageType === 'success' ? (
                 <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
@@ -727,7 +702,7 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
-        
+
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Sidebar */}
           <div className="lg:w-64">
@@ -736,11 +711,10 @@ export default function ProfilePage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${activeTab === tab.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    }`}
                 >
                   <tab.icon className="w-5 h-5" />
                   <span>{tab.label}</span>

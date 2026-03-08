@@ -656,15 +656,16 @@ class UserStatusConsumer(TokenAuthMixin, SafeConsumerMixin, AsyncWebsocketConsum
             pass  # Ignorar erros no disconnect
     
     async def _set_user_online_async(self, online):
-        """Atualizar status online em background com timeout curto"""
+        """Atualizar status online em background com timeout adequado"""
         try:
             import asyncio
             await asyncio.wait_for(
                 self.set_user_online(online),
-                timeout=0.2  # Timeout muito curto de 200ms
+                timeout=5.0  # Aumentado para 5s para acomodar latência de rede externa
             )
-        except (asyncio.TimeoutError, Exception):
-            pass  # Ignorar timeout/erros
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.error(f"UserStatusConsumer: Erro ao atualizar status online: {str(e)}")
+            pass  # Ignorar timeout/erros para não quebrar o disconnect
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -686,32 +687,42 @@ class UserStatusConsumer(TokenAuthMixin, SafeConsumerMixin, AsyncWebsocketConsum
         )
 
     @database_sync_to_async
-    def set_user_online(self, is_online):
-        if not hasattr(self, "user_id") or not self.user_id:
-            return
-
+    def _update_user_db_status(self, is_online):
+        """Atualiza apenas o banco de dados de forma síncrona"""
         UserModel = get_user_model()
         try:
             user = UserModel.objects.get(id=self.user_id)
             user.is_online = is_online
             user.last_seen = timezone.now()
             user.save(update_fields=["is_online", "last_seen"])
+            return user.id, user.last_seen
+        except UserModel.DoesNotExist:
+            return None, None
 
-            # Notificar outros usuários sobre a mudança de status
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
+    async def set_user_online(self, is_online):
+        """Método assíncrono para atualizar banco e notificar via Redis"""
+        if not hasattr(self, "user_id") or not self.user_id:
+            return
+
+        # 1. Atualizar banco de dados de forma segura (thread separate)
+        user_id, last_seen = await self._update_user_db_status(is_online)
+        
+        if not user_id:
+            return
+
+        # 2. Notificar outros usuários via Channel Layer (Redis) de forma assíncrona
+        try:
+            await self.channel_layer.group_send(
                 "user_status_global",
                 {
                     "type": "user_status_update",
-                    "user_id": user.id,
+                    "user_id": user_id,
                     "is_online": is_online,
-                    "last_seen": user.last_seen.isoformat()
-                    if user.last_seen
-                    else None,
+                    "last_seen": last_seen.isoformat() if last_seen else None,
                 },
             )
-        except UserModel.DoesNotExist:
-            pass
+        except Exception as e:
+            logger.error(f"UserStatusConsumer: Erro ao enviar notificação de status para o Redis: {str(e)}")
 
     @database_sync_to_async
     def refresh_last_seen(self):

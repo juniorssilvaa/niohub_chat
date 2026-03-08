@@ -91,10 +91,10 @@ export default function SuperadminConfig() {
                 <p className="text-green-400 font-medium">{success}</p>
               </div>
             )}
-            
+
             {/* Configurações Gerais */}
             <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 px-6 py-4 border-b border-border">
+              <div className="bg-muted px-6 py-4 border-b border-border">
                 <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
                   <Globe className="w-5 h-5 text-blue-400" />
                   Configurações Gerais
@@ -104,32 +104,32 @@ export default function SuperadminConfig() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block font-medium mb-2 text-foreground">Nome do Sistema</label>
-                    <input 
-                      type="text" 
-                      name="site_name" 
-                      value={config?.site_name || ''} 
-                      onChange={handleChange} 
-                      className="w-full px-4 py-3 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" 
+                    <input
+                      type="text"
+                      name="site_name"
+                      value={config?.site_name || ''}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                       placeholder="Nome do sistema"
                     />
                   </div>
                   <div>
                     <label className="block font-medium mb-2 text-foreground">E-mail de Contato</label>
-                    <input 
-                      type="email" 
-                      name="contact_email" 
-                      value={config?.contact_email || ''} 
-                      onChange={handleChange} 
-                      className="w-full px-4 py-3 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" 
+                    <input
+                      type="email"
+                      name="contact_email"
+                      value={config?.contact_email || ''}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                       placeholder="contato@empresa.com"
                     />
                   </div>
                   <div>
                     <label className="block font-medium mb-2 text-foreground">Idioma Padrão</label>
-                    <select 
-                      name="default_language" 
-                      value={config?.default_language || 'pt-br'} 
-                      onChange={handleChange} 
+                    <select
+                      name="default_language"
+                      value={config?.default_language || 'pt-br'}
+                      onChange={handleChange}
                       className="w-full px-4 py-3 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                     >
                       <option value="pt-br">Português (Brasil)</option>
@@ -140,10 +140,10 @@ export default function SuperadminConfig() {
                   </div>
                   <div>
                     <label className="block font-medium mb-2 text-foreground">Fuso Horário</label>
-                    <select 
-                      name="timezone" 
-                      value={config?.timezone || 'America/Sao_Paulo'} 
-                      onChange={handleChange} 
+                    <select
+                      name="timezone"
+                      value={config?.timezone || 'America/Sao_Paulo'}
+                      onChange={handleChange}
                       className="w-full px-4 py-3 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                     >
                       <option value="America/Sao_Paulo">São Paulo</option>
@@ -168,12 +168,12 @@ export default function SuperadminConfig() {
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex items-center space-x-3">
-                    <input 
-                      type="checkbox" 
-                      name="allow_public_signup" 
+                    <input
+                      type="checkbox"
+                      name="allow_public_signup"
                       id="allow_public_signup"
-                      checked={!!config?.allow_public_signup} 
-                      onChange={handleChange} 
+                      checked={!!config?.allow_public_signup}
+                      onChange={handleChange}
                       className="w-4 h-4 text-primary bg-background border-border rounded focus:ring-primary focus:ring-2"
                     />
                     <label htmlFor="allow_public_signup" className="font-medium text-foreground">
@@ -182,12 +182,12 @@ export default function SuperadminConfig() {
                   </div>
                   <div>
                     <label className="block font-medium mb-2 text-foreground">Limite de Usuários por Empresa</label>
-                    <input 
-                      type="number" 
-                      name="max_users_per_company" 
-                      value={config?.max_users_per_company || 10} 
-                      onChange={handleChange} 
-                      className="w-full px-4 py-3 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" 
+                    <input
+                      type="number"
+                      name="max_users_per_company"
+                      value={config?.max_users_per_company || 10}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                       min="1"
                       max="1000"
                     />
@@ -198,7 +198,7 @@ export default function SuperadminConfig() {
 
             {/* Configurações do Google AI */}
             <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden">
-              <div className="bg-gradient-to-r from-green-900/20 to-blue-900/20 px-6 py-4 border-b border-border">
+              <div className="bg-muted px-6 py-4 border-b border-border">
                 <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
                   <Zap className="w-5 h-5 text-green-400" />
                   Configurações do Google AI
@@ -208,12 +208,12 @@ export default function SuperadminConfig() {
                 <div>
                   <label className="block font-medium mb-2 text-foreground">Chave da API Google AI</label>
                   <div className="relative">
-                    <input 
-                      type={showGoogleAIKey ? "text" : "password"} 
-                      name="google_api_key" 
-                      value={config?.google_api_key || ''} 
-                      onChange={handleChange} 
-                      className="w-full px-4 py-3 pr-12 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" 
+                    <input
+                      type={showGoogleAIKey ? "text" : "password"}
+                      name="google_api_key"
+                      value={config?.google_api_key || ''}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 pr-12 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                       placeholder="AIza..."
                     />
                     <button
@@ -225,7 +225,7 @@ export default function SuperadminConfig() {
                     </button>
                   </div>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Chave da API do Google AI para geração de respostas automáticas. 
+                    Chave da API do Google AI para geração de respostas automáticas.
                     Se não fornecida, será usada a variável de ambiente GOOGLE_API_KEY.
                   </p>
                 </div>
@@ -246,12 +246,12 @@ export default function SuperadminConfig() {
                     Chave da API OpenAI (somente para transcrição de áudio)
                   </label>
                   <div className="relative">
-                    <input 
-                      type={showOpenAITranscriptionKey ? "text" : "password"} 
-                      name="openai_transcription_api_key" 
-                      value={config?.openai_transcription_api_key || ''} 
-                      onChange={handleChange} 
-                      className="w-full px-4 py-3 pr-12 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" 
+                    <input
+                      type={showOpenAITranscriptionKey ? "text" : "password"}
+                      name="openai_transcription_api_key"
+                      value={config?.openai_transcription_api_key || ''}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 pr-12 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                       placeholder="sk-..."
                     />
                     <button
@@ -263,8 +263,8 @@ export default function SuperadminConfig() {
                     </button>
                   </div>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Chave da API OpenAI exclusivamente para converter mensagens de áudio em texto (speech-to-text). 
-                    Esta chave <strong className="text-foreground">NÃO será usada</strong> para geração de respostas ao cliente. 
+                    Chave da API OpenAI exclusivamente para converter mensagens de áudio em texto (speech-to-text).
+                    Esta chave <strong className="text-foreground">NÃO será usada</strong> para geração de respostas ao cliente.
                     As respostas continuam sendo geradas pelo Google Gemini em 100% dos casos.
                   </p>
                 </div>
@@ -272,10 +272,10 @@ export default function SuperadminConfig() {
             </div>
 
             {/* Botão Salvar */}
-            <div className="flex justify-end pt-6">
-              <button 
-                type="submit" 
-                className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg" 
+            <div className="flex justify-end pt-6 border-t border-border mt-6">
+              <button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20"
                 disabled={saving}
               >
                 <Save className="w-5 h-5" />

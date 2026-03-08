@@ -87,7 +87,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4 dark">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 dark">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -96,8 +96,8 @@ export default function Login() {
       >
         <div className="bg-card rounded-2xl shadow-2xl overflow-hidden border border-border">
           <div className="flex flex-col md:flex-row">
-            <div className="md:w-1/2 bg-[#242424] p-8 md:p-12 flex flex-col items-center justify-center relative">
-              <div className="absolute inset-0 bg-[#ffffff]/0.02" />
+            <div className="md:w-1/2 bg-card p-8 md:p-12 flex flex-col items-center justify-center relative">
+              <div className="absolute inset-0 opacity-[0.03] bg-white" />
               <div className="relative z-10 flex flex-col items-center">
                 <div className="w-48 h-48 md:w-56 md:h-56 mb-6">
                   <img src={logoImage} alt="NioChat Logo" className="w-full h-full object-contain" />

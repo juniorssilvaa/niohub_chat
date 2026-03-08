@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { 
-  Building, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Search, 
+import {
+  Building,
+  Plus,
+  Edit,
+  Trash2,
+  Search,
   Users,
   MessageCircle,
   Calendar,
@@ -128,7 +128,7 @@ const CompanyManagement = () => {
                   <span className="text-sm font-medium text-green-500">+15%</span>
                 </div>
               </div>
-              <div className="p-3 rounded-lg bg-blue-500/20">
+              <div className="p-3 rounded-lg bg-muted border border-border">
                 <Building className="w-6 h-6 text-blue-500" />
               </div>
             </div>
@@ -292,9 +292,8 @@ const CompanyManagement = () => {
                         <div className="text-sm text-card-foreground">
                           R$ {company.monthlyRevenue.toFixed(2)}
                         </div>
-                        <div className={`text-xs flex items-center ${
-                          company.growth.startsWith('+') ? 'text-green-500' : 'text-red-500'
-                        }`}>
+                        <div className={`text-xs flex items-center ${company.growth.startsWith('+') ? 'text-green-500' : 'text-red-500'
+                          }`}>
                           {company.growth.startsWith('+') ? (
                             <TrendingUp className="w-3 h-3 mr-1" />
                           ) : (
@@ -306,8 +305,8 @@ const CompanyManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(company.status)}`}>
-                        {company.status === 'active' ? 'Ativo' : 
-                         company.status === 'suspended' ? 'Suspenso' : 'Teste'}
+                        {company.status === 'active' ? 'Ativo' :
+                          company.status === 'suspended' ? 'Suspenso' : 'Teste'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

@@ -168,7 +168,7 @@ export default function ProviderDataForm() {
       {loading ? (
         <div className="text-muted-foreground">Carregando...</div>
       ) : (
-        <div className="overflow-y-auto max-h-[75vh] pb-6">
+        <div className="pb-6">
           <form onSubmit={handleSubmit} className="space-y-6 pb-4">
             {success && <div className="text-green-600 dark:text-green-400 mb-2">{success}</div>}
             {error && <div className="text-red-600 dark:text-red-400 mb-2">{error}</div>}
@@ -236,7 +236,7 @@ export default function ProviderDataForm() {
                       onChange={(e) => setPersonalidadeAvancadaEnabled(e.target.checked)}
                       className="sr-only"
                     />
-                    <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${personalidadeAvancadaEnabled ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                    <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${personalidadeAvancadaEnabled ? 'bg-green-500' : 'bg-red-500'}`}>
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${personalidadeAvancadaEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </div>
                     <span className="ml-2 text-sm text-foreground whitespace-nowrap">Habilitar personalidade avançada</span>
@@ -306,19 +306,7 @@ export default function ProviderDataForm() {
               <label className="block font-medium mb-1 text-foreground">Modo de Falar</label>
               <input type="text" name="modo_falar" value={form.modo_falar || ''} onChange={handleChange} className="input w-full bg-background text-foreground border border-border rounded px-3 py-2" placeholder="Ex: Nordestino, Formal, Descontraído, Mineiro" />
             </div>
-            <div>
-              <label className="block font-medium mb-1 text-foreground">Modo de Atendimento</label>
-              <select
-                name="bot_mode"
-                value={form.bot_mode || 'ia'}
-                onChange={handleChange}
-                className="input w-full bg-background text-foreground border border-border rounded px-3 py-2"
-              >
-                <option value="ia">Inteligência Artificial (IA)</option>
-                <option value="chatbot">Fluxo de Chatbot</option>
-              </select>
-              <p className="text-xs text-muted-foreground mt-1">Define se o atendimento inicial será por IA ou por um fluxo de chatbot.</p>
-            </div>
+            {/* Modo de Atendimento removido do painel do provedor - Restrito ao SuperAdmin */}
             <div>
               <label className="block font-medium mb-1 text-foreground">Uso de Emojis</label>
               <select name="uso_emojis" value={form.uso_emojis || ''} onChange={handleChange} className="input w-full bg-background text-foreground border border-border rounded px-3 py-2">

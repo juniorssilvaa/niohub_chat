@@ -573,7 +573,7 @@ export default function ConversationAudit({ provedorId }) {
   }
 
   return (
-    <div className={`flex-1 p-6 bg-background min-h-screen ${selectedConversation ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+    <div className={`flex-1 p-6 bg-background ${selectedConversation ? 'overflow-hidden' : 'overflow-y-auto'}`}>
       <div className="max-w-7xl mx-auto w-full">
         {/* Header */}
         <div className="mb-6">

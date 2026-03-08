@@ -8,19 +8,19 @@ const NotificationModal = ({ isOpen, onClose, notification, onMarkAsRead }) => {
   // Marcar como visualizada
   const handleConfirmRead = async () => {
     if (!notification) return;
-    
+
     try {
       setIsLoading(true);
       const token = localStorage.getItem('token');
       await axios.patch(`/api/mensagens-sistema/${notification.id}/marcar-visualizada/`, {}, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Chamar callback para atualizar estado
       if (onMarkAsRead) {
         onMarkAsRead(notification.id);
       }
-      
+
       // Fechar modal
       onClose();
     } catch (err) {
@@ -57,18 +57,18 @@ const NotificationModal = ({ isOpen, onClose, notification, onMarkAsRead }) => {
   return (
     <>
       {/* Overlay escuro - não fecha ao clicar fora */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       >
         {/* Modal */}
-        <div 
+        <div
           className="bg-card border border-border rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header do modal */}
           <div className="flex items-center justify-between p-6 border-b border-border bg-gradient-to-r from-blue-600/10 to-purple-600/10">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/20">
+              <div className="p-2 rounded-lg bg-muted border border-border">
                 <Bell className="w-6 h-6 text-blue-400" />
               </div>
               <div>

@@ -193,7 +193,7 @@ const InternalChatButton = () => {
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
           <button
-            className="p-2 rounded-lg transition-colors text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative"
+            className="p-2 rounded-lg transition-colors text-topbar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative"
             title="Chat Interno"
           >
             <MessageCircle className="w-5 h-5" />

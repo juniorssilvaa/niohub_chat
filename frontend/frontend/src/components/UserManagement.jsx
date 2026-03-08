@@ -85,7 +85,7 @@ const fetchUsers = async (token, provedorId = null) => {
   if (provedorId) {
     params.provedor = provedorId;
   }
-  
+
   const res = await axios.get('/api/users/', {
     headers: { Authorization: `Token ${token}` },
     params
@@ -103,7 +103,7 @@ const fetchUsers = async (token, provedorId = null) => {
 };
 
 const UserManagement = ({ provedorId }) => {
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -173,11 +173,11 @@ const UserManagement = ({ provedorId }) => {
         if (!token) {
           return;
         }
-        
+
         const response = await axios.get('/api/provedores/', {
           headers: { Authorization: `Token ${token}` }
         });
-        
+
         const provedoresData = response.data.results || response.data;
         setProvedores(provedoresData);
       } catch (error) {
@@ -265,15 +265,15 @@ const UserManagement = ({ provedorId }) => {
       }, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Atualizar a lista de usuários
-      const updatedUsers = usersState.map(user => 
-        user.id === selectedUser.id 
+      const updatedUsers = usersState.map(user =>
+        user.id === selectedUser.id
           ? { ...user, first_name: editUserName, last_name: editUserLastName, username: editUserUsername, email: editUserEmail, permissions: editUserPermissions }
           : user
       );
       setUsersState(updatedUsers);
-      
+
       // CORREÇÃO: Se o usuário editado é o usuário atual, atualizar suas permissões no localStorage
       const currentUser = JSON.parse(localStorage.getItem('user'));
       if (currentUser && currentUser.id === selectedUser.id) {
@@ -284,7 +284,7 @@ const UserManagement = ({ provedorId }) => {
             headers: { Authorization: `Token ${token}` }
           });
           localStorage.setItem('user', JSON.stringify(response.data));
-          
+
           // Disparar evento e recarregar a página para garantir a atualização
           window.dispatchEvent(new CustomEvent('userPermissionsUpdated'));
           window.location.reload();
@@ -298,7 +298,7 @@ const UserManagement = ({ provedorId }) => {
         // Se não for o usuário atual, apenas mostrar o alerta
         alert('Permissões salvas com sucesso!');
       }
-      
+
       handleCloseEditModal();
     } catch (err) {
       alert('Erro ao salvar permissões!');
@@ -484,11 +484,11 @@ const UserManagement = ({ provedorId }) => {
   const handleOpenAddModal = async () => {
     setAddUserForm(initialAddUserForm);
     setShowAddModal(true);
-    
+
     // SEMPRE forçar carregamento dos provedores quando abrir o modal
     try {
       const token = localStorage.getItem('token');
-      
+
       if (token) {
         const response = await axios.get('/api/provedores/', {
           headers: { Authorization: `Token ${token}` }
@@ -514,15 +514,15 @@ const UserManagement = ({ provedorId }) => {
       }, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Atualizar a lista de usuários
-      const updatedUsers = usersState.map(u => 
-        u.id === user.id 
+      const updatedUsers = usersState.map(u =>
+        u.id === user.id
           ? { ...u, is_active: !u.is_active }
           : u
       );
       setUsersState(updatedUsers);
-      
+
       alert(`Usuário ${user.is_active ? 'desativado' : 'ativado'} com sucesso!`);
       handleCloseEditModal();
     } catch (err) {
@@ -546,7 +546,7 @@ const UserManagement = ({ provedorId }) => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-6">
           <div className="niochat-card p-6">
             <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-blue-500/20">
+              <div className="p-3 rounded-lg bg-muted border border-border">
                 <Users className="w-6 h-6 text-blue-500" />
               </div>
               <div className="ml-4">
@@ -770,39 +770,39 @@ const UserManagement = ({ provedorId }) => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Nome</label>
-                    <input 
-                      type="text" 
-                      className="niochat-input w-full" 
+                    <input
+                      type="text"
+                      className="niochat-input w-full"
                       value={editUserName}
                       onChange={(e) => setEditUserName(e.target.value)}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Sobrenome</label>
-                    <input 
-                      type="text" 
-                      className="niochat-input w-full" 
+                    <input
+                      type="text"
+                      className="niochat-input w-full"
                       value={editUserLastName || ''}
                       onChange={(e) => setEditUserLastName(e.target.value)}
                     />
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Usuário</label>
-                    <input 
-                      type="text" 
-                      className="niochat-input w-full" 
+                    <input
+                      type="text"
+                      className="niochat-input w-full"
                       value={editUserUsername}
                       onChange={(e) => setEditUserUsername(e.target.value)}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">E-mail</label>
-                    <input 
-                      type="email" 
-                      className="niochat-input w-full" 
+                    <input
+                      type="email"
+                      className="niochat-input w-full"
                       value={editUserEmail}
                       onChange={(e) => setEditUserEmail(e.target.value)}
                     />
@@ -813,8 +813,8 @@ const UserManagement = ({ provedorId }) => {
                   <div className="flex flex-col gap-2">
                     {PERMISSIONS.map(perm => (
                       <label key={perm.key} className="flex items-center gap-2">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           value={perm.key}
                           checked={editUserPermissions.includes(perm.key)}
                           onChange={(e) => handlePermissionChange(perm.key, e.target.checked)}
@@ -828,15 +828,15 @@ const UserManagement = ({ provedorId }) => {
                   <label className="block text-sm font-medium mb-1">Status</label>
                   <button
                     type="button"
-                    className={`px-4 py-2 rounded font-bold ${selectedUser.is_active ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}
+                    className={`px-4 py-2 rounded font-bold transition-all shadow-md ${selectedUser.is_active ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
                     onClick={() => handleToggleUserStatus(selectedUser)}
                   >
                     {selectedUser.is_active ? 'Inativar acesso' : 'Reativar acesso'}
                   </button>
                 </div>
                 <div className="flex justify-end gap-2 mt-6">
-                  <button type="button" className="niochat-button" onClick={handleCloseEditModal}>Cancelar</button>
-                  <button type="submit" className="niochat-button niochat-button-primary">Salvar</button>
+                  <button type="button" className="niochat-button border border-red-500/50 text-red-500 hover:bg-red-500/10 font-bold" onClick={handleCloseEditModal}>Cancelar</button>
+                  <button type="submit" className="niochat-button bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/20">Salvar</button>
                 </div>
               </form>
             </div>
@@ -883,8 +883,8 @@ const UserManagement = ({ provedorId }) => {
                   />
                 </div>
                 <div className="flex justify-end gap-2 mt-6">
-                  <button type="button" className="niochat-button" onClick={handleCloseResetModal}>Cancelar</button>
-                  <button type="submit" className="niochat-button niochat-button-primary" disabled={resetPasswordLoading}>
+                  <button type="button" className="niochat-button border border-red-500/50 text-red-500 hover:bg-red-500/10 font-bold" onClick={handleCloseResetModal}>Cancelar</button>
+                  <button type="submit" className="niochat-button bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/20" disabled={resetPasswordLoading}>
                     {resetPasswordLoading ? 'Salvando...' : 'Salvar'}
                   </button>
                 </div>
@@ -905,7 +905,7 @@ const UserManagement = ({ provedorId }) => {
                 {errorMsg && (
                   <div className="text-red-400 text-sm mb-2">{errorMsg}</div>
                 )}
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-200 text-sm font-bold mb-2">Nome</label>
@@ -916,7 +916,7 @@ const UserManagement = ({ provedorId }) => {
                     <input type="text" name="last_name" autoComplete="off" className="w-full px-4 py-2 rounded bg-background text-white border border-border" value={addUserForm.last_name} onChange={handleAddUserChange} required />
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-200 text-sm font-bold mb-2">Usuário</label>
@@ -927,7 +927,7 @@ const UserManagement = ({ provedorId }) => {
                     <input type="email" name="email" autoComplete="off" className="w-full px-4 py-2 rounded bg-background text-white border border-border" value={addUserForm.email} onChange={handleAddUserChange} required />
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-200 text-sm font-bold mb-2">Senha</label>
@@ -948,10 +948,10 @@ const UserManagement = ({ provedorId }) => {
                     </select>
                   </div>
                 </div>
-                
+
                 {/* Campo hidden para enviar o provedor_id automaticamente */}
                 <input type="hidden" name="provedor_id" value={provedorId} />
-                
+
                 <div>
                   <label className="block text-gray-200 text-sm font-bold mb-2">Permissões</label>
                   <div className="flex flex-col gap-2">
@@ -975,7 +975,7 @@ const UserManagement = ({ provedorId }) => {
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-primary text-white py-2 rounded font-bold hover:bg-primary/80 transition"
+                  className="w-full bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-500/20"
                   disabled={loadingAdd}
                 >
                   {loadingAdd ? 'Adicionando...' : 'Adicionar Usuário'}

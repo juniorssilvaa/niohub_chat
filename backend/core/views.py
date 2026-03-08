@@ -3559,7 +3559,7 @@ class UserMeView(APIView):
                 if hasattr(user, 'sound_notifications_enabled'):
                     response_data['sound_notifications_enabled'] = getattr(user, 'sound_notifications_enabled', False)
                 if hasattr(user, 'new_message_sound'):
-                    response_data['new_message_sound'] = getattr(user, 'new_message_sound', 'mixkit-bell-notification-933.wav')
+                    response_data['new_message_sound'] = getattr(user, 'new_message_sound', '01.mp3')
                 if hasattr(user, 'new_conversation_sound'):
                     response_data['new_conversation_sound'] = getattr(user, 'new_conversation_sound', 'mixkit-digital-quick-tone-2866.wav')
             except Exception:

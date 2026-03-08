@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { 
-  Settings as SettingsIcon, 
-  User, 
-  Bell, 
-  Shield, 
-  Palette, 
+import {
+  Settings as SettingsIcon,
+  User,
+  Bell,
+  Shield,
+  Palette,
   Globe,
   Save,
   Eye,
@@ -25,7 +25,7 @@ const Settings = () => {
       emailNotifications: true,
       pushNotifications: true,
       soundNotifications: false,
-      soundNotificationFile: 'mixkit-bell-notification-933.wav', // Som padrão
+      soundNotificationFile: '01.mp3', // Som padrão
       desktopNotifications: true
     },
     security: {
@@ -51,13 +51,13 @@ const Settings = () => {
   const handleSave = () => {
     // Aqui você salvaria as configurações no backend
     console.log('Saving settings:', settings);
-    
+
     // Salvar preferências de notificação sonora no localStorage
     localStorage.setItem('notificationSound', JSON.stringify({
       enabled: settings.notifications.soundNotifications,
       file: settings.notifications.soundNotificationFile
     }));
-    
+
     // Mostrar mensagem de sucesso
     alert('Configurações salvas com sucesso!');
   };
@@ -159,7 +159,7 @@ const Settings = () => {
         Preferências de Notificação
       </h3>
       <div className="space-y-4">
-        {Object.entries(settings.notifications).map(([key, value]) => (
+        {Object.entries(settings.notifications).filter(([key]) => key !== 'soundNotificationFile').map(([key, value]) => (
           <div key={key} className="flex items-center justify-between p-4 border border-border rounded-lg">
             <div>
               <h4 className="font-medium text-card-foreground">
@@ -187,11 +187,11 @@ const Settings = () => {
                 })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              <div className="w-11 h-6 bg-red-500/80 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
             </label>
           </div>
         ))}
-        
+
         {/* Seleção de som para notificações */}
         {settings.notifications.soundNotifications && (
           <div className="p-4 border border-border rounded-lg bg-muted/20">
@@ -207,21 +207,22 @@ const Settings = () => {
                   value={settings.notifications.soundNotificationFile}
                   onChange={(e) => setSettings({
                     ...settings,
-                    notifications: { 
-                      ...settings.notifications, 
-                      soundNotificationFile: e.target.value 
+                    notifications: {
+                      ...settings.notifications,
+                      soundNotificationFile: e.target.value
                     }
                   })}
                   className="niochat-input w-full"
                 >
-                  <option value="mixkit-bell-notification-933.wav">Bell Notification</option>
-                  <option value="mixkit-access-allowed-tone-2869.wav">Access Allowed</option>
-                  <option value="mixkit-bubble-pop-up-alert-notification-2357.wav">Bubble Pop Up</option>
-                  <option value="mixkit-correct-answer-tone-2870.wav">Correct Answer</option>
-                  <option value="mixkit-digital-quick-tone-2866.wav">Digital Quick</option>
-                  <option value="mixkit-elevator-tone-2863.wav">Elevator</option>
-                  <option value="mixkit-interface-option-select-2573.wav">Interface Option</option>
-                  <option value="mixkit-sci-fi-click-900.wav">Sci-Fi Click</option>
+                  {Array.from({ length: 14 }, (_, i) => {
+                    const num = (i + 1).toString().padStart(2, '0');
+                    const fileName = `${num}.mp3`;
+                    return (
+                      <option key={fileName} value={fileName}>
+                        Som {num}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
               <div className="flex items-end">
@@ -269,7 +270,7 @@ const Settings = () => {
                 })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              <div className="w-11 h-6 bg-red-500/80 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
             </label>
           </div>
         </div>
@@ -397,9 +398,8 @@ const Settings = () => {
                 </div>
                 <div>
                   <h4 className="font-medium text-card-foreground">{integration.name}</h4>
-                  <p className={`text-sm ${
-                    integration.status === 'connected' ? 'text-green-500' : 'text-red-500'
-                  }`}>
+                  <p className={`text-sm ${integration.status === 'connected' ? 'text-green-500' : 'text-red-500'
+                    }`}>
                     {integration.status === 'connected' ? 'Conectado' : 'Desconectado'}
                   </p>
                 </div>
@@ -449,11 +449,10 @@ const Settings = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${activeTab === tab.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    }`}
                 >
                   <tab.icon className="w-5 h-5" />
                   <span>{tab.label}</span>
@@ -466,7 +465,7 @@ const Settings = () => {
           <div className="flex-1">
             <div className="niochat-card p-6">
               {renderTabContent()}
-              
+
               {/* Save Button */}
               <div className="mt-8 pt-6 border-t border-border">
                 <button

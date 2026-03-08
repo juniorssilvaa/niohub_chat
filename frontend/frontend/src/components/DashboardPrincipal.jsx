@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { buildWebSocketUrl } from '../utils/websocketUrl';
 import { buildApiPath } from '../utils/apiBaseUrl';
-import { 
-  MessageCircle, 
-  Users, 
-  Clock, 
-  CheckCircle, 
+import {
+  MessageCircle,
+  Users,
+  Clock,
+  CheckCircle,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -44,7 +44,7 @@ const DashboardPrincipal = ({ provedorId }) => {
   const [canais, setCanais] = useState([]);
   const [responseTimeData, setResponseTimeData] = useState([]);
   const [ws, setWs] = useState(null);
-  
+
   // Estados para dados do Supabase (apenas para os 2 cards específicos)
   const [supabaseStats, setSupabaseStats] = useState({
     satisfacao_media: '0.0',
@@ -58,18 +58,18 @@ const DashboardPrincipal = ({ provedorId }) => {
         setLoading(true);
         // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
         let token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-        
+
         if (!token) {
           console.error('Token não encontrado no localStorage');
           throw new Error('Token não encontrado. Faça login novamente.');
         }
-        
+
         // Buscar estatísticas gerais da API real
         // Se provedorId estiver disponível, passar como parâmetro (para superadmin visualizar outros provedores)
-        const statsUrl = provedorId 
+        const statsUrl = provedorId
           ? buildApiPath(`/api/dashboard/stats/?provedor_id=${provedorId}`)
           : buildApiPath('/api/dashboard/stats/');
-        
+
         // Garantir que o token está sendo enviado - usar axios com header explícito
         // O interceptor do axios já adiciona o token, mas vamos garantir que está correto
         const statsResponse = await axios.get(statsUrl, {
@@ -77,7 +77,7 @@ const DashboardPrincipal = ({ provedorId }) => {
             'Authorization': `Token ${token}`
           }
         });
-        
+
         const statsData = statsResponse.data;
         setStats(statsData.stats || statsData);
 
@@ -88,7 +88,7 @@ const DashboardPrincipal = ({ provedorId }) => {
               'Authorization': `Token ${token}`
             }
           });
-          
+
           const canaisData = canaisResponse.data;
           setCanais(canaisData.results || canaisData || []);
         } catch (err) {
@@ -102,7 +102,7 @@ const DashboardPrincipal = ({ provedorId }) => {
               'Authorization': `Token ${token}`
             }
           });
-          
+
           const responseTimeData = responseTimeResponse.data;
           setResponseTimeData(responseTimeData);
         } catch (err) {
@@ -129,18 +129,18 @@ const DashboardPrincipal = ({ provedorId }) => {
       // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       if (!token) return;
-      
+
       const wsUrl = buildWebSocketUrl('/ws/conversas_dashboard/', { token });
       const websocket = new WebSocket(wsUrl);
-      
+
       websocket.onopen = () => {
         console.log('WebSocket dashboard conectado');
         setWs(websocket);
       };
-      
+
       websocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        
+
         // Atualizar estatísticas em tempo real
         if (data.type === 'dashboard_update') {
           setStats(prevStats => ({
@@ -149,14 +149,14 @@ const DashboardPrincipal = ({ provedorId }) => {
           }));
         }
       };
-      
+
       websocket.onclose = () => {
         console.log('WebSocket dashboard desconectado');
         setWs(null);
         // Reconectar após 5 segundos
         setTimeout(connectWebSocket, 5000);
       };
-      
+
       websocket.onerror = (error) => {
         // CORREÇÃO DE SEGURANÇA: Não expor token em logs
         // O erro pode conter a URL com token, mas não vamos logá-la
@@ -185,7 +185,7 @@ const DashboardPrincipal = ({ provedorId }) => {
             'Authorization': `Token ${token}`
           }
         });
-        
+
         if (response.status === 200) {
           const data = response.data;
           setStats(data);
@@ -211,16 +211,16 @@ const DashboardPrincipal = ({ provedorId }) => {
     try {
       // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      
+
       // Buscar satisfação média e estatísticas do dashboard (que já tem conversas resolvidas)
       // Se provedorId estiver disponível, passar como parâmetro (para superadmin visualizar outros provedores)
-      const csatStatsUrl = provedorId 
+      const csatStatsUrl = provedorId
         ? buildApiPath(`/api/csat/feedbacks/stats/?days=30&provedor_id=${provedorId}`)
         : buildApiPath('/api/csat/feedbacks/stats/?days=30');
-      const dashboardStatsUrl = provedorId 
+      const dashboardStatsUrl = provedorId
         ? buildApiPath(`/api/dashboard/stats/?provedor_id=${provedorId}`)
         : buildApiPath('/api/dashboard/stats/');
-      
+
       const [csatResponse, dashboardStatsResponse] = await Promise.all([
         axios.get(csatStatsUrl, {
           headers: { Authorization: `Token ${token}` }
@@ -229,23 +229,23 @@ const DashboardPrincipal = ({ provedorId }) => {
           headers: { Authorization: `Token ${token}` }
         })
       ]);
-      
+
       const csatData = csatResponse.data;
       // Formatar average_rating para ter 1 casa decimal (igual ao CSAT Dashboard)
-      const averageRating = csatData.average_rating 
-        ? parseFloat(csatData.average_rating).toFixed(1) 
+      const averageRating = csatData.average_rating
+        ? parseFloat(csatData.average_rating).toFixed(1)
         : '0.0';
-      
+
       // Calcular taxa de resolução baseada nas conversas resolvidas do dashboard
       const dashboardStats = dashboardStatsResponse.data;
       const conversasResolvidas = dashboardStats.conversas_resolvidas || 0;
       const totalConversas = dashboardStats.total_conversas || 0;
-      
+
       // Taxa de resolução = (conversas resolvidas / total de conversas) * 100
-      const resolutionRate = totalConversas > 0 
+      const resolutionRate = totalConversas > 0
         ? Math.round((conversasResolvidas / totalConversas) * 100)
         : 0;
-      
+
       setSupabaseStats({
         satisfacao_media: averageRating.toString(),
         taxa_resolucao: `${resolutionRate}%`
@@ -267,7 +267,7 @@ const DashboardPrincipal = ({ provedorId }) => {
       console.log('Nova avaliação CSAT recebida:', payload);
       fetchSupabaseStats();
     });
-    
+
     // Subscription para Auditoria (Taxa de Resolução)
     subscribeToAudit(provedorId, (payload) => {
       console.log('Nova auditoria recebida:', payload);
@@ -281,7 +281,7 @@ const DashboardPrincipal = ({ provedorId }) => {
     if (channelType === 'whatsapp_session' || channelType === 'whatsapp_oficial' || channelType === 'whatsapp') {
       return 'WhatsApp';
     }
-    
+
     const channelNames = {
       'whatsapp': 'WhatsApp',
       'telegram': 'Telegram',
@@ -344,7 +344,7 @@ const DashboardPrincipal = ({ provedorId }) => {
   }
 
   return (
-    <div className="w-full space-y-6 p-6 bg-background min-h-screen">
+    <div className="w-full space-y-6 p-6 bg-background">
       {/* Métricas principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
@@ -382,7 +382,7 @@ const DashboardPrincipal = ({ provedorId }) => {
         <Card className="bg-card border-border">
           <CardContent className="p-6">
             <h3 className="text-lg font-semibold text-foreground mb-4">Status das Conversas</h3>
-            <ConversationsPieChart 
+            <ConversationsPieChart
               data={[
                 { name: 'Abertas', value: stats.conversas_abertas || 0 },
                 { name: 'Pendentes', value: stats.conversas_pendentes || 0 },
@@ -395,7 +395,7 @@ const DashboardPrincipal = ({ provedorId }) => {
         <Card className="bg-card border-border">
           <CardContent className="p-6">
             <h3 className="text-lg font-semibold text-foreground mb-4">Canais de Atendimento</h3>
-            <ConversationsPieChart 
+            <ConversationsPieChart
               data={(() => {
                 // Definir todos os tipos de canais disponíveis
                 const canaisAgrupados = {
@@ -405,19 +405,19 @@ const DashboardPrincipal = ({ provedorId }) => {
                   'webchat': { name: 'Chat Web', value: 0 },
                   'instagram': { name: 'Instagram', value: 0 }
                 };
-                
+
                 // Preencher com valores reais
                 (stats.canais || []).forEach(canal => {
                   let tipoNormalizado = canal.inbox__channel_type;
                   if (tipoNormalizado === 'whatsapp_session' || tipoNormalizado === 'whatsapp_oficial' || tipoNormalizado === 'whatsapp') {
                     tipoNormalizado = 'whatsapp';
                   }
-                  
+
                   if (canaisAgrupados[tipoNormalizado]) {
                     canaisAgrupados[tipoNormalizado].value += (canal.total || 0);
                   }
                 });
-                
+
                 return Object.values(canaisAgrupados);
               })()}
             />

@@ -9,11 +9,11 @@ const MetaFinalizing = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const providerId = searchParams.get('provider_id') || '1';
-  
-  const [step, setStep] = useState('waiting'); 
+
+  const [step, setStep] = useState('waiting');
   const [error, setError] = useState(null);
   const [resultData, setResultData] = useState(null);
-  const authCodeRef = useRef(null); 
+  const authCodeRef = useRef(null);
   const eventDataRef = useRef(null);
   const hasLaunched = useRef(false);
   const sdkLoaded = useRef(false);
@@ -25,7 +25,7 @@ const MetaFinalizing = () => {
 
   // Verificar se há token antes de usar o hook
   const hasToken = localStorage.getItem('auth_token') || localStorage.getItem('token');
-  
+
   // 1. O hook usa as funções declaradas abaixo (hoisted)
   const { sendFinishToBackend } = useMetaEmbeddedSignupListener({
     providerId,
@@ -54,16 +54,16 @@ const MetaFinalizing = () => {
     }
 
     if (processingRef.current || step === 'success') return;
-    
+
     const { wabaId, ...eventData } = eventDataRef.current;
     const code = authCodeRef.current;
 
     processingRef.current = true;
     setStep('processing');
-    
+
     try {
       const fullPayloadData = { ...eventData, code };
-      
+
       const response = await sendFinishToBackend(wabaId, providerId, { payload: fullPayloadData });
 
       if (response.success) {
@@ -86,7 +86,7 @@ const MetaFinalizing = () => {
     const baseUrl = getApiBaseUrl() || import.meta.env.VITE_API_URL || 'https://api.niochat.com.br';
     const BACKEND_URL = baseUrl.replace(/\/+$/, '');
     const redirectUri = encodeURIComponent(`${BACKEND_URL}/api/auth/facebook/callback/`);
-    
+
     const extras = encodeURIComponent(JSON.stringify({
       featureType: "whatsapp_business_app_onboarding",
       sessionInfoVersion: "3"
@@ -104,7 +104,7 @@ const MetaFinalizing = () => {
         config_id: CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
-        extras: { 
+        extras: {
           setup: {},
           featureType: "whatsapp_business_app_onboarding",
           sessionInfoVersion: "3"
@@ -144,7 +144,7 @@ const MetaFinalizing = () => {
         return;
       }
 
-      window.fbAsyncInit = function() {
+      window.fbAsyncInit = function () {
         window.FB.init({
           appId: META_APP_ID,
           cookie: true,
@@ -155,7 +155,7 @@ const MetaFinalizing = () => {
         launchWhatsAppSignup();
       };
 
-      (function(d, s, id) {
+      (function (d, s, id) {
         var js, fjs = d.getElementsByTagName(s)[0];
         if (d.getElementById(id)) return;
         js = d.createElement(s); js.id = id;
@@ -174,36 +174,37 @@ const MetaFinalizing = () => {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      minHeight: '100vh', backgroundColor: '#0f172a', color: 'white', fontFamily: 'sans-serif', padding: '20px'
+      minHeight: '100vh', backgroundColor: 'var(--background)', color: 'var(--foreground)', fontFamily: 'sans-serif', padding: '20px'
     }}>
       <div style={{
-        backgroundColor: '#1e293b', padding: '40px', borderRadius: '12px',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)', maxWidth: '550px', width: '100%', textAlign: 'center'
+        backgroundColor: 'var(--card)', padding: '40px', borderRadius: '12px',
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)', maxWidth: '550px', width: '100%', textAlign: 'center',
+        border: '1px solid var(--border)'
       }}>
-        
+
         {step === 'waiting' && (
           <>
             <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
-              <Loader2 size={60} className="animate-spin" style={{ color: '#3b82f6' }} />
+              <Loader2 size={60} className="animate-spin" style={{ color: 'var(--primary)' }} />
             </div>
             <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>
               Aguardando finalização...
             </h2>
-            <p style={{ color: '#94a3b8', lineHeight: '1.6', marginBottom: '24px' }}>
+            <p style={{ color: 'var(--muted-foreground)', lineHeight: '1.6', marginBottom: '24px' }}>
               Por favor, conclua os passos na janela da Meta que foi aberta.
               Esta página atualizará automaticamente ao terminar.
             </p>
-            <div style={{ fontSize: '12px', color: '#64748b', borderTop: '1px solid #334155', paddingTop: '16px' }}>
-              Janela não abriu? <button onClick={() => { hasLaunched.current = false; launchWhatsAppSignup(); }} style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clique aqui para tentar novamente</button>
+            <div style={{ fontSize: '12px', color: 'var(--muted-foreground)', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+              Janela não abriu? <button onClick={() => { hasLaunched.current = false; launchWhatsAppSignup(); }} style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clique aqui para tentar novamente</button>
             </div>
           </>
         )}
 
         {step === 'processing' && (
           <>
-            <Loader2 size={60} className="animate-spin" style={{ color: '#fbbf24', margin: '0 auto 20px' }} />
+            <Loader2 size={60} className="animate-spin" style={{ color: 'var(--nc-accent, #fbbf24)', margin: '0 auto 20px' }} />
             <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>Configurando Canal...</h2>
-            <p style={{ color: '#94a3b8' }}>Recebemos os dados da Meta e estamos vinculando sua conta.</p>
+            <p style={{ color: 'var(--muted-foreground)' }}>Recebemos os dados da Meta e estamos vinculando sua conta.</p>
           </>
         )}
 
@@ -211,12 +212,12 @@ const MetaFinalizing = () => {
           <>
             <CheckCircle2 size={64} style={{ color: '#22c55e', margin: '0 auto 20px' }} />
             <h2 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px', color: '#22c55e' }}>Tudo Pronto!</h2>
-            <p style={{ color: '#94a3b8', marginBottom: '24px' }}>Seu WhatsApp Oficial foi conectado com sucesso.</p>
-            
-            <div style={{ textAlign: 'left', backgroundColor: '#0f172a', padding: '24px', borderRadius: '8px', fontSize: '15px', marginBottom: '32px', border: '1px solid #334155' }}>
-              <div><strong style={{ color: '#64748b', width: '140px', display: 'inline-block' }}>Número:</strong> <span style={{ color: '#3b82f6', fontWeight: 'bold' }}>{resultData?.phone_number}</span></div>
-              <div><strong style={{ color: '#64748b', width: '140px', display: 'inline-block' }}>Status:</strong> <span style={{ color: '#22c55e' }}>{resultData?.status?.toUpperCase()}</span></div>
-              <div><strong style={{ color: '#64748b', width: '140px', display: 'inline-block' }}>WABA ID:</strong> {resultData?.waba_id}</div>
+            <p style={{ color: 'var(--muted-foreground)', marginBottom: '24px' }}>Seu WhatsApp Oficial foi conectado com sucesso.</p>
+
+            <div style={{ textAlign: 'left', backgroundColor: 'var(--background)', padding: '24px', borderRadius: '8px', fontSize: '15px', marginBottom: '32px', border: '1px solid var(--border)' }}>
+              <div><strong style={{ color: 'var(--muted-foreground)', width: '140px', display: 'inline-block' }}>Número:</strong> <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{resultData?.phone_number}</span></div>
+              <div><strong style={{ color: 'var(--muted-foreground)', width: '140px', display: 'inline-block' }}>Status:</strong> <span style={{ color: 'var(--nc-success, #22c55e)' }}>{resultData?.status?.toUpperCase()}</span></div>
+              <div><strong style={{ color: 'var(--muted-foreground)', width: '140px', display: 'inline-block' }}>WABA ID:</strong> {resultData?.waba_id}</div>
             </div>
 
             <button onClick={() => navigate(`/app/accounts/${providerId}/integracoes`)} style={{ backgroundColor: '#22c55e', color: 'white', border: 'none', padding: '14px 24px', borderRadius: '6px', fontWeight: 'bold', width: '100%' }}>

@@ -17,6 +17,7 @@ import UserStatusManager from './components/UserStatusManager';
 
 import { useAuth } from './contexts/AuthContext';
 import useSessionTimeout from './hooks/useSessionTimeout';
+import { APP_VERSION } from './config/version';
 
 import './App.css';
 
@@ -48,6 +49,12 @@ export default function App() {
   useEffect(() => {
     if (user?.id) {
       startTimeout();
+      
+      // Verificar versão do Changelog
+      const lastSeenVersion = localStorage.getItem('last_seen_changelog_version');
+      if (lastSeenVersion !== APP_VERSION) {
+        setShowChangelog(true);
+      }
     }
   }, [user?.id, startTimeout]);
 
@@ -196,7 +203,13 @@ export default function App() {
         } />
       </Routes>
 
-      <Changelog isOpen={showChangelog} onClose={() => setShowChangelog(false)} />
+      <Changelog 
+        isOpen={showChangelog} 
+        onClose={() => {
+          setShowChangelog(false);
+          localStorage.setItem('last_seen_changelog_version', APP_VERSION);
+        }} 
+      />
       <UserStatusManager user={user} />
     </>
   );

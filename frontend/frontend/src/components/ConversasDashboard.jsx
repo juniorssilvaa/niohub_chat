@@ -143,6 +143,27 @@ export default function ConversasDashboard() {
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState(null);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [providerConfig, setProviderConfig] = useState(null);
+
+  useEffect(() => {
+    const fetchProviderConfig = async () => {
+      try {
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+        if (token) {
+          const response = await axios.get('/api/provider/config/', {
+            headers: { Authorization: `Token ${token}` }
+          });
+          setProviderConfig(response.data);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar configurações do provedor:', error);
+      }
+    };
+    
+    if (authReady) {
+      fetchProviderConfig();
+    }
+  }, [authReady]);
 
   // Funções auxiliares para filtrar conversas (sem sobreposição)
   const isComIA = (conv) => {
@@ -1212,35 +1233,69 @@ export default function ConversasDashboard() {
       ) : (
         <>
           {/* Dashboard de Métricas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-[#242424] border border-[#333333] rounded-[2rem] p-6 shadow-2xl relative group transition-all hover:bg-[#2d2d2d] active:scale-[0.98]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Inteligência Artificial</p>
-                  <p className="text-4xl font-black text-white tracking-tighter">{conversas.filter(isComIA).length}</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {/* Inteligência Artificial */}
+            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-6 shadow-lg shadow-indigo-500/20 relative overflow-hidden transition-all hover:-translate-y-1 hover:shadow-xl">
+              <div className="relative z-10">
+                <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-3 font-mono">
+                  {providerConfig?.chatbot_mode ? 'Automação' : 'Inteligência Artificial'}
+                </p>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-5xl font-bold text-white tracking-tight">
+                    {counts.ia}
+                  </h3>
+                  <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
+                    {providerConfig?.chatbot_mode ? (
+                      <Bot className="w-8 h-8 text-white" strokeWidth={1.5} />
+                    ) : (
+                      <BrainCircuit className="w-8 h-8 text-white" strokeWidth={1.5} />
+                    )}
+                  </div>
                 </div>
-                <BrainCircuit className="w-9 h-9 text-purple-400" strokeWidth={1.2} />
               </div>
+              {/* Decorative elements */}
+              <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-indigo-400/20 rounded-full blur-xl pointer-events-none"></div>
             </div>
 
-            <div className="bg-[#242424] border border-[#333333] rounded-[2rem] p-6 shadow-2xl relative group transition-all hover:bg-[#2d2d2d] active:scale-[0.98]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Fila de Espera</p>
-                  <p className="text-4xl font-black text-white tracking-tighter">{conversas.filter(isEmEspera).length}</p>
+            {/* Fila de Espera */}
+            <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-6 shadow-lg shadow-orange-500/20 relative overflow-hidden transition-all hover:-translate-y-1 hover:shadow-xl">
+              <div className="relative z-10">
+                <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-3 font-mono">
+                  Fila de Espera
+                </p>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-5xl font-bold text-white tracking-tight">
+                    {counts.fila}
+                  </h3>
+                  <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
+                    <Clock className="w-8 h-8 text-white" strokeWidth={1.5} />
+                  </div>
                 </div>
-                <Timer className="w-9 h-9 text-amber-500" strokeWidth={1.2} />
               </div>
+              {/* Decorative elements */}
+              <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-orange-300/20 rounded-full blur-xl pointer-events-none"></div>
             </div>
 
-            <div className="bg-[#242424] border border-[#333333] rounded-[2rem] p-6 shadow-2xl relative group transition-all hover:bg-[#2d2d2d] active:scale-[0.98]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Em Atendimento</p>
-                  <p className="text-4xl font-black text-white tracking-tighter">{conversas.filter(isEmAtendimento).length}</p>
+            {/* Em Atendimento */}
+            <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl p-6 shadow-lg shadow-emerald-500/20 relative overflow-hidden transition-all hover:-translate-y-1 hover:shadow-xl">
+              <div className="relative z-10">
+                <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-3 font-mono">
+                  Em Atendimento
+                </p>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-5xl font-bold text-white tracking-tight">
+                    {counts.atendimento}
+                  </h3>
+                  <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
+                    <Users className="w-8 h-8 text-white" strokeWidth={1.5} />
+                  </div>
                 </div>
-                <Users className="w-9 h-9 text-emerald-400" strokeWidth={1.2} />
               </div>
+              {/* Decorative elements */}
+              <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-emerald-300/20 rounded-full blur-xl pointer-events-none"></div>
             </div>
           </div>
 
@@ -1248,16 +1303,18 @@ export default function ConversasDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Bloco 1: Com IA */}
             <div className="bg-card rounded-lg shadow-md p-4 flex flex-col h-96">
-              <h3 className="text-lg font-semibold text-card-foreground mb-4">Com IA</h3>
+              <h3 className="text-lg font-semibold text-card-foreground mb-4">
+                {providerConfig?.chatbot_mode ? 'Na Automação' : 'Com IA'}
+              </h3>
               <div className="flex-1 overflow-y-auto pr-2">
                 <div className="space-y-3">
                   {conversas.filter(isComIA).map((conv) => (
-                    <div key={conv.id} className="bg-background rounded-lg p-3 relative">
+                    <div key={conv.id} className="bg-background rounded-lg p-3 relative status-border-ia shadow-sm transition-all hover:shadow-md hover:bg-muted/20">
                       <div className="flex items-start gap-3">
                         <img
                           src={getAvatar(conv.contact)}
                           alt="avatar"
-                          className="w-10 h-10 rounded-full object-cover border-2 border-border"
+                          className="w-10 h-10 rounded-full object-cover border-2 border-purple-500/30"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
@@ -1317,12 +1374,12 @@ export default function ConversasDashboard() {
               <div className="flex-1 overflow-y-auto pr-2">
                 <div className="space-y-3">
                   {conversas.filter(isEmEspera).map((conv) => (
-                    <div key={conv.id} className="bg-background rounded-lg p-3 relative">
+                    <div key={conv.id} className="bg-background rounded-lg p-3 relative status-border-espera shadow-sm transition-all hover:shadow-md hover:bg-muted/20">
                       <div className="flex items-start gap-3">
                         <img
                           src={getAvatar(conv.contact)}
                           alt="avatar"
-                          className="w-10 h-10 rounded-full object-cover border-2 border-border"
+                          className="w-10 h-10 rounded-full object-cover border-2 border-orange-500/30"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
@@ -1382,12 +1439,12 @@ export default function ConversasDashboard() {
               <div className="flex-1 overflow-y-auto pr-2">
                 <div className="space-y-3">
                   {conversas.filter(isEmAtendimento).map((conv) => (
-                    <div key={conv.id} className="bg-background rounded-lg p-3 relative">
+                    <div key={conv.id} className="bg-background rounded-lg p-3 relative status-border-atendimento shadow-sm transition-all hover:shadow-md hover:bg-muted/20">
                       <div className="flex items-start gap-3">
                         <img
                           src={getAvatar(conv.contact)}
                           alt="avatar"
-                          className="w-10 h-10 rounded-full object-cover border-2 border-border"
+                          className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500/30"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">

@@ -76,10 +76,10 @@ export default function SuperadminDashboard({ onLogout }) {
   // Função para calcular tendências (simulada por enquanto)
   const calcularTendencias = (valorAtual, valorAnterior = 0) => {
     if (valorAnterior === 0) return { valor: 0, percentual: 0, direcao: 'up' };
-    
+
     const diferenca = valorAtual - valorAnterior;
     const percentual = Math.round((diferenca / valorAnterior) * 100);
-    
+
     return {
       valor: Math.abs(diferenca),
       percentual: Math.abs(percentual),
@@ -92,25 +92,25 @@ export default function SuperadminDashboard({ onLogout }) {
     const fetchProvedoresAndStats = async () => {
       try {
         const token = localStorage.getItem('token');
-        
+
         // Buscar provedores
         const provedoresRes = await axios.get('/api/provedores/', {
           headers: { Authorization: `Token ${token}` }
         });
         const provedores = provedoresRes.data.results || provedoresRes.data;
         setProvedoresState(provedores);
-        
+
         // Calcular totais dos provedores
         const totalUsuarios = provedores.reduce((sum, p) => sum + (p.users_count || 0), 0);
         const totalConversas = provedores.reduce((sum, p) => sum + (p.conversations_count || 0), 0);
-        
+
         // Simular dados anteriores para tendências (em produção, buscar do banco)
         const dadosAnteriores = {
           provedores: Math.max(0, provedores.length - 1), // Simular mudança
           usuarios: Math.max(0, totalUsuarios - 1),       // Simular mudança
           conversas: Math.max(0, totalConversas - 1)      // Simular mudança
         };
-        
+
         setStatsData({
           totalProvedores: provedores.length,
           receitaMensal: 'R$ 0,00',
@@ -123,12 +123,12 @@ export default function SuperadminDashboard({ onLogout }) {
             conversas: calcularTendencias(totalConversas, dadosAnteriores.conversas)
           }
         });
-        
+
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
       }
     };
-    
+
     fetchProvedoresAndStats();
   }, []);
 
@@ -232,14 +232,14 @@ export default function SuperadminDashboard({ onLogout }) {
               </h1>
               <p className="text-muted-foreground">Visão geral do sistema e estatísticas em tempo real</p>
             </div>
-            
+
             {/* Cards de Estatísticas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden transition-all duration-300 hover:shadow-xl">
                 <div className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 px-5 py-4 border-b border-border">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-blue-500/20">
+                      <div className="p-2 rounded-lg bg-muted border border-border">
                         <Wifi className="w-6 h-6 text-blue-400" />
                       </div>
                       <div>
@@ -253,9 +253,8 @@ export default function SuperadminDashboard({ onLogout }) {
                       ) : (
                         <TrendingDown className="w-4 h-4 text-red-500" />
                       )}
-                      <span className={`text-xs font-medium ${
-                        statsData.tendencias.provedores.direcao === 'up' ? 'text-green-500' : 'text-red-500'
-                      }`}>
+                      <span className={`text-xs font-medium ${statsData.tendencias.provedores.direcao === 'up' ? 'text-green-500' : 'text-red-500'
+                        }`}>
                         {statsData.tendencias.provedores.direcao === 'up' ? '+' : '-'}{statsData.tendencias.provedores.percentual}%
                       </span>
                     </div>
@@ -265,7 +264,7 @@ export default function SuperadminDashboard({ onLogout }) {
                   <p className="text-xs text-muted-foreground">Total no Sistema</p>
                 </div>
               </div>
-              
+
               <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden transition-all duration-300 hover:shadow-xl">
                 <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 px-5 py-4 border-b border-border">
                   <div className="flex items-center justify-between">
@@ -284,9 +283,8 @@ export default function SuperadminDashboard({ onLogout }) {
                       ) : (
                         <TrendingDown className="w-4 h-4 text-red-500" />
                       )}
-                      <span className={`text-xs font-medium ${
-                        statsData.tendencias.receita.direcao === 'up' ? 'text-green-500' : 'text-red-500'
-                      }`}>
+                      <span className={`text-xs font-medium ${statsData.tendencias.receita.direcao === 'up' ? 'text-green-500' : 'text-red-500'
+                        }`}>
                         {statsData.tendencias.receita.direcao === 'up' ? '+' : '-'}{statsData.tendencias.receita.percentual}%
                       </span>
                     </div>
@@ -296,7 +294,7 @@ export default function SuperadminDashboard({ onLogout }) {
                   <p className="text-xs text-muted-foreground">Receita Mensal</p>
                 </div>
               </div>
-              
+
               <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden transition-all duration-300 hover:shadow-xl">
                 <div className="bg-gradient-to-r from-purple-900/30 to-violet-900/30 px-5 py-4 border-b border-border">
                   <div className="flex items-center justify-between">
@@ -315,9 +313,8 @@ export default function SuperadminDashboard({ onLogout }) {
                       ) : (
                         <TrendingDown className="w-4 h-4 text-red-500" />
                       )}
-                      <span className={`text-xs font-medium ${
-                        statsData.tendencias.usuarios.direcao === 'up' ? 'text-green-500' : 'text-red-500'
-                      }`}>
+                      <span className={`text-xs font-medium ${statsData.tendencias.usuarios.direcao === 'up' ? 'text-green-500' : 'text-red-500'
+                        }`}>
                         {statsData.tendencias.usuarios.direcao === 'up' ? '+' : '-'}{statsData.tendencias.usuarios.percentual}%
                       </span>
                     </div>
@@ -327,7 +324,7 @@ export default function SuperadminDashboard({ onLogout }) {
                   <p className="text-xs text-muted-foreground">Total de Usuários</p>
                 </div>
               </div>
-              
+
               <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden transition-all duration-300 hover:shadow-xl">
                 <div className="bg-gradient-to-r from-orange-900/30 to-red-900/30 px-5 py-4 border-b border-border">
                   <div className="flex items-center justify-between">
@@ -346,9 +343,8 @@ export default function SuperadminDashboard({ onLogout }) {
                       ) : (
                         <TrendingDown className="w-4 h-4 text-red-500" />
                       )}
-                      <span className={`text-xs font-medium ${
-                        statsData.tendencias.conversas.direcao === 'up' ? 'text-green-500' : 'text-red-500'
-                      }`}>
+                      <span className={`text-xs font-medium ${statsData.tendencias.conversas.direcao === 'up' ? 'text-green-500' : 'text-red-500'
+                        }`}>
                         {statsData.tendencias.conversas.direcao === 'up' ? '+' : '-'}{statsData.tendencias.conversas.percentual}%
                       </span>
                     </div>
@@ -364,10 +360,10 @@ export default function SuperadminDashboard({ onLogout }) {
             <div className="mb-8">
               <DashboardCharts />
             </div>
-            
+
             {/* Seção de Provedores */}
 
-            
+
             {/* Modal de adicionar empresa */}
             {showAddModal && (
               <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">

@@ -5,7 +5,7 @@ import AddEditTeamModal from './AddEditTeamModal';
 
 const TeamsPage = () => {
   console.log('TeamsPage está sendo renderizado');
-  
+
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,18 +24,18 @@ const TeamsPage = () => {
           setLoading(false);
           return;
         }
-        
+
         const response = await fetch('/api/teams/', {
           headers: {
             'Authorization': `Token ${token}`,
             'Content-Type': 'application/json'
           }
         });
-        
+
         if (!response.ok) {
           throw new Error('Erro ao buscar equipes');
         }
-        
+
         const data = await response.json();
         setTeams(data.results || data);
       } catch (err) {
@@ -68,7 +68,7 @@ const TeamsPage = () => {
           alert('Token não encontrado. Faça login novamente.');
           return;
         }
-        
+
         const response = await fetch(`/api/teams/${teamId}/`, {
           method: 'DELETE',
           headers: {
@@ -76,7 +76,7 @@ const TeamsPage = () => {
             'Content-Type': 'application/json'
           }
         });
-        
+
         if (response.ok) {
           setTeams(teams.filter(team => team.id !== teamId));
         } else {
@@ -97,7 +97,7 @@ const TeamsPage = () => {
         alert('Token não encontrado. Faça login novamente.');
         return;
       }
-      
+
       const teamPayload = {
         name: teamData.name,
         description: '',
@@ -127,18 +127,18 @@ const TeamsPage = () => {
           body: JSON.stringify(teamPayload)
         });
       }
-      
+
       if (response.ok) {
         const savedTeam = await response.json();
-        
+
         if (editingTeam) {
-          setTeams(teams.map(team => 
+          setTeams(teams.map(team =>
             team.id === editingTeam.id ? savedTeam : team
           ));
         } else {
           setTeams([...teams, savedTeam]);
         }
-        
+
         setIsModalOpen(false);
       } else {
         const errorData = await response.json();
@@ -210,7 +210,7 @@ const TeamsPage = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => handleDeleteTeam(team.id)}
-                  className="text-red-600 hover:text-red-700"
+                  className="border-red-500/50 text-red-500 hover:bg-red-500/10 hover:text-red-400 font-bold"
                 >
                   <Trash2 className="w-3 h-3 mr-1" />
                   Apagar

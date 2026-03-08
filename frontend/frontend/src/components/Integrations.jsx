@@ -9,7 +9,7 @@ import useMetaEmbeddedSignupListener from '../hooks/useMetaEmbeddedSignupListene
 import { useNavigate } from 'react-router-dom';
 import { Switch } from './ui/switch';
 
-function StatusBadge({ status, t }) {
+  function StatusBadge({ status, t }) {
   let color = 'bg-yellow-500';
   let text = 'text-yellow-900';
   let statusText = t('desconectado');
@@ -35,7 +35,7 @@ function StatusBadge({ status, t }) {
   );
 }
 
-function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onCheckStatus, onDeleteInstance, deletingChannelId, isProcessing, onToggleIA, t }) {
+function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onCheckStatus, onDeleteInstance, deletingChannelId, isProcessing, onToggleIA, providerConfig, t }) {
   const isWhatsapp = channel.tipo === 'whatsapp' || channel.tipo === 'whatsapp_session';
   const isWhatsappOficial = channel.tipo === 'whatsapp_oficial';
 
@@ -173,7 +173,7 @@ function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onChe
         {isConnected && (
           <div className="flex items-center gap-1.5">
             <Bot className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">ChatBot:</span>
+            <span className="text-xs text-muted-foreground">{providerConfig?.chatbot_mode ? 'Automação' : 'IA'}:</span>
             <Switch
               checked={channel.ia_ativa !== false}
               onCheckedChange={(checked) => onToggleIA(channel.id, checked)}
@@ -273,6 +273,25 @@ const FACEBOOK_APP_ID = '713538217881661';
 const META_EMBEDDED_SIGNUP_CONFIG_ID = '1888449245359692';
 
 export default function Integrations({ provedorId }) {
+  const [providerConfig, setProviderConfig] = useState(null);
+
+  useEffect(() => {
+    const fetchProviderConfig = async () => {
+      try {
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+        if (token) {
+          const response = await axios.get('/api/provider/config/', {
+            headers: { Authorization: `Token ${token}` }
+          });
+          setProviderConfig(response.data);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar configurações do provedor:', error);
+      }
+    };
+    fetchProviderConfig();
+  }, []);
+
   // Função helper para buscar canais com provedor_id quando necessário
   const fetchCanais = async (token) => {
     const params = {};
@@ -2551,6 +2570,7 @@ export default function Integrations({ provedorId }) {
               onToggleIA={handleToggleIA}
               deletingChannelId={deletingChannelId}
               isProcessing={processingChannels.has(channel.id)}
+              providerConfig={providerConfig}
               t={t}
             />
             {/* QR Code para WhatsApp */}
@@ -2665,7 +2685,7 @@ export default function Integrations({ provedorId }) {
                   </div>
                 ) : selectedType === 'telegram' ? (
                   <div className="flex flex-col gap-4">
-                    <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 mb-2">
+                    <div className="bg-muted border border-border rounded-lg p-3 mb-2">
                       <p className="text-xs text-blue-300">
                         <strong>Como obter suas credenciais:</strong><br />
                         1. Acesse <a href="https://my.telegram.org/auth" target="_blank" rel="noopener noreferrer" className="underline">my.telegram.org/auth</a><br />
@@ -3184,7 +3204,7 @@ export default function Integrations({ provedorId }) {
                   {/* Formulário */}
                   <div className="space-y-4 pr-2" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
 
-                    <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+                    <div className="bg-muted border border-border rounded-lg p-4">
                       <p className="text-xs text-blue-300">
                         <strong>Informação:</strong> Os modelos de mensagem permitem enviar mensagens fora da janela de atendimento ao cliente (24 horas).
                         Após criar, o modelo será analisado pela Meta e pode levar até 24 horas para ser aprovado.
