@@ -319,6 +319,7 @@ const Dashboard = ({ provedorId }) => {
               trend={stat.trend}
               icon={stat.icon}
               subtitle=""
+              color={stat.color}
             />
           ))}
         </div>

@@ -1,6 +1,32 @@
 {
-  "current_version": "2.26.8",
+  "current_version": "2.26.9",
   "versions": [
+    {
+      "version": "2.26.9",
+      "version_type": "patch",
+      "date": "2026-03-11",
+      "title": "Melhorias Visuais e Correção de Duplicidade",
+      "changes": [
+        {
+          "type": "fix",
+          "module": "Dashboard",
+          "title": "Correção de Cores e Contraste",
+          "description": "Ajustada a cor dos textos e labels para branco em todo o painel, garantindo legibilidade perfeita no modo escuro."
+        },
+        {
+          "type": "fix",
+          "module": "Atendimento",
+          "title": "Correção de Duplicação de Atendimentos",
+          "description": "Corrigida falha na normalização de números brasileiros que causava a abertura de novos atendimentos para o mesmo cliente devido ao nono dígito."
+        },
+        {
+          "type": "improvement",
+          "module": "Banco de Dados",
+          "title": "Limpeza Definitiva",
+          "description": "Removidos registros órfãos e implementada exclusão em cascata automática para canais e inboxes."
+        }
+      ]
+    },
     {
       "version": "2.26.8",
       "version_type": "patch",

@@ -1,2 +1,0 @@
----INBOXES ATUAIS---
-[(9, 'WhatsApp - NIO NET', 'whatsapp', '22'), (10, 'WhatsApp - WhatsApp Oficial - NIO NET', 'whatsapp_oficial', '21'), (11, 'WhatsApp - WhatsApp Oficial - NIO NET', 'whatsapp_oficial', '17'), (12, 'WhatsApp - NIO NET', 'whatsapp', 'whatsapp_cloud_api')]

@@ -34,20 +34,20 @@ export default function AppearancePage() {
     <div className="flex-1 p-6 bg-background overflow-y-auto">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold text-foreground mb-8 flex items-center gap-3">
-          <Palette className="w-8 h-8 text-muted-foreground" /> Aparência
+          <Palette className="w-8 h-8 text-white/70" /> Aparência
         </h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           {/* Settings Column */}
           <div className="space-y-6">
             <div className="niochat-card p-6 border border-border shadow-sm">
-              <h3 className="text-lg font-medium text-card-foreground mb-6">
+              <h3 className="text-lg font-medium text-white mb-6">
                 Aparência e Localização
               </h3>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-card-foreground mb-2">
+                  <label className="block text-sm font-medium text-white mb-2">
                     Tema do Painel e App
                   </label>
                   <div className="grid grid-cols-3 gap-3">
@@ -60,7 +60,7 @@ export default function AppearancePage() {
                         })}
                         className={`py-2 px-4 rounded-lg border text-sm font-medium transition-all ${settings.appearance.theme === t
                             ? 'bg-primary text-primary-foreground border-primary shadow-md'
-                            : 'bg-background text-muted-foreground border-border hover:border-primary/50'
+                            : 'bg-background text-white/70 border-border hover:border-primary/50'
                           }`}
                       >
                         {t === 'dark' ? 'Escuro' : t === 'light' ? 'Claro' : 'Auto'}
@@ -70,7 +70,7 @@ export default function AppearancePage() {
                 </div>
 
                 <div className="pt-4 border-t border-border">
-                  <label className="block text-sm font-medium text-card-foreground mb-2">
+                  <label className="block text-sm font-medium text-white mb-2">
                     Idioma Principal
                   </label>
                   <select
@@ -88,7 +88,7 @@ export default function AppearancePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-card-foreground mb-2">
+                  <label className="block text-sm font-medium text-white mb-2">
                     Fuso Horário
                   </label>
                   <select
@@ -107,7 +107,7 @@ export default function AppearancePage() {
               </div>
             </div>
 
-            <div className="p-4 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
+            <div className="p-4 bg-muted/30 rounded-lg border border-border text-sm text-white/70">
               <p>
                 As alterações de tema são refletidas instantaneamente na interface de pré-visualização ao lado.
               </p>

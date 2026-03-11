@@ -228,12 +228,33 @@ def fetch_and_update_phone_numbers(waba_id: str, canal: Canal) -> bool:
 
 
 def normalize_phone_number(phone: str) -> str:
-    """Normaliza número de telefone para formato padrão."""
+    """
+    Normaliza número de telefone para formato padrão.
+    Lida com o nono dígito brasileiro para evitar duplicidade.
+    """
     if not phone:
         return ""
-    cleaned = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    if cleaned.startswith("+"):
-        cleaned = cleaned[1:]
+    
+    # Remover caracteres não numéricos
+    import re
+    cleaned = re.sub(r'\D', '', phone)
+    
+    # Se começar com +, o regex acima já removeu
+    
+    # Lógica para números brasileiros (DDI 55)
+    if cleaned.startswith('55') and len(cleaned) >= 10:
+        # Extrair DDD e número
+        ddd_e_numero = cleaned[2:]
+        
+        # Se tem 10 dígitos (DDD + 8), adicionar o 9 (nono dígito)
+        # Regra: DDDs 11 a 99 (todos hoje têm nono dígito no celular)
+        if len(ddd_e_numero) == 10:
+            # DDD (2) + Número (8) -> Adicionar 9 após o DDD
+            cleaned = '55' + ddd_e_numero[:2] + '9' + ddd_e_numero[2:]
+        
+        # Opcional: Se quiser remover o 9 invés de adicionar, faria o contrário.
+        # Mas o padrão Meta/WhatsApp Cloud API é enviar COM o 9.
+            
     return cleaned
 
 

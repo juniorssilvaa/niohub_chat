@@ -2,7 +2,8 @@ from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.db import transaction
 from django.core.cache import cache
-from .models import Conversation, Message
+from .models import Conversation, Message, Inbox
+from core.models import Canal
 from .services import ConversationNotificationService
 from .serializers import MessageSerializer, ConversationSerializer
 import logging
@@ -217,3 +218,27 @@ def notify_conversation_deleted(sender, instance, **kwargs):
             f"Erro ao notificar deleção de conversa {instance.pk}: {e}",
             exc_info=True
         )
+
+
+@receiver(post_delete, sender=Canal)
+def cleanup_inbox_on_canal_delete(sender, instance, **kwargs):
+    """
+    Garante a exclusão em cascata do Inbox quando um Canal é deletado.
+    Como channel_id é um CharField, o Django não faz isso automaticamente.
+    """
+    try:
+        # Buscar inboxes que apontam para este canal
+        # 1. Por ID numérico
+        inboxes = Inbox.objects.filter(channel_id=str(instance.id), provedor=instance.provedor)
+
+        # 2. Casos especiais (strings como whatsapp_cloud_api)
+        if instance.tipo == 'whatsapp_oficial':
+            special_inboxes = Inbox.objects.filter(channel_id='whatsapp_cloud_api', provedor=instance.provedor)
+            inboxes = inboxes | special_inboxes
+
+        for inbox in inboxes:
+            logger.info(f"[CascadeDelete] Deletando Inbox órfão {inbox.id} ({inbox.name}) após exclusão do Canal {instance.id}")
+            inbox.delete()
+
+    except Exception as e:
+        logger.error(f"[CascadeDelete] Erro ao limpar inboxes para o canal {instance.id}: {e}")

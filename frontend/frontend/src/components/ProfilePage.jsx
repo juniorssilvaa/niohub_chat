@@ -399,7 +399,7 @@ export default function ProfilePage() {
   const renderAssignmentSettings = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-card-foreground">
+        <h3 className="text-lg font-medium text-white">
           {t('mensagem_atribuicao') || 'Mensagem de Atribuição'}
         </h3>
         <button
@@ -429,7 +429,7 @@ export default function ProfilePage() {
   const renderProfileSettings = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-card-foreground">
+        <h3 className="text-lg font-medium text-white">
           {t('informacoes_pessoais')}
         </h3>
         <button
@@ -444,7 +444,7 @@ export default function ProfilePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-card-foreground mb-2">
+          <label className="block text-sm font-medium text-white mb-2">
             {t('nome_completo')}
           </label>
           <input
@@ -459,7 +459,7 @@ export default function ProfilePage() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-card-foreground mb-2">
+          <label className="block text-sm font-medium text-white mb-2">
             {t('email')}
           </label>
           <input
@@ -474,7 +474,7 @@ export default function ProfilePage() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-card-foreground mb-2">
+          <label className="block text-sm font-medium text-white mb-2">
             {t('telefone')}
           </label>
           <input
@@ -489,7 +489,7 @@ export default function ProfilePage() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-card-foreground mb-2">
+          <label className="block text-sm font-medium text-white mb-2">
             {t('idioma_sistema')}
           </label>
           <select
@@ -518,14 +518,14 @@ export default function ProfilePage() {
 
   const renderNotificationSettings = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-medium text-card-foreground mb-4">
+      <h3 className="text-lg font-medium text-white mb-4">
         {t('preferencias_notificacao')}
       </h3>
       <div className="space-y-4">
         <div className="flex items-center justify-between p-4 border border-border rounded-lg">
           <div className="flex items-center gap-2">
-            <Volume2 className="w-5 h-5 text-muted-foreground" />
-            <h4 className="font-medium text-card-foreground">{t('notificacoes_sonoras')}</h4>
+            <Volume2 className="w-5 h-5 text-white/70" />
+            <h4 className="font-medium text-white">{t('notificacoes_sonoras')}</h4>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -543,7 +543,7 @@ export default function ProfilePage() {
           <div className="p-4 border border-border rounded-lg">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-card-foreground mb-2">
+                <label className="block text-sm font-medium text-white mb-2">
                   {t('som_novas_mensagens')}
                 </label>
                 <select
@@ -560,7 +560,7 @@ export default function ProfilePage() {
 
                 <div className="mt-4">
                   <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-medium text-muted-foreground">
+                    <label className="block text-xs font-medium text-white/70">
                       Volume
                     </label>
                     <span className="text-xs font-medium text-primary">
@@ -596,7 +596,7 @@ export default function ProfilePage() {
           <div className="p-4 border border-border rounded-lg">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-card-foreground mb-2">
+                <label className="block text-sm font-medium text-white mb-2">
                   {t('som_novas_conversas')}
                 </label>
                 <select
@@ -613,7 +613,7 @@ export default function ProfilePage() {
 
                 <div className="mt-4">
                   <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-medium text-muted-foreground">
+                    <label className="block text-xs font-medium text-white/70">
                       Volume
                     </label>
                     <span className="text-xs font-medium text-primary">
@@ -653,15 +653,15 @@ export default function ProfilePage() {
 
   const renderSecuritySettings = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-medium text-card-foreground mb-4">
+      <h3 className="text-lg font-medium text-white mb-4">
         {t('configuracoes_seguranca')}
       </h3>
       <div className="space-y-4">
         <div className="p-4 border border-border rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="font-medium text-card-foreground">{t('autenticacao_dois_fatores')}</h4>
-              <p className="text-sm text-muted-foreground">
+              <h4 className="font-medium text-white">{t('autenticacao_dois_fatores')}</h4>
+              <p className="text-sm text-white/70">
                 {t('adicionar_camada_seguranca')}
               </p>
             </div>
@@ -683,8 +683,8 @@ export default function ProfilePage() {
         <div className="p-4 border border-border rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="font-medium text-card-foreground">{t('redefinir_senha')}</h4>
-              <p className="text-sm text-muted-foreground">
+              <h4 className="font-medium text-white">{t('redefinir_senha')}</h4>
+              <p className="text-sm text-white/70">
                 {t('alterar_senha')}
               </p>
             </div>
@@ -700,7 +700,7 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-card-foreground mb-2">
+          <label className="block text-sm font-medium text-white mb-2">
             {t('timeout_sessao')}
           </label>
           <div className="flex gap-2">
@@ -752,7 +752,7 @@ export default function ProfilePage() {
     <div className="flex-1 p-6 bg-background overflow-y-auto">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-foreground mb-6 flex items-center gap-3">
-          <User className="w-8 h-8 text-muted-foreground" /> {t('perfil')}
+          <User className="w-8 h-8 text-white/70" /> {t('perfil')}
         </h1>
 
         {/* Mensagem de feedback global */}
@@ -786,7 +786,7 @@ export default function ProfilePage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${activeTab === tab.id
                     ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    : 'text-white/70 hover:text-foreground hover:bg-muted'
                     }`}
                 >
                   <tab.icon className="w-5 h-5" />

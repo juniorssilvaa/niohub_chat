@@ -65,12 +65,12 @@ const Settings = () => {
   const renderProfileSettings = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-medium text-card-foreground mb-4">
+        <h3 className="text-lg font-medium text-white mb-4">
           Informações Pessoais
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-card-foreground mb-2">
+            <label className="block text-sm font-medium text-white mb-2">
               Nome Completo
             </label>
             <input
@@ -84,7 +84,7 @@ const Settings = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-card-foreground mb-2">
+            <label className="block text-sm font-medium text-white mb-2">
               E-mail
             </label>
             <input
@@ -98,7 +98,7 @@ const Settings = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-card-foreground mb-2">
+            <label className="block text-sm font-medium text-white mb-2">
               Telefone
             </label>
             <input
@@ -115,12 +115,12 @@ const Settings = () => {
       </div>
 
       <div>
-        <h3 className="text-lg font-medium text-card-foreground mb-4">
+        <h3 className="text-lg font-medium text-white mb-4">
           Alterar Senha
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-card-foreground mb-2">
+            <label className="block text-sm font-medium text-white mb-2">
               Senha Atual
             </label>
             <div className="relative">
@@ -132,14 +132,14 @@ const Settings = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/70"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-card-foreground mb-2">
+            <label className="block text-sm font-medium text-white mb-2">
               Nova Senha
             </label>
             <input
@@ -155,21 +155,21 @@ const Settings = () => {
 
   const renderNotificationSettings = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-medium text-card-foreground mb-4">
+      <h3 className="text-lg font-medium text-white mb-4">
         Preferências de Notificação
       </h3>
       <div className="space-y-4">
         {Object.entries(settings.notifications).filter(([key]) => key !== 'soundNotificationFile').map(([key, value]) => (
           <div key={key} className="flex items-center justify-between p-4 border border-border rounded-lg">
             <div>
-              <h4 className="font-medium text-card-foreground">
+              <h4 className="font-medium text-white">
                 {key === 'emailNotifications' && 'Notificações por E-mail'}
                 {key === 'pushNotifications' && 'Notificações Push'}
                 {key === 'soundNotifications' && 'Notificações Sonoras'}
                 {key === 'soundNotificationFile' && 'Som das Notificações'}
                 {key === 'desktopNotifications' && 'Notificações Desktop'}
               </h4>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-white/70">
                 {key === 'emailNotifications' && 'Receber notificações por e-mail'}
                 {key === 'pushNotifications' && 'Receber notificações push no dispositivo'}
                 {key === 'soundNotifications' && 'Reproduzir som para notificações'}
@@ -195,12 +195,12 @@ const Settings = () => {
         {/* Seleção de som para notificações */}
         {settings.notifications.soundNotifications && (
           <div className="p-4 border border-border rounded-lg bg-muted/20">
-            <h4 className="font-medium text-card-foreground mb-3">
+            <h4 className="font-medium text-white mb-3">
               Som das Notificações
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-card-foreground mb-2">
+                <label className="block text-sm font-medium text-white mb-2">
                   Escolher Som
                 </label>
                 <select
@@ -237,7 +237,7 @@ const Settings = () => {
                 </button>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="text-xs text-white/70 mt-2">
               Pré-visualize o som selecionado clicando em "Ouvir Som"
             </p>
           </div>
@@ -248,15 +248,15 @@ const Settings = () => {
 
   const renderSecuritySettings = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-medium text-card-foreground mb-4">
+      <h3 className="text-lg font-medium text-white mb-4">
         Configurações de Segurança
       </h3>
       <div className="space-y-4">
         <div className="p-4 border border-border rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="font-medium text-card-foreground">Autenticação de Dois Fatores</h4>
-              <p className="text-sm text-muted-foreground">
+              <h4 className="font-medium text-white">Autenticação de Dois Fatores</h4>
+              <p className="text-sm text-white/70">
                 Adicione uma camada extra de segurança à sua conta
               </p>
             </div>
@@ -277,7 +277,7 @@ const Settings = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-card-foreground mb-2">
+            <label className="block text-sm font-medium text-white mb-2">
               Timeout da Sessão (minutos)
             </label>
             <select
@@ -295,7 +295,7 @@ const Settings = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-card-foreground mb-2">
+            <label className="block text-sm font-medium text-white mb-2">
               Expiração da Senha (dias)
             </label>
             <select
@@ -319,12 +319,12 @@ const Settings = () => {
 
   const renderAppearanceSettings = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-medium text-card-foreground mb-4">
+      <h3 className="text-lg font-medium text-white mb-4">
         Aparência e Localização
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-card-foreground mb-2">
+          <label className="block text-sm font-medium text-white mb-2">
             Tema
           </label>
           <select
@@ -341,7 +341,7 @@ const Settings = () => {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-card-foreground mb-2">
+          <label className="block text-sm font-medium text-white mb-2">
             Idioma
           </label>
           <select
@@ -358,7 +358,7 @@ const Settings = () => {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-card-foreground mb-2">
+          <label className="block text-sm font-medium text-white mb-2">
             Fuso Horário
           </label>
           <select
@@ -380,7 +380,7 @@ const Settings = () => {
 
   const renderIntegrationsSettings = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-medium text-card-foreground mb-4">
+      <h3 className="text-lg font-medium text-white mb-4">
         Integrações Disponíveis
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -397,7 +397,7 @@ const Settings = () => {
                   <Globe className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h4 className="font-medium text-card-foreground">{integration.name}</h4>
+                  <h4 className="font-medium text-white">{integration.name}</h4>
                   <p className={`text-sm ${integration.status === 'connected' ? 'text-green-500' : 'text-red-500'
                     }`}>
                     {integration.status === 'connected' ? 'Conectado' : 'Desconectado'}
@@ -438,7 +438,7 @@ const Settings = () => {
             <SettingsIcon className="w-8 h-8 mr-3" />
             Configurações
           </h1>
-          <p className="text-muted-foreground">Gerencie suas preferências e configurações do sistema</p>
+          <p className="text-white/70">Gerencie suas preferências e configurações do sistema</p>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">
@@ -451,7 +451,7 @@ const Settings = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${activeTab === tab.id
                     ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    : 'text-white/70 hover:text-foreground hover:bg-muted'
                     }`}
                 >
                   <tab.icon className="w-5 h-5" />

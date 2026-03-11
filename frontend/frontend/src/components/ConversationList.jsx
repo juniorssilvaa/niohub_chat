@@ -1330,24 +1330,24 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Nome do Contato</label>
+              <label className="block text-sm font-medium mb-2 text-white">Nome do Contato</label>
               <input
                 type="text"
                 value={novoContato.nome}
                 onChange={(e) => setNovoContato(prev => ({ ...prev, nome: e.target.value }))}
                 placeholder="Digite o nome do contato"
-                className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-white bg-background/50"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Telefone (com 55)</label>
+              <label className="block text-sm font-medium mb-2 text-white">Telefone (com 55)</label>
               <input
                 type="text"
                 value={novoContato.telefone}
                 onChange={(e) => setNovoContato(prev => ({ ...prev, telefone: e.target.value }))}
                 placeholder="5511999999999"
-                className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-white bg-background/50"
               />
             </div>
 
@@ -1355,7 +1355,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             {/* Seleção de Inbox Específico */}
             {inboxes.length > 0 && (
               <div>
-                <label className="block text-sm font-medium mb-2">Canal Específico (Conexão)</label>
+                <label className="block text-sm font-medium mb-2 text-white">Canal Específico (Conexão)</label>
                 <select
                   value={novoContato.inboxId || ''}
                   onChange={(e) => {
@@ -1373,7 +1373,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                       buscarTemplates(channel_id_value);
                     }
                   }}
-                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-white bg-background/50"
                 >
                   <option value="">Selecione a conexão</option>
                   {inboxes
@@ -1403,25 +1403,25 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                     }))}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm font-medium">Usar template de mensagem (para iniciar conversa após 24h)</span>
+                  <span className="text-sm font-medium text-white">Usar template de mensagem (para iniciar conversa após 24h)</span>
                 </label>
               </div>
             )}
 
             {novoContato.usarTemplate && (novoContato.canal === 'whatsapp' || novoContato.canal === 'whatsapp_oficial') ? (
               <div>
-                <label className="block text-sm font-medium mb-2">Template</label>
+                <label className="block text-sm font-medium mb-2 text-white">Template</label>
                 {carregandoTemplates ? (
                   <div className="text-sm text-muted-foreground">Carregando templates...</div>
                 ) : templates.length > 0 ? (
                   <select
                     value={novoContato.templateSelecionado || ''}
                     onChange={(e) => setNovoContato(prev => ({ ...prev, templateSelecionado: e.target.value }))}
-                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground"
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-white bg-background/50"
                   >
-                    <option value="" className="bg-background text-foreground">Selecione um template</option>
+                    <option value="" className="bg-background text-white">Selecione um template</option>
                     {templates.map((template, index) => (
-                      <option key={template.id || template.name || `template-${index}`} value={template.name} className="bg-background text-foreground">
+                      <option key={template.id || template.name || `template-${index}`} value={template.name} className="bg-background text-white">
                         {template.name} ({template.language || 'pt_BR'})
                       </option>
                     ))}
@@ -1434,13 +1434,13 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium mb-2">Mensagem</label>
+                <label className="block text-sm font-medium mb-2 text-white">Mensagem</label>
                 <textarea
                   value={novoContato.mensagem}
                   onChange={(e) => setNovoContato(prev => ({ ...prev, mensagem: e.target.value }))}
                   placeholder="Digite a mensagem a ser enviada"
                   rows={3}
-                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none text-white bg-background/50"
                 />
               </div>
             )}
@@ -1477,7 +1477,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Buscar Contato</label>
+              <label className="block text-sm font-medium mb-2 text-white">Buscar Contato</label>
               <input
                 type="text"
                 value={contatoExistente.busca}
@@ -1486,7 +1486,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                   buscarContatos(e.target.value);
                 }}
                 placeholder="Digite nome ou telefone"
-                className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-white bg-background/50"
               />
             </div>
 
@@ -1518,7 +1518,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             {/* Seleção de Inbox para Contato Existente */}
             {inboxes.length > 0 && (
               <div>
-                <label className="block text-sm font-medium mb-2">Canal de Envio</label>
+                <label className="block text-sm font-medium mb-2 text-white">Canal de Envio</label>
                 <select
                   value={contatoExistente.inboxId || ''}
                   onChange={(e) => {
@@ -1536,7 +1536,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                       buscarTemplates(channel_id_value);
                     }
                   }}
-                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-white bg-background/50"
                 >
                   <option value="">Selecione a conexão</option>
                   {inboxes.map(inbox => (
@@ -1561,24 +1561,24 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                   }))}
                   className="w-4 h-4"
                 />
-                <span className="text-sm font-medium">Usar template de mensagem (para iniciar conversa após 24h)</span>
+                <span className="text-sm font-medium text-white">Usar template de mensagem (para iniciar conversa após 24h)</span>
               </label>
             </div>
 
             {contatoExistente.usarTemplate ? (
               <div>
-                <label className="block text-sm font-medium mb-2">Template</label>
+                <label className="block text-sm font-medium mb-2 text-white">Template</label>
                 {carregandoTemplates ? (
                   <div className="text-sm text-muted-foreground">Carregando templates...</div>
                 ) : templates.length > 0 ? (
                   <select
                     value={contatoExistente.templateSelecionado || ''}
                     onChange={(e) => setContatoExistente(prev => ({ ...prev, templateSelecionado: e.target.value }))}
-                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground"
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-white bg-background/50"
                   >
-                    <option value="" className="bg-background text-foreground">Selecione um template</option>
+                    <option value="" className="bg-background text-white">Selecione um template</option>
                     {templates.map((template, index) => (
-                      <option key={template.id || template.name || `template-${index}`} value={template.name} className="bg-background text-foreground">
+                      <option key={template.id || template.name || `template-${index}`} value={template.name} className="bg-background text-white">
                         {template.name} ({template.language || 'pt_BR'})
                       </option>
                     ))}
@@ -1591,13 +1591,13 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium mb-2">Mensagem</label>
+                <label className="block text-sm font-medium mb-2 text-white">Mensagem</label>
                 <textarea
                   value={contatoExistente.mensagem}
                   onChange={(e) => setContatoExistente(prev => ({ ...prev, mensagem: e.target.value }))}
                   placeholder="Digite a mensagem a ser enviada"
                   rows={3}
-                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none text-white bg-background/50"
                 />
               </div>
             )}

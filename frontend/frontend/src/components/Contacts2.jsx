@@ -371,11 +371,11 @@ export default function Contacts({ provedorId }) {
       {/* Barra de ações */}
       <div className="flex items-center mb-4 gap-2 flex-wrap">
         <select
-          className="border rounded px-2 py-1 text-sm bg-background"
+          className="border rounded px-2 py-1 text-sm bg-background text-white border-input"
           value={action}
           onChange={e => setAction(e.target.value)}
         >
-          {actions.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+          {actions.map(a => <option key={a.value} value={a.value} className="bg-background text-white">{a.label}</option>)}
         </select>
         <button
           onClick={handleExecuteAction}
@@ -393,7 +393,7 @@ export default function Contacts({ provedorId }) {
             placeholder="Buscar por nome, telefone ou email..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="pl-8 pr-3 py-1 border rounded text-sm bg-background w-64"
+            className="pl-8 pr-3 py-1 border rounded text-sm bg-background w-64 text-white border-input"
           />
         </div>
         {/* Filtro de bloqueados */}
@@ -422,20 +422,20 @@ export default function Contacts({ provedorId }) {
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-card p-6 rounded-lg shadow-lg w-full max-w-md relative">
-            <button onClick={() => setShowModal(false)} className="absolute top-2 right-2 text-muted-foreground"><X /></button>
+            <button onClick={() => setShowModal(false)} className="absolute top-2 right-2 text-red-500 hover:text-red-600 transition-colors"><X /></button>
             <h2 className="text-lg font-bold mb-4">Novo Contato</h2>
             <form onSubmit={handleNovoContato} className="flex flex-col gap-3">
-              <label className="text-sm font-medium">Nome
-                <input required className="mt-1 w-full border rounded px-2 py-1 bg-background" value={novoContato.nome} onChange={e => setNovoContato({ ...novoContato, nome: e.target.value })} />
+              <label className="text-sm font-medium text-white">Nome
+                <input required className="mt-1 w-full border rounded px-2 py-1 bg-background text-white" value={novoContato.nome} onChange={e => setNovoContato({ ...novoContato, nome: e.target.value })} />
               </label>
-              <label className="text-sm font-medium">Telefone
-                <input required className="mt-1 w-full border rounded px-2 py-1 bg-background" value={novoContato.telefone} onChange={e => setNovoContato({ ...novoContato, telefone: e.target.value })} placeholder="+55..." />
+              <label className="text-sm font-medium text-white">Telefone
+                <input required className="mt-1 w-full border rounded px-2 py-1 bg-background text-white" value={novoContato.telefone} onChange={e => setNovoContato({ ...novoContato, telefone: e.target.value })} placeholder="+55..." />
               </label>
-              <label className="text-sm font-medium">Email (opcional)
-                <input type="email" className="mt-1 w-full border rounded px-2 py-1 bg-background" value={novoContato.email} onChange={e => setNovoContato({ ...novoContato, email: e.target.value })} placeholder="email@exemplo.com" />
+              <label className="text-sm font-medium text-white">Email (opcional)
+                <input type="email" className="mt-1 w-full border rounded px-2 py-1 bg-background text-white" value={novoContato.email} onChange={e => setNovoContato({ ...novoContato, email: e.target.value })} placeholder="email@exemplo.com" />
               </label>
-              <label className="text-sm font-medium">Canal
-                <select className="mt-1 w-full border rounded px-2 py-1 bg-background" value={novoContato.canal} onChange={e => setNovoContato({ ...novoContato, canal: e.target.value })}>
+              <label className="text-sm font-medium text-white">Canal
+                <select className="mt-1 w-full border rounded px-2 py-1 bg-background text-white" value={novoContato.canal} onChange={e => setNovoContato({ ...novoContato, canal: e.target.value })}>
                   <option value="whatsapp">WhatsApp</option>
                   <option value="telegram">Telegram</option>
                   <option value="email">Email</option>
@@ -459,20 +459,20 @@ export default function Contacts({ provedorId }) {
       {showEditModal && editingContact && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-card p-6 rounded-lg shadow-lg w-full max-w-md relative">
-            <button onClick={() => setShowEditModal(false)} className="absolute top-2 right-2 text-muted-foreground"><X /></button>
+            <button onClick={() => setShowEditModal(false)} className="absolute top-2 right-2 text-red-500 hover:text-red-600 transition-colors"><X /></button>
             <h2 className="text-lg font-bold mb-4">Editar Contato</h2>
             <form onSubmit={handleEditContact} className="flex flex-col gap-3">
-              <label className="text-sm font-medium">Nome
-                <input required className="mt-1 w-full border rounded px-2 py-1 bg-background" value={editingContact.name} onChange={e => setEditingContact({ ...editingContact, name: e.target.value })} />
+              <label className="text-sm font-medium text-white">Nome
+                <input required className="mt-1 w-full border rounded px-2 py-1 bg-background text-white" value={editingContact.name} onChange={e => setEditingContact({ ...editingContact, name: e.target.value })} />
               </label>
-              <label className="text-sm font-medium">Email
-                <input className="mt-1 w-full border rounded px-2 py-1 bg-background" value={editingContact.email} onChange={e => setEditingContact({ ...editingContact, email: e.target.value })} />
+              <label className="text-sm font-medium text-white">Email
+                <input className="mt-1 w-full border rounded px-2 py-1 bg-background text-white" value={editingContact.email} onChange={e => setEditingContact({ ...editingContact, email: e.target.value })} />
               </label>
-              <label className="text-sm font-medium">Telefone
-                <input className="mt-1 w-full border rounded px-2 py-1 bg-background" value={editingContact.phone} onChange={e => setEditingContact({ ...editingContact, phone: e.target.value })} />
+              <label className="text-sm font-medium text-white">Telefone
+                <input className="mt-1 w-full border rounded px-2 py-1 bg-background text-white" value={editingContact.phone} onChange={e => setEditingContact({ ...editingContact, phone: e.target.value })} />
               </label>
-              <label className="text-sm font-medium">Sender LID
-                <input className="mt-1 w-full border rounded px-2 py-1 bg-background" value={editingContact.sender_lid} onChange={e => setEditingContact({ ...editingContact, sender_lid: e.target.value })} placeholder="249666566365270@lid" />
+              <label className="text-sm font-medium text-white">Sender LID
+                <input className="mt-1 w-full border rounded px-2 py-1 bg-background text-white" value={editingContact.sender_lid} onChange={e => setEditingContact({ ...editingContact, sender_lid: e.target.value })} placeholder="249666566365270@lid" />
               </label>
               <button type="submit" className="bg-gradient-to-r from-blue-500 to-blue-400 hover:from-blue-600 hover:to-blue-500 text-white px-3 py-1 rounded text-sm font-medium mt-2 shadow-lg hover:shadow-xl transition-all duration-200">Salvar Edição</button>
             </form>
@@ -493,11 +493,11 @@ export default function Contacts({ provedorId }) {
                   className="rounded border-gray-300"
                 />
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">NOME</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider">CONTATO</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider">CANAL</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider whitespace-nowrap">ÚLTIMO CONTATO</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider">ATENDER</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">NOME</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-white">CONTATO</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-white">CANAL</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-white">ÚLTIMO CONTATO</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-white">ATENDER</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider w-16"></th>
             </tr>
           </thead>
@@ -520,14 +520,14 @@ export default function Contacts({ provedorId }) {
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-sm text-card-foreground">
+                    <div className="text-sm text-white">
                       {contato.name || 'Sem nome'}
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1 items-center">
                       {contato.phone && (
-                        <div className="text-sm text-card-foreground">
+                        <div className="text-sm text-white">
                           {cleanPhone(contato.phone)}
                         </div>
                       )}

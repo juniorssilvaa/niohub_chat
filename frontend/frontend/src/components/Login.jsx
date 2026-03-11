@@ -105,7 +105,7 @@ export default function Login() {
                 <h1 className="text-3xl md:text-4xl font-bold tracking-wide text-foreground">
                   NioChat
                 </h1>
-                <p className="text-muted-foreground mt-3 text-sm text-center">
+                <p className="text-white mt-3 text-sm text-center">
                   Sua plataforma inteligente de atendimento
                 </p>
               </div>
@@ -115,33 +115,33 @@ export default function Login() {
               <h2 className="text-2xl font-semibold text-white mb-2">
                 Bem-vindo de volta
               </h2>
-              <p className="text-muted-foreground mb-8">
+              <p className="text-white mb-8">
                 Faça login para continuar
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Usuário</Label>
+                  <Label className="text-white">Usuário</Label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="pl-12 h-12"
+                      className="pl-12 h-12 text-white"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Senha</Label>
+                  <Label className="text-white">Senha</Label>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-12 pr-12 h-12"
+                      className="pl-12 pr-12 h-12 text-white"
                       required
                     />
                     <button
@@ -168,7 +168,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="text-center mt-6 text-sm text-muted-foreground space-y-1">
+        <div className="text-center mt-6 text-sm text-white space-y-1">
           <p>© 2026 NIOCHAT</p>
           <p>Versão {version}</p>
         </div>

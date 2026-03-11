@@ -539,45 +539,45 @@ const UserManagement = ({ provedorId }) => {
             <Users className="w-8 h-8 mr-3" />
             Gerenciamento de Usuários
           </h1>
-          <p className="text-muted-foreground">Gerencie usuários, permissões e acessos do sistema</p>
+          <p className="text-white">Gerencie usuários, permissões e acessos do sistema</p>
         </div>
 
         {/* Statistics - agora em cima */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-6">
-          <div className="niochat-card p-6">
+          <div className="niochat-card p-6 bg-blue-500/10 border-blue-500/20">
             <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-muted border border-border">
-                <Users className="w-6 h-6 text-blue-500" />
+              <div className="p-3 rounded-lg bg-blue-500/20 border border-blue-500/30">
+                <Users className="w-6 h-6 text-blue-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-muted-foreground">Total de Usuários</p>
-                <p className="text-2xl font-bold text-card-foreground">{usersState.length}</p>
+                <p className="text-sm font-medium text-blue-200">Total de Usuários</p>
+                <p className="text-2xl font-bold text-white">{usersState.length}</p>
               </div>
             </div>
           </div>
 
-          <div className="niochat-card p-6">
+          <div className="niochat-card p-6 bg-green-500/10 border-green-500/20">
             <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-green-500/20">
-                <User className="w-6 h-6 text-green-500" />
+              <div className="p-3 rounded-lg bg-green-500/20 border border-green-500/30">
+                <User className="w-6 h-6 text-green-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-muted-foreground">Atendentes</p>
-                <p className="text-2xl font-bold text-card-foreground">
+                <p className="text-sm font-medium text-green-200">Atendentes</p>
+                <p className="text-2xl font-bold text-white">
                   {usersState.filter(u => u.user_type === 'agent').length}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="niochat-card p-6">
+          <div className="niochat-card p-6 bg-yellow-500/10 border-yellow-500/20">
             <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-yellow-500/20">
-                <Shield className="w-6 h-6 text-yellow-500" />
+              <div className="p-3 rounded-lg bg-yellow-500/20 border border-yellow-500/30">
+                <Shield className="w-6 h-6 text-yellow-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-muted-foreground">Administradores</p>
-                <p className="text-2xl font-bold text-card-foreground">
+                <p className="text-sm font-medium text-yellow-200">Administradores</p>
+                <p className="text-2xl font-bold text-white">
                   {usersState.filter(u => u.user_type === 'admin').length}
                 </p>
               </div>
@@ -634,17 +634,17 @@ const UserManagement = ({ provedorId }) => {
             <table className="w-full">
               <thead className="bg-muted">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Usuário
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Função
                   </th>
                   {/* Removido Empresa */}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Último Login
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">

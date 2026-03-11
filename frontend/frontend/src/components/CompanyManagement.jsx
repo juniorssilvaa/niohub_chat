@@ -109,18 +109,18 @@ const CompanyManagement = () => {
             <Building className="w-8 h-8 mr-3" />
             Gerenciamento de Empresas
           </h1>
-          <p className="text-muted-foreground">Gerencie empresas clientes e seus planos de assinatura</p>
+          <p className="text-white">Gerencie empresas clientes e seus planos de assinatura</p>
         </div>
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="niochat-card p-6">
+          <div className="niochat-card p-6 bg-blue-500/10 border-blue-500/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">
+                <p className="text-sm font-medium text-blue-200 mb-1">
                   Total de Empresas
                 </p>
-                <p className="text-2xl font-bold text-card-foreground">
+                <p className="text-2xl font-bold text-white">
                   {companies.length}
                 </p>
                 <div className="flex items-center mt-2">
@@ -128,19 +128,19 @@ const CompanyManagement = () => {
                   <span className="text-sm font-medium text-green-500">+15%</span>
                 </div>
               </div>
-              <div className="p-3 rounded-lg bg-muted border border-border">
-                <Building className="w-6 h-6 text-blue-500" />
+              <div className="p-3 rounded-lg bg-blue-500/20 border border-blue-500/30">
+                <Building className="w-6 h-6 text-blue-400" />
               </div>
             </div>
           </div>
 
-          <div className="niochat-card p-6">
+          <div className="niochat-card p-6 bg-green-500/10 border-green-500/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">
+                <p className="text-sm font-medium text-green-200 mb-1">
                   Receita Mensal
                 </p>
-                <p className="text-2xl font-bold text-card-foreground">
+                <p className="text-2xl font-bold text-white">
                   R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
                 <div className="flex items-center mt-2">
@@ -148,19 +148,19 @@ const CompanyManagement = () => {
                   <span className="text-sm font-medium text-green-500">+22%</span>
                 </div>
               </div>
-              <div className="p-3 rounded-lg bg-green-500/20">
-                <TrendingUp className="w-6 h-6 text-green-500" />
+              <div className="p-3 rounded-lg bg-green-500/20 border border-green-500/30">
+                <TrendingUp className="w-6 h-6 text-green-400" />
               </div>
             </div>
           </div>
 
-          <div className="niochat-card p-6">
+          <div className="niochat-card p-6 bg-purple-500/10 border-purple-500/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">
+                <p className="text-sm font-medium text-purple-200 mb-1">
                   Total de Usuários
                 </p>
-                <p className="text-2xl font-bold text-card-foreground">
+                <p className="text-2xl font-bold text-white">
                   {totalUsers}
                 </p>
                 <div className="flex items-center mt-2">
@@ -168,19 +168,19 @@ const CompanyManagement = () => {
                   <span className="text-sm font-medium text-green-500">+18%</span>
                 </div>
               </div>
-              <div className="p-3 rounded-lg bg-purple-500/20">
-                <Users className="w-6 h-6 text-purple-500" />
+              <div className="p-3 rounded-lg bg-purple-500/20 border border-purple-500/30">
+                <Users className="w-6 h-6 text-purple-400" />
               </div>
             </div>
           </div>
 
-          <div className="niochat-card p-6">
+          <div className="niochat-card p-6 bg-orange-500/10 border-orange-500/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">
+                <p className="text-sm font-medium text-orange-200 mb-1">
                   Total de Conversas
                 </p>
-                <p className="text-2xl font-bold text-card-foreground">
+                <p className="text-2xl font-bold text-white">
                   {totalConversations.toLocaleString('pt-BR')}
                 </p>
                 <div className="flex items-center mt-2">
@@ -188,8 +188,8 @@ const CompanyManagement = () => {
                   <span className="text-sm font-medium text-green-500">+35%</span>
                 </div>
               </div>
-              <div className="p-3 rounded-lg bg-orange-500/20">
-                <MessageCircle className="w-6 h-6 text-orange-500" />
+              <div className="p-3 rounded-lg bg-orange-500/20 border border-orange-500/30">
+                <MessageCircle className="w-6 h-6 text-orange-400" />
               </div>
             </div>
           </div>
@@ -225,22 +225,22 @@ const CompanyManagement = () => {
             <table className="w-full">
               <thead className="bg-muted">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Empresa
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Plano
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Usuários
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Conversas
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Receita
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                     Status
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
