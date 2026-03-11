@@ -51,13 +51,85 @@ class ContactSerializer(serializers.ModelSerializer):
 
 
 class InboxSerializer(serializers.ModelSerializer):
+    custom_name = serializers.SerializerMethodField()
+    channel_real_id = serializers.SerializerMethodField()
+
     class Meta:
         model = Inbox
         fields = [
             'id', 'name', 'channel_type', 'channel_id', 'provedor',
-            'is_active', 'created_at'
+            'is_active', 'created_at', 'custom_name', 'channel_real_id'
         ]
         read_only_fields = ['id', 'created_at']
+
+    def get_canal_instancia(self, obj):
+        """Método auxiliar para encontrar a instância do Canal vinculada a este Inbox"""
+        try:
+            from core.models import Canal
+            
+            # 1. Tentar busca direta por ID (Canal.id == Inbox.channel_id)
+            try:
+                canal_id = int(obj.channel_id)
+                canal = Canal.objects.filter(id=canal_id).first()
+                if canal: return canal
+            except (ValueError, TypeError):
+                # Se channel_id não for numérico, pode ser um UUID ou string (ex: 'whatsapp_cloud_api')
+                canal = Canal.objects.filter(id=obj.channel_id).first()
+                if canal: return canal
+            
+            # 2. Fallback Inteligente: Buscar canais do mesmo provedor e tipos compatíveis
+            tipo_inbox = obj.channel_type
+            tipos_compativeis = [tipo_inbox]
+            
+            # Alguns inboxes são criados como 'whatsapp' mas podem ser qualquer tipo de WhatsApp
+            if tipo_inbox == 'whatsapp':
+                tipos_compativeis = ['whatsapp', 'whatsapp_session', 'evolution', 'whatsapp_oficial']
+            
+            canais_candidatos = Canal.objects.filter(
+                provedor=obj.provedor,
+                tipo__in=tipos_compativeis,
+                ativo=True
+            )
+
+            if canais_candidatos.count() == 1:
+                return canais_candidatos.first()
+            
+            elif canais_candidatos.count() > 1:
+                # 1. Tentar match por nome
+                for c in canais_candidatos:
+                    if c.nome and (c.nome.lower() in obj.name.lower() or obj.name.lower() in c.nome.lower()):
+                        return c
+                
+                # 2. Se for para Cloud API ou inboxes "soltos", priorizar o que tem WABA_ID (necessário p/ templates)
+                com_waba = canais_candidatos.exclude(waba_id__isnull=True).exclude(waba_id='')
+                if com_waba.count() == 1:
+                    return com_waba.first()
+                
+                # 3. Tentar encontrar o canal que NÃO está mapeado em nenhum outro inbox padrão
+                ids_em_uso = Inbox.objects.filter(provedor=obj.provedor).exclude(id=obj.id).values_list('channel_id', flat=True)
+                canais_disponiveis = canais_candidatos.exclude(id__in=[cid for cid in ids_em_uso if str(cid).isdigit()])
+                
+                if canais_disponiveis.count() >= 1:
+                    return canais_disponiveis.first()
+                
+                # 4. Fallback final: primeiro da lista
+                return canais_candidatos.first()
+
+            return None
+        except Exception:
+            return None
+
+    def get_custom_name(self, obj):
+        """Retorna o nome customizado do canal vinculado ao inbox com fallback inteligente"""
+        canal = self.get_canal_instancia(obj)
+        if canal and canal.nome:
+            return canal.nome
+        return obj.name
+
+    def get_channel_real_id(self, obj):
+        """Retorna o ID real (numérico) do Canal no banco de dados"""
+        canal = self.get_canal_instancia(obj)
+        return canal.id if canal else None
 
 
 class MessageReactionSerializer(serializers.ModelSerializer):
@@ -221,12 +293,43 @@ class ConversationSerializer(serializers.ModelSerializer):
         team_id = validated_data.pop('team_id', None)
         
         # Buscar as instâncias dos objetos relacionados
+        contact = None
+        inbox = None
         if contact_id:
             from .models import Contact
-            validated_data['contact'] = Contact.objects.get(id=contact_id)
+            contact = Contact.objects.get(id=contact_id)
+            validated_data['contact'] = contact
         if inbox_id:
             from .models import Inbox
-            validated_data['inbox'] = Inbox.objects.get(id=inbox_id)
+            inbox = Inbox.objects.get(id=inbox_id)
+            validated_data['inbox'] = inbox
+            
+        # [NOVO] Lógica de reuso de conversa aberta
+        if contact and inbox:
+            from .models import Conversation
+            # Buscar qualquer conversa que não esteja fechada (open, snoozed, pending)
+            existing_conversation = Conversation.objects.filter(
+                contact=contact,
+                inbox=inbox
+            ).exclude(status__in=['closed', 'encerrada', 'resolved', 'finalizada', 'closing']).first()
+            
+            if existing_conversation:
+                # Se encontrou, apenas atualizamos o assignee se necessário e a retornamos
+                if assignee_id:
+                    from core.models import User
+                    existing_conversation.assignee = User.objects.get(id=assignee_id)
+                if team_id:
+                    from .models import Team
+                    existing_conversation.team = Team.objects.get(id=team_id)
+                
+                # Garantir que o status seja 'open' se estava em algum outro estado não-fechado
+                if existing_conversation.status != 'open':
+                    existing_conversation.status = 'open'
+                
+                existing_conversation.save()
+                return existing_conversation
+
+        # Se não existe conversa aberta, segue o fluxo normal de criação
         if assignee_id:
             from core.models import User
             validated_data['assignee'] = User.objects.get(id=assignee_id)

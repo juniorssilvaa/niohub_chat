@@ -568,7 +568,9 @@ class UserSerializer(serializers.ModelSerializer):
             'avatar', 'phone', 'is_online', 'last_seen', 'created_at', 'updated_at',
             'is_active', 'last_login', 'password', 'permissions',
             'provedor_id', 'provedores_admin', 'session_timeout', 'language',
-            'assignment_message',
+            'assignment_message', 'sound_notifications_enabled',
+            'new_message_sound', 'new_message_sound_volume',
+            'new_conversation_sound', 'new_conversation_sound_volume',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'last_login']
     

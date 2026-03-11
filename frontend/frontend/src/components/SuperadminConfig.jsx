@@ -64,7 +64,7 @@ export default function SuperadminConfig() {
   };
 
   return (
-    <div className="flex-1 p-6 bg-background overflow-y-auto">
+    <div className="flex-1 min-h-0 p-6 bg-background overflow-y-auto">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">

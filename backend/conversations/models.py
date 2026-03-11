@@ -38,6 +38,43 @@ class Inbox(models.Model):
     def __str__(self):
         return f"{self.name} ({self.channel_type})"
 
+    def get_canal_instance(self):
+        """
+        Retorna a instância real do modelo Canal vinculada a este Inbox.
+        Tenta buscar pelo ID numérico armazenado em channel_id.
+        """
+        from core.models import Canal
+        import logging
+        logger = logging.getLogger(__name__)
+
+        channel_id = self.channel_id
+        
+        # Tentar buscar pelo ID
+        if channel_id and str(channel_id).isdigit():
+            try:
+                canal = Canal.objects.filter(id=int(channel_id), provedor=self.provedor).first()
+                if canal:
+                    return canal
+            except (ValueError, TypeError):
+                pass
+
+        # Fallback: buscar o primeiro canal ativo do mesmo tipo para o provedor
+        # Isso é necessário para compatibilidade com inboxes criados antes da correção de IDs
+        tipo_map = {
+            'whatsapp_oficial': 'whatsapp_oficial',
+            'whatsapp': 'whatsapp_oficial', # Muitos inboxes de whatsapp_oficial estão marcados apenas como 'whatsapp'
+            'telegram': 'telegram'
+        }
+        tipo_canal = tipo_map.get(self.channel_type, self.channel_type)
+        
+        logger.warning(f"[Inbox {self.id}] Canal específico {channel_id} não encontrado. Usando fallback por tipo {tipo_canal}")
+        
+        return Canal.objects.filter(
+            provedor=self.provedor,
+            tipo=tipo_canal,
+            ativo=True
+        ).first()
+
 
 class Conversation(models.Model):
     STATUS_CHOICES = [

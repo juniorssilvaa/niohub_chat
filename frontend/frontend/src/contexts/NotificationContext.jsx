@@ -34,7 +34,9 @@ export const NotificationProvider = ({ children }) => {
   const connectionFailuresRef = useRef({ internalChat: 0, privateChat: 0 });
   const soundEnabledRef = useRef(false);
   const newMsgSoundRef = useRef('01.mp3');
+  const newMsgVolumeRef = useRef(1.0);
   const newConvSoundRef = useRef('02.mp3');
+  const newConvVolumeRef = useRef(1.0);
   const audioRef = useRef(null);
   const faviconTimerRef = useRef(null);
   const isFaviconBlinkingRef = useRef(false);
@@ -49,7 +51,9 @@ export const NotificationProvider = ({ children }) => {
       setCurrentUser(authUser);
       soundEnabledRef.current = !!authUser.sound_notifications_enabled;
       if (authUser.new_message_sound) newMsgSoundRef.current = authUser.new_message_sound;
+      if (authUser.new_message_sound_volume !== undefined) newMsgVolumeRef.current = authUser.new_message_sound_volume;
       if (authUser.new_conversation_sound) newConvSoundRef.current = authUser.new_conversation_sound;
+      if (authUser.new_conversation_sound_volume !== undefined) newConvVolumeRef.current = authUser.new_conversation_sound_volume;
     } else {
       setCurrentUser(null);
     }
@@ -349,15 +353,19 @@ export const NotificationProvider = ({ children }) => {
             return;
           }
 
-          const isMessageEvent = evt === 'new_message' ||
-            evt === 'message' ||
-            evt === 'chat_message' ||
-            evt === 'message_created' ||
-            evt === 'message_received' ||
-            evt === 'messages' ||
-            evt === 'new_private_message';
-
           if (isMessageEvent) {
+            // ISOLAMENTO: Só tocar som se a mensagem for para o usuário logado
+            // O WebSocket do painel envia todas as mensagens do provedor.
+            // Precisamos verificar se a conversa está atribuída a este atendente.
+            const messageData = data.message || data.data?.message || data.data;
+            const assigneeId = data.conversation?.assignee_id || data.data?.conversation?.assignee_id || data.assignee_id;
+
+            // Se a conversa tem um atendente e não é o usuário atual, ignorar som
+            if (assigneeId && currentUser?.id && parseInt(assigneeId) !== currentUser.id) {
+              console.log('[NOTIF-DEBUG] Som de MENSAGEM ignorado: Conversa atribuída a outro atendente (', assigneeId, ')');
+              return;
+            }
+
             // Verificar se esta mensagem pertence a uma conversa que ACABOU de tocar som de "Nova Conversa"
             const convId = data.conversation_id || data.conversation?.id || data.data?.conversation_id;
             if (convId && processedEventsRef.current.has(`silence_msg_${convId}`)) {
@@ -372,32 +380,41 @@ export const NotificationProvider = ({ children }) => {
                 processedEventsRef.current.delete(first);
               }
             }
-            console.log('[NOTIF-DEBUG] Evento de MENSAGEM detectado. Som:', newMsgSoundRef.current);
-            playSound(newMsgSoundRef.current);
+            console.log('[NOTIF-DEBUG] Evento de MENSAGEM detectado. Som:', newMsgSoundRef.current, 'Volume:', newMsgVolumeRef.current);
+            playSound(newMsgSoundRef.current, newMsgVolumeRef.current);
             startBlinkingFavicon();
-          } else if (evt === 'conversation_created' || evt === 'conversation_updated' || evt === 'conversation_event' || evt === 'update_conversation' || evt === 'chat_created') {
+          } else if (evt === 'conversation_created' || evt === 'chat_created') {
+            // LÓGICA: Som de "Novas Conversas" APENAS em eventos de criação real
+            const conv = data.conversation || data.payload || data.data || data.data?.conversation;
+
+            console.log('[NOTIF-DEBUG] Evento de NOVA CONVERSA detectado. Som:', newConvSoundRef.current, 'Volume:', newConvVolumeRef.current);
+            playSound(newConvSoundRef.current, newConvVolumeRef.current);
+            startBlinkingFavicon();
+
+            // Se tocou som de nova conversa, silenciar sons de mensagem desta conversa pelos próximos segundos
+            if (conv?.id) {
+              const silenceKey = `silence_msg_${conv.id}`;
+              processedEventsRef.current.add(silenceKey);
+              setTimeout(() => {
+                processedEventsRef.current.delete(silenceKey);
+              }, 5000);
+            }
+          } else if (evt === 'conversation_updated' || evt === 'conversation_event' || evt === 'update_conversation') {
+            // LÓGICA: Status pending/snoozed também toca som de "Novas Conversas" (re-atendimento)
             const conv = data.conversation || data.payload || data.data || data.data?.conversation;
             const status = conv?.status || conv?.additional_attributes?.status;
+            const assigneeId = conv?.assignee_id || conv?.assignee?.id;
 
-            // Só tocar som de nova conversa se for criação OU se estiver pending/snoozed
-            const isNew = evt === 'conversation_created' || evt === 'chat_created';
+            // Se entrar em pendente sem atendente, toca som para todos (nova conversa em espera)
+            // Se entrar em pendente COM atendente, toca som apenas para o atendente (isolamento)
+            const isUnassigned = !assigneeId;
+            const isMine = assigneeId && currentUser?.id && parseInt(assigneeId) === currentUser.id;
             const isCriticalStatus = status === 'pending' || status === 'snoozed';
 
-            if (isNew || isCriticalStatus) {
-              // Evitar duplicidade se já processamos este ID de conversa nos últimos segundos
-              const convEventId = `conv_${conv?.id}_${status}`;
-              console.log('[NOTIF-DEBUG] Evento de CONVERSA detectado. Status:', status, 'Som:', newConvSoundRef.current);
-              playSound(newConvSoundRef.current);
+            if (isCriticalStatus && (isUnassigned || isMine)) {
+              console.log('[NOTIF-DEBUG] Re-atendimento detectado. Status:', status, 'Som:', newConvSoundRef.current);
+              playSound(newConvSoundRef.current, newConvVolumeRef.current);
               startBlinkingFavicon();
-
-              // Se tocou som de nova conversa, silenciar sons de mensagem desta conversa pelos próximos segundos
-              if (conv?.id) {
-                const silenceKey = `silence_msg_${conv.id}`;
-                processedEventsRef.current.add(silenceKey);
-                setTimeout(() => {
-                  processedEventsRef.current.delete(silenceKey);
-                }, 5000); // 5 segundos de silêncio para mensagens iniciais redundantes
-              }
             }
           }
         } catch (_) { }
@@ -425,7 +442,7 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  const playSound = (fileName) => {
+  const playSound = (fileName, volume = 1.0) => {
     // Fallback: se soundEnabledRef.current for falso, verificar localStorage por garantia
     const isEnabled = soundEnabledRef.current || localStorage.getItem('sound_notifications_enabled') === 'true';
     if (!isEnabled) {
@@ -448,6 +465,7 @@ export const NotificationProvider = ({ children }) => {
         audioRef.current.pause();
         audioRef.current.src = src;
       }
+      audioRef.current.volume = volume;
       audioRef.current.currentTime = 0;
       audioRef.current.play().catch(() => { });
     } catch (_) { }

@@ -1,6 +1,32 @@
 {
-  "current_version": "2.26.7",
+  "current_version": "2.26.8",
   "versions": [
+    {
+      "version": "2.26.8",
+      "version_type": "patch",
+      "date": "2026-03-11",
+      "title": "Melhorias de Estabilidade e Volume de Notificações",
+      "changes": [
+        {
+          "type": "feature",
+          "module": "Notificações",
+          "title": "Controle de Volume",
+          "description": "Implementado sistema de ajuste de volume independente para notificações de novas mensagens e atendimentos."
+        },
+        {
+          "type": "fix",
+          "module": "Atendimento",
+          "title": "Seletor de Templates",
+          "description": "Corrigida a exibição de templates ao iniciar novos atendimentos."
+        },
+        {
+          "type": "fix",
+          "module": "Atendimento",
+          "title": "Correções Gerais",
+          "description": "Melhorias na estabilidade do envio de mensagens e correções na listagem de contatos existentes."
+        }
+      ]
+    },
     {
       "version": "2.26.7",
       "version_type": "patch",

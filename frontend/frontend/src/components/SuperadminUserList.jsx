@@ -87,14 +87,14 @@ export default function SuperadminUserList() {
       }
       setLoading(false);
     }
-    
+
     fetchUsers();
-    
+
     // Atualizar lista de usuários a cada 30 segundos para obter status atualizado
     const intervalId = setInterval(() => {
       fetchUsers();
     }, 30000);
-    
+
     return () => clearInterval(intervalId);
   }, [success]);
 
@@ -145,9 +145,9 @@ export default function SuperadminUserList() {
       });
       // Não é necessário criar CompanyUser manualmente - o backend já faz a associação
       console.log('Usuário criado e associado ao provedor com sucesso!');
-             setSuccess('Usuário criado com sucesso!');
-       setShowModal(false);
-       setForm({ username: '', email: '', password: '', first_name: '', last_name: '', user_type: 'agent', is_active: true, provedor_id: '' });
+      setSuccess('Usuário criado com sucesso!');
+      setShowModal(false);
+      setForm({ username: '', email: '', password: '', first_name: '', last_name: '', user_type: 'agent', is_active: true, provedor_id: '' });
     } catch (e) {
       let msg = 'Erro ao criar usuário.';
       if (e.response && e.response.data) {
@@ -236,14 +236,14 @@ export default function SuperadminUserList() {
             <table className="min-w-full divide-y divide-border">
               <thead>
                 <tr>
-                  <th className="px-4 py-2 text-left">Usuário</th>
-                  <th className="px-4 py-2 text-left">Email</th>
-                  <th className="px-4 py-2 text-left">Tipo</th>
-                                      <th className="px-4 py-2 text-left">Provedores</th>
-                  <th className="px-4 py-2 text-center">Ativo</th>
-                  <th className="px-4 py-2 text-center">Online</th>
-                  <th className="px-4 py-2 text-center">Último acesso</th>
-                  <th className="px-4 py-2 text-center">Ações</th>
+                  <th className="px-4 py-2 text-left text-foreground font-semibold">Usuário</th>
+                  <th className="px-4 py-2 text-left text-foreground font-semibold">Email</th>
+                  <th className="px-4 py-2 text-left text-foreground font-semibold">Tipo</th>
+                  <th className="px-4 py-2 text-left text-foreground font-semibold">Provedores</th>
+                  <th className="px-4 py-2 text-center text-foreground font-semibold">Ativo</th>
+                  <th className="px-4 py-2 text-center text-foreground font-semibold">Online</th>
+                  <th className="px-4 py-2 text-center text-foreground font-semibold">Último acesso</th>
+                  <th className="px-4 py-2 text-center text-foreground font-semibold">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -254,15 +254,15 @@ export default function SuperadminUserList() {
                 )}
                 {users.map(user => (
                   <tr key={user.id} className="hover:bg-muted/50">
-                    <td className="px-4 py-2 font-semibold">{user.username}</td>
-                    <td className="px-4 py-2">{user.email || '-'}</td>
+                    <td className="px-4 py-2 font-semibold text-foreground">{user.username}</td>
+                    <td className="px-4 py-2 text-muted-foreground">{user.email || '-'}</td>
                     <td className="px-4 py-2">
                       {user.user_type === 'agent' ? (
                         <span className="inline-flex items-center gap-1 bg-green-900/80 text-green-100 rounded px-2 py-1 text-xs font-semibold">
                           agent
                         </span>
                       ) : (
-                        user.user_type
+                        <span className="text-muted-foreground text-sm">{user.user_type}</span>
                       )}
                     </td>
                     <td className="px-4 py-2">
@@ -289,7 +289,7 @@ export default function SuperadminUserList() {
                         <span className="inline-flex items-center gap-1 text-gray-400"><Circle className="w-4 h-4" /> Offline</span>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td className="px-4 py-2 text-center text-muted-foreground">
                       {user.last_seen ? (
                         <span title={`Último acesso: ${new Date(user.last_seen).toLocaleString('pt-BR')}`}>
                           {new Date(user.last_seen).toLocaleString('pt-BR', {
@@ -366,7 +366,7 @@ export default function SuperadminUserList() {
                     <input type="text" value={selectedUser.last_name || ''} onChange={e => setSelectedUser({ ...selectedUser, last_name: e.target.value })} className="input w-full bg-[#181b20] text-white border border-border rounded px-3 py-2" required />
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">Usuário</label>
@@ -377,7 +377,7 @@ export default function SuperadminUserList() {
                     <input type="email" value={selectedUser.email} onChange={e => setSelectedUser({ ...selectedUser, email: e.target.value })} className="input w-full bg-[#181b20] text-white border border-border rounded px-3 py-2" required />
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block font-medium mb-1 text-gray-200">Tipo</label>
                   <select value={selectedUser.user_type} onChange={e => setSelectedUser({ ...selectedUser, user_type: e.target.value })} className="input w-full bg-[#181b20] text-white border border-border rounded px-3 py-2">
@@ -386,7 +386,7 @@ export default function SuperadminUserList() {
                     <option value="agent">Atendente</option>
                   </select>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <input type="checkbox" checked={selectedUser.is_active} onChange={e => setSelectedUser({ ...selectedUser, is_active: e.target.checked })} />
                   <label className="font-medium text-gray-200">Ativo</label>
@@ -457,7 +457,7 @@ export default function SuperadminUserList() {
                     <input type="text" name="last_name" value={form.last_name} onChange={handleChange} className="input w-full bg-[#181b20] text-white border border-border rounded px-3 py-2" required />
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">Usuário</label>
@@ -468,7 +468,7 @@ export default function SuperadminUserList() {
                     <input type="email" name="email" value={form.email} onChange={handleChange} className="input w-full bg-[#181b20] text-white border border-border rounded px-3 py-2" required />
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">Senha</label>
@@ -483,7 +483,7 @@ export default function SuperadminUserList() {
                     </select>
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block font-medium mb-1 text-gray-200">Provedor</label>
                   <select name="provedor_id" value={form.provedor_id} onChange={handleChange} className="input w-full bg-[#181b20] text-white border border-border rounded px-3 py-2">
@@ -496,12 +496,12 @@ export default function SuperadminUserList() {
                     )}
                   </select>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <input type="checkbox" name="is_active" checked={form.is_active} onChange={handleChange} />
                   <label className="font-medium text-gray-200">Ativo</label>
                 </div>
-                
+
                 <div>
                   <button type="submit" className="bg-primary text-white px-6 py-2 rounded font-medium w-full mt-2 hover:bg-primary/90 transition" disabled={saving}>
                     {saving ? 'Salvando...' : 'Criar Usuário'}

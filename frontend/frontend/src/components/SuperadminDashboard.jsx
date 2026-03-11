@@ -420,8 +420,6 @@ export default function SuperadminDashboard({ onLogout }) {
         <Route path="configuracoes" element={<SuperadminConfig />} />
         <Route path="painel-empresa" element={<div className="flex-1 p-6">Redirecionando para o painel de empresa...</div>} />
         <Route path="provedores" element={<SuperadminProvedores />} />
-        <Route path="configuracoes" element={<SuperadminConfig />} />
-        {/* <Route path="limpeza-rapida" element={<LimpezaRapida />} /> */}
         <Route path="*" element={<Navigate to="dashboard" replace />} />
       </Routes>
       {menuId && menuBtnRefs.current[menuId] && ReactDOM.createPortal(

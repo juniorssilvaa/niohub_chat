@@ -578,6 +578,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                     'id': inbox.id if inbox else None,
                     'channel_type': inbox.channel_type if inbox else None,
                     'name': inbox.name if inbox else None,
+                    'channel_real_id': InboxSerializer(inbox).data.get('channel_real_id') if inbox else None,
                     'provedor': {
                         'id': provedor.id if provedor else None,
                         'nome': provedor.nome if provedor else None,
@@ -1215,12 +1216,18 @@ class ConversationViewSet(viewsets.ModelViewSet):
             )
             if conversation_created:
                 logger.info(f"[START_WITH_TEMPLATE] Nova conversa criada e atribuída a {request.user.username}: {conversation.id}")
+            else:
+                # Importante: Se a conversa já existia, garantir que seja aberta e atribuída
+                conversation.status = 'open'
+                conversation.assignee = request.user
+                conversation.save(update_fields=['status', 'assignee'])
+                logger.info(f"[START_WITH_TEMPLATE] Conversa existente {conversation.id} (recuperada por contato/inbox) aberta e atribuída a {request.user.username}")
         else:
-            # Se a conversa já existia, garantir que está aberta e atribuída ao usuário que enviou o template
+            # Se a conversa já existia (fornecida por ID), garantir que está aberta e atribuída
             conversation.status = 'open'
             conversation.assignee = request.user
             conversation.save(update_fields=['status', 'assignee'])
-            logger.info(f"[START_WITH_TEMPLATE] Conversa existente {conversation.id} aberta e atribuída a {request.user.username}")
+            logger.info(f"[START_WITH_TEMPLATE] Conversa existente {conversation.id} (fornecida por ID) aberta e atribuída a {request.user.username}")
         
         # Se não foram fornecidos componentes, buscar o template para verificar se tem variáveis
         components_prepared = False
@@ -2734,14 +2741,8 @@ class MessageViewSet(viewsets.ModelViewSet):
                 success, telegram_response = self._send_telegram_message(conversation, formatted_content, reply_to_message_id)
                 logger.info(f"[SEND_TEXT] Resultado Telegram: success={success}, response={telegram_response}")
             elif channel_type == 'whatsapp':
-                # Verificar se é WhatsApp Oficial ou Uazapi
-                from core.models import Canal
-                provedor = conversation.inbox.provedor
-                canal_oficial = Canal.objects.filter(
-                    provedor=provedor,
-                    tipo="whatsapp_oficial",
-                    ativo=True
-                ).first()
+                # Obter canal específico vinculado ao inbox
+                canal_oficial = conversation.inbox.get_canal_instance()
                 
                 if canal_oficial and canal_oficial.token and canal_oficial.phone_number_id:
                     # Verificar se a janela de 24 horas está aberta para WhatsApp Official

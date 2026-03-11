@@ -3560,8 +3560,12 @@ class UserMeView(APIView):
                     response_data['sound_notifications_enabled'] = getattr(user, 'sound_notifications_enabled', False)
                 if hasattr(user, 'new_message_sound'):
                     response_data['new_message_sound'] = getattr(user, 'new_message_sound', '01.mp3')
+                if hasattr(user, 'new_message_sound_volume'):
+                    response_data['new_message_sound_volume'] = getattr(user, 'new_message_sound_volume', 1.0)
                 if hasattr(user, 'new_conversation_sound'):
-                    response_data['new_conversation_sound'] = getattr(user, 'new_conversation_sound', 'mixkit-digital-quick-tone-2866.wav')
+                    response_data['new_conversation_sound'] = getattr(user, 'new_conversation_sound', '02.mp3')
+                if hasattr(user, 'new_conversation_sound_volume'):
+                    response_data['new_conversation_sound_volume'] = getattr(user, 'new_conversation_sound_volume', 1.0)
             except Exception:
                 pass
             
@@ -3627,9 +3631,17 @@ class UserMeView(APIView):
                 user.new_message_sound = request.data.get('new_message_sound', '')
                 updated_fields.append('new_message_sound')
             
+            if 'new_message_sound_volume' in request.data:
+                user.new_message_sound_volume = float(request.data.get('new_message_sound_volume', 1.0))
+                updated_fields.append('new_message_sound_volume')
+            
             if 'new_conversation_sound' in request.data:
                 user.new_conversation_sound = request.data.get('new_conversation_sound', '')
                 updated_fields.append('new_conversation_sound')
+
+            if 'new_conversation_sound_volume' in request.data:
+                user.new_conversation_sound_volume = float(request.data.get('new_conversation_sound_volume', 1.0))
+                updated_fields.append('new_conversation_sound_volume')
             
             # Salvar apenas se houver campos para atualizar
             if updated_fields:
@@ -4298,6 +4310,21 @@ class CanalViewSet(viewsets.ModelViewSet):
             # GET: Listar modelos
             if request.method == 'GET':
                 from integrations.whatsapp_templates import list_message_templates
+                
+                # Verificar pré-requisitos antes de chamar a API da Meta
+                if not canal.waba_id:
+                    return Response({
+                        'success': True,
+                        'templates': [],
+                        'warning': 'Canal sem waba_id configurado. Configure o canal WhatsApp Oficial primeiro.'
+                    })
+                
+                if not canal.token:
+                    return Response({
+                        'success': True,
+                        'templates': [],
+                        'warning': 'Canal sem token de acesso configurado.'
+                    })
                 
                 success, templates, error = list_message_templates(canal)
                 

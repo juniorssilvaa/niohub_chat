@@ -63,25 +63,25 @@ export default function SuperadminCanais() {
     const fetchData = async () => {
       try {
         const token = localStorage.getItem('token');
-        
+
         // Buscar canais
         const canaisRes = await axios.get('/api/canais/', {
           headers: { Authorization: `Token ${token}` }
         });
         setCanais(canaisRes.data.results || canaisRes.data);
-        
+
         // Buscar provedores
         const provedoresRes = await axios.get('/api/provedores/', {
           headers: { Authorization: `Token ${token}` }
         });
         setProvedores(provedoresRes.data.results || provedoresRes.data);
-        
+
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
         setErrorMsg('Erro ao carregar canais e provedores');
       }
     };
-    
+
     fetchData();
   }, []);
 
@@ -97,16 +97,16 @@ export default function SuperadminCanais() {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
-    
+
     try {
       const token = localStorage.getItem('token');
       const response = await axios.post('/api/canais/', addCanalForm, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Adicionar novo canal à lista
       setCanais(prev => [...prev, response.data]);
-      
+
       // Limpar formulário e fechar modal
       setAddCanalForm({
         tipo: 'telegram',
@@ -128,7 +128,7 @@ export default function SuperadminCanais() {
         dados_extras: {}
       });
       setShowAddModal(false);
-      
+
     } catch (err) {
       setErrorMsg(err.response?.data?.error || 'Erro ao criar canal');
     } finally {
@@ -138,16 +138,16 @@ export default function SuperadminCanais() {
 
   const handleDeleteCanal = async (canalId) => {
     if (!window.confirm('Tem certeza que deseja excluir este canal?')) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`/api/canais/${canalId}/`, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Remover canal da lista
       setCanais(prev => prev.filter(c => c.id !== canalId));
-      
+
     } catch (err) {
       alert('Erro ao excluir canal!');
     }
@@ -159,12 +159,12 @@ export default function SuperadminCanais() {
       await axios.patch(`/api/canais/${canalId}/`, { ativo: !currentStatus }, {
         headers: { Authorization: `Token ${token}` }
       });
-      
+
       // Atualizar status na lista
-      setCanais(prev => prev.map(c => 
+      setCanais(prev => prev.map(c =>
         c.id === canalId ? { ...c, ativo: !currentStatus } : c
       ));
-      
+
     } catch (err) {
       alert('Erro ao alterar status do canal!');
     }
@@ -206,8 +206,8 @@ export default function SuperadminCanais() {
             className="pl-10 pr-4 py-2 rounded bg-background border w-full"
           />
         </div>
-        <button 
-          className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded font-medium text-sm" 
+        <button
+          className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded font-medium text-sm"
           onClick={() => setShowAddModal(true)}
         >
           <Plus className="w-4 h-4" /> Adicionar Canal
@@ -220,32 +220,32 @@ export default function SuperadminCanais() {
           <div className="bg-[#23272f] rounded-xl shadow-2xl p-8 w-full max-w-2xl relative border border-border max-h-[90vh] overflow-y-auto">
             <button className="absolute top-2 right-2 text-gray-400 hover:text-white text-2xl" onClick={() => setShowAddModal(false)}>&times;</button>
             <h2 className="text-2xl font-bold mb-6 text-white">Adicionar Canal</h2>
-            
+
             <form onSubmit={handleAddCanal} className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-medium mb-1 text-gray-200">Tipo de Canal *</label>
-                  <select 
-                    name="tipo" 
-                    className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                    value={addCanalForm.tipo} 
-                    onChange={handleAddCanalChange} 
-                    required 
+                  <select
+                    name="tipo"
+                    className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                    value={addCanalForm.tipo}
+                    onChange={handleAddCanalChange}
+                    required
                   >
                     {Object.entries(tipoLabels).map(([value, label]) => (
                       <option key={value} value={value}>{label}</option>
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block font-medium mb-1 text-gray-200">Provedor *</label>
-                  <select 
-                    name="provedor" 
-                    className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                    value={addCanalForm.provedor} 
-                    onChange={handleAddCanalChange} 
-                    required 
+                  <select
+                    name="provedor"
+                    className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                    value={addCanalForm.provedor}
+                    onChange={handleAddCanalChange}
+                    required
                   >
                     <option value="">Selecione um provedor</option>
                     {provedores.map(provedor => (
@@ -253,26 +253,26 @@ export default function SuperadminCanais() {
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block font-medium mb-1 text-gray-200">Nome do Canal</label>
-                  <input 
-                    type="text" 
-                    name="nome" 
-                    className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                    value={addCanalForm.nome} 
-                    onChange={handleAddCanalChange} 
+                  <input
+                    type="text"
+                    name="nome"
+                    className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                    value={addCanalForm.nome}
+                    onChange={handleAddCanalChange}
                   />
                 </div>
-                
+
                 <div className="flex items-center">
-                  <input 
-                    type="checkbox" 
-                    name="ativo" 
+                  <input
+                    type="checkbox"
+                    name="ativo"
                     id="ativo"
-                    className="mr-2" 
-                    checked={addCanalForm.ativo} 
-                    onChange={handleAddCanalChange} 
+                    className="mr-2"
+                    checked={addCanalForm.ativo}
+                    onChange={handleAddCanalChange}
                   />
                   <label htmlFor="ativo" className="text-gray-200">Canal Ativo</label>
                 </div>
@@ -283,22 +283,22 @@ export default function SuperadminCanais() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">Instance ID</label>
-                    <input 
-                      type="text" 
-                      name="instance_id" 
-                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                      value={addCanalForm.instance_id} 
-                      onChange={handleAddCanalChange} 
+                    <input
+                      type="text"
+                      name="instance_id"
+                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                      value={addCanalForm.instance_id}
+                      onChange={handleAddCanalChange}
                     />
                   </div>
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">API Key</label>
-                    <input 
-                      type="text" 
-                      name="api_key" 
-                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                      value={addCanalForm.api_key} 
-                      onChange={handleAddCanalChange} 
+                    <input
+                      type="text"
+                      name="api_key"
+                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                      value={addCanalForm.api_key}
+                      onChange={handleAddCanalChange}
                     />
                   </div>
                 </div>
@@ -308,32 +308,32 @@ export default function SuperadminCanais() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">API ID</label>
-                    <input 
-                      type="text" 
-                      name="api_id" 
-                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                      value={addCanalForm.api_id} 
-                      onChange={handleAddCanalChange} 
+                    <input
+                      type="text"
+                      name="api_id"
+                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                      value={addCanalForm.api_id}
+                      onChange={handleAddCanalChange}
                     />
                   </div>
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">API Hash</label>
-                    <input 
-                      type="text" 
-                      name="api_hash" 
-                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                      value={addCanalForm.api_hash} 
-                      onChange={handleAddCanalChange} 
+                    <input
+                      type="text"
+                      name="api_hash"
+                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                      value={addCanalForm.api_hash}
+                      onChange={handleAddCanalChange}
                     />
                   </div>
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">Phone Number</label>
-                    <input 
-                      type="text" 
-                      name="phone_number" 
-                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                      value={addCanalForm.phone_number} 
-                      onChange={handleAddCanalChange} 
+                    <input
+                      type="text"
+                      name="phone_number"
+                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                      value={addCanalForm.phone_number}
+                      onChange={handleAddCanalChange}
                     />
                   </div>
                 </div>
@@ -343,32 +343,32 @@ export default function SuperadminCanais() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">E-mail</label>
-                    <input 
-                      type="email" 
-                      name="email" 
-                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                      value={addCanalForm.email} 
-                      onChange={handleAddCanalChange} 
+                    <input
+                      type="email"
+                      name="email"
+                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                      value={addCanalForm.email}
+                      onChange={handleAddCanalChange}
                     />
                   </div>
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">SMTP Host</label>
-                    <input 
-                      type="text" 
-                      name="smtp_host" 
-                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                      value={addCanalForm.smtp_host} 
-                      onChange={handleAddCanalChange} 
+                    <input
+                      type="text"
+                      name="smtp_host"
+                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                      value={addCanalForm.smtp_host}
+                      onChange={handleAddCanalChange}
                     />
                   </div>
                   <div>
                     <label className="block font-medium mb-1 text-gray-200">SMTP Port</label>
-                    <input 
-                      type="text" 
-                      name="smtp_port" 
-                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                      value={addCanalForm.smtp_port} 
-                      onChange={handleAddCanalChange} 
+                    <input
+                      type="text"
+                      name="smtp_port"
+                      className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                      value={addCanalForm.smtp_port}
+                      onChange={handleAddCanalChange}
                     />
                   </div>
                 </div>
@@ -377,18 +377,18 @@ export default function SuperadminCanais() {
               {addCanalForm.tipo === 'website' && (
                 <div>
                   <label className="block font-medium mb-1 text-gray-200">URL</label>
-                  <input 
-                    type="url" 
-                    name="url" 
-                    className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" 
-                    value={addCanalForm.url} 
-                    onChange={handleAddCanalChange} 
+                  <input
+                    type="url"
+                    name="url"
+                    className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                    value={addCanalForm.url}
+                    onChange={handleAddCanalChange}
                   />
                 </div>
               )}
 
               {errorMsg && <div className="text-red-400 text-sm mb-2">{errorMsg}</div>}
-              
+
               <button
                 type="submit"
                 className="w-full bg-primary text-white py-2 rounded font-bold hover:bg-primary/80 transition"
@@ -406,12 +406,12 @@ export default function SuperadminCanais() {
         <table className="min-w-full">
           <thead className="bg-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold">CANAL</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold">PROVEDOR</th>
-              <th className="px-6 py-3 text-center text-xs font-semibold">TIPO</th>
-              <th className="px-6 py-3 text-center text-xs font-semibold">STATUS</th>
-              <th className="px-6 py-3 text-center text-xs font-semibold">CRIADO EM</th>
-              <th className="px-6 py-3 text-center text-xs font-semibold">AÇÕES</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-foreground uppercase">CANAL</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-foreground uppercase">PROVEDOR</th>
+              <th className="px-6 py-3 text-center text-xs font-semibold text-foreground uppercase">TIPO</th>
+              <th className="px-6 py-3 text-center text-xs font-semibold text-foreground uppercase">STATUS</th>
+              <th className="px-6 py-3 text-center text-xs font-semibold text-foreground uppercase">CRIADO EM</th>
+              <th className="px-6 py-3 text-center text-xs font-semibold text-foreground uppercase">AÇÕES</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -439,7 +439,7 @@ export default function SuperadminCanais() {
                   <td className="px-6 py-4 text-left align-middle">
                     <div className="flex items-center gap-2">
                       <Wifi className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">{provedor?.nome || 'Provedor não encontrado'}</span>
+                      <span className="text-sm text-foreground">{provedor?.nome || 'Provedor não encontrado'}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-center align-middle">
@@ -465,7 +465,7 @@ export default function SuperadminCanais() {
                       <button className="p-1 hover:bg-muted rounded text-blue-600">
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button 
+                      <button
                         className="p-1 hover:bg-muted rounded text-red-600"
                         onClick={() => handleDeleteCanal(canal.id)}
                       >
@@ -478,7 +478,7 @@ export default function SuperadminCanais() {
             })}
           </tbody>
         </table>
-        
+
         {filteredCanais.length === 0 && (
           <div className="text-center py-8 text-muted-foreground">
             {search ? 'Nenhum canal encontrado para esta busca.' : 'Nenhum canal cadastrado ainda.'}

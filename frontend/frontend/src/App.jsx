@@ -49,7 +49,7 @@ export default function App() {
   useEffect(() => {
     if (user?.id) {
       startTimeout();
-      
+
       // Verificar versão do Changelog
       const lastSeenVersion = localStorage.getItem('last_seen_changelog_version');
       if (lastSeenVersion !== APP_VERSION) {
@@ -177,7 +177,7 @@ export default function App() {
           <Route path="/superadmin/*" element={
             <div className="flex h-screen">
               <SuperadminSidebar onLogout={handleLogout} />
-              <div className="flex-1">
+              <div className="flex-1 flex flex-col overflow-hidden">
                 <Topbar onLogout={handleLogout} onChangelog={() => setShowChangelog(true)} />
                 <SuperadminDashboard />
               </div>
@@ -203,12 +203,12 @@ export default function App() {
         } />
       </Routes>
 
-      <Changelog 
-        isOpen={showChangelog} 
+      <Changelog
+        isOpen={showChangelog}
         onClose={() => {
           setShowChangelog(false);
           localStorage.setItem('last_seen_changelog_version', APP_VERSION);
-        }} 
+        }}
       />
       <UserStatusManager user={user} />
     </>

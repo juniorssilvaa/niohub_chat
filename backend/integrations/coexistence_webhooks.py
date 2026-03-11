@@ -962,12 +962,45 @@ def process_incoming_messages(waba_id: str, value: dict):
             logger.debug(f"[WhatsAppWebhook] Contato processado: {normalized_from} - Nome: {contact.name}")
             
             from conversations.models import Inbox, Team
-            # Buscar inbox existente ou criar novo (evitar erro de múltiplos resultados)
-            inbox = Inbox.objects.filter(
-                channel_type="whatsapp",
-                provedor=provedor,
-                channel_id="whatsapp_cloud_api"
-            ).first()
+            
+            # LÓGICA CORRIGIDA: Determinar o inbox correto pelo canal que recebeu a mensagem
+            # Isso evita criar dois atendimentos (um por whatsapp_oficial e outro por whatsapp genérico)
+            
+            inbox = None
+            
+            # 1. Se temos o phone_number_id, tentar identificar se veio por um canal whatsapp_oficial
+            if phone_number_id and canal and canal.phone_number_id == phone_number_id:
+                # A mensagem veio pelo mesmo canal (whatsapp_oficial) que identificamos no início
+                # Buscar o inbox vinculado a este canal
+                inbox = Inbox.objects.filter(
+                    channel_type='whatsapp_oficial',
+                    channel_id=str(canal.id),
+                    provedor=provedor
+                ).first()
+
+            # 2. Verificar também se existe uma conversa aberta com este contato em QUALQUER inbox do provedor
+            # (para não duplicar quando o agente iniciou por um canal específico e o cliente responde)
+            if not inbox:
+                # Buscar na conversa existente mais recente deste contato com este provedor qual inbox usar
+                from conversations.models import Conversation as Conv
+                conv_existente = Conv.objects.filter(
+                    contact=contact,
+                    inbox__provedor=provedor
+                ).exclude(
+                    status__in=['closed', 'resolved', 'finalizada']
+                ).select_related('inbox').order_by('-created_at').first()
+                
+                if conv_existente and conv_existente.inbox:
+                    inbox = conv_existente.inbox
+                    logger.info(f"[WhatsAppWebhook] Reutilizando inbox da conversa existente: {inbox.id} ({inbox.channel_type}) para contato {normalized_from}")
+
+            # 3. Fallback: buscar inbox genérico whatsapp ou criar um
+            if not inbox:
+                inbox = Inbox.objects.filter(
+                    channel_type="whatsapp",
+                    provedor=provedor,
+                    channel_id="whatsapp_cloud_api"
+                ).first()
             
             if not inbox:
                 inbox = Inbox.objects.create(

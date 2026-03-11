@@ -9,7 +9,7 @@ import useMetaEmbeddedSignupListener from '../hooks/useMetaEmbeddedSignupListene
 import { useNavigate } from 'react-router-dom';
 import { Switch } from './ui/switch';
 
-  function StatusBadge({ status, t }) {
+function StatusBadge({ status, t }) {
   let color = 'bg-yellow-500';
   let text = 'text-yellow-900';
   let statusText = t('desconectado');
@@ -35,7 +35,7 @@ import { Switch } from './ui/switch';
   );
 }
 
-function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onCheckStatus, onDeleteInstance, deletingChannelId, isProcessing, onToggleIA, providerConfig, t }) {
+function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onCheckStatus, onDeleteInstance, deletingChannelId, isProcessing, onToggleIA, providerConfig, onEditName, t }) {
   const isWhatsapp = channel.tipo === 'whatsapp' || channel.tipo === 'whatsapp_session';
   const isWhatsappOficial = channel.tipo === 'whatsapp_oficial';
 
@@ -86,7 +86,7 @@ function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onChe
   // Se desconectado, SEMPRE mostrar GIF (nunca mostrar foto)
   const shouldShowGif = isDisconnected;
 
-  // Adicionar cache-busting se a foto vier de uma URL externa (não data URL)
+  // Adicionar cache-busting se a foto viera de uma URL externa (não data URL)
   // Usa o status como chave para forçar recarregamento quando o status muda
   // CORREÇÃO: Só processar profilePic se não deve mostrar GIF (ou seja, se está conectado)
   const statusKey = status || 'unknown';
@@ -141,7 +141,24 @@ function ChannelCard({ channel, onConnect, onDelete, onEdit, onDisconnect, onChe
           </div>
         )}
         <div>
-          <div className="font-bold text-lg text-foreground capitalize">
+          <div className="flex items-center gap-2">
+            <div className="font-bold text-lg text-foreground">
+              {channel.nome || (
+                channel.tipo === 'whatsapp_session' ? 'WhatsApp QR code' :
+                  channel.tipo === 'telegram' ? 'Telegram' :
+                    channel.tipo === 'whatsapp_oficial' ? 'WhatsApp Oficial' :
+                      channel.tipo
+              )}
+            </div>
+            <button
+              onClick={() => onEditName(channel)}
+              className="p-1 hover:bg-muted rounded transition text-muted-foreground hover:text-foreground"
+              title="Editar nome"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="text-xs text-muted-foreground capitalize">
             {channel.tipo === 'whatsapp_session' ? 'WhatsApp QR code' :
               channel.tipo === 'telegram' ? 'Telegram' :
                 channel.tipo === 'whatsapp_oficial' ? 'WhatsApp Oficial' :
@@ -347,6 +364,12 @@ export default function Integrations({ provedorId }) {
   const [qrCardLoading, setQrCardLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  // Estados para edição de nome do canal
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [channelToEdit, setChannelToEdit] = useState(null);
+  const [newName, setNewName] = useState('');
+  const [savingName, setSavingName] = useState(false);
   // Adicionar estados:
   const [showPairingMenu, setShowPairingMenu] = useState(false);
   const [pairingMethod, setPairingMethod] = useState(''); // 'qrcode' ou 'paircode'
@@ -1412,6 +1435,40 @@ export default function Integrations({ provedorId }) {
     }
   };
 
+  const handleEditName = (channel) => {
+    setChannelToEdit(channel);
+    setNewName(channel.nome || '');
+    setIsEditingName(true);
+  };
+
+  const handleSaveName = async () => {
+    if (!channelToEdit || !newName.trim()) return;
+
+    setSavingName(true);
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      const response = await axios.patch(`/api/canais/${channelToEdit.id}/`, {
+        nome: newName.trim()
+      }, {
+        headers: { Authorization: `Token ${token}` }
+      });
+
+      if (response.status === 200) {
+        setChannels(prev => prev.map(c => c.id === channelToEdit.id ? { ...c, nome: response.data.nome } : c));
+        setIsEditingName(false);
+        setChannelToEdit(null);
+        setNewName('');
+        setToast({ show: true, message: 'Nome do canal atualizado com sucesso!', type: 'success' });
+        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar nome do canal:', error);
+      alert('Erro ao salvar nome do canal. Tente novamente.');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
   const handleToggleIA = async (channelId, iaAtiva) => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -2014,169 +2071,6 @@ export default function Integrations({ provedorId }) {
   };
 
   const handleSelectType = (tipo) => {
-    // Se for WhatsApp Oficial, criar o canal primeiro (sem conectar)
-    if (tipo === 'whatsapp_oficial') {
-      if (!provedorId) {
-        console.error('provedorId não está disponível!');
-        alert('Erro: ID do provedor não encontrado. Por favor, recarregue a página.');
-        return;
-      }
-
-      setShowModal(false);
-      setSelectedType(null);
-      setAdding(true);
-
-      // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-
-      // Criar canal WhatsApp Oficial primeiro (sem conectar)
-      axios.post('/api/canais/', {
-        tipo: 'whatsapp_oficial',
-        provedor_id: provedorId,
-        ativo: false, // Inativo até conectar
-        status: 'disconnected'
-      }, {
-        headers: { Authorization: `Token ${token}` }
-      }).then((response) => {
-        console.log('Canal WhatsApp Oficial criado:', response.data);
-        setAdding(false);
-
-        // Recarregar lista de canais
-        fetchCanais(token).then(res => {
-          setChannels(Array.isArray(res.data) ? res.data : res.data.results || []);
-        });
-
-        // Mostrar mensagem informando que precisa conectar
-        setToast({
-          show: true,
-          message: 'Canal WhatsApp Oficial criado! Clique em "Conectar" para iniciar o fluxo OAuth.',
-          type: 'info'
-        });
-        setTimeout(() => setToast({ show: false, message: '', type: 'info' }), 5000);
-      }).catch((error) => {
-        console.error('Erro ao criar canal WhatsApp Oficial:', error);
-        setAdding(false);
-        const errorMessage = error.response?.data?.error || error.message || 'Erro desconhecido';
-        setToast({
-          show: true,
-          message: `Erro ao criar canal: ${errorMessage}`,
-          type: 'error'
-        });
-        setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 5000);
-      });
-
-      return;
-    }
-
-    // Se for WhatsApp normal, redirecionar para OAuth da Meta (comportamento antigo)
-    if (tipo === 'whatsapp') {
-      if (!provedorId) {
-        console.error('provedorId não está disponível!');
-        alert('Erro: ID do provedor não encontrado. Por favor, recarregue a página.');
-        return;
-      }
-
-      setShowModal(false);
-      setSelectedType(null);
-
-      // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      const configId = provedor?.meta_config_id || META_EMBEDDED_SIGNUP_CONFIG_ID;
-
-      // Chamar endpoint do backend para obter URL OAuth
-      axios.post('/api/canais/get_whatsapp_official_oauth_url/', {
-        provider_id: provedorId,
-        config_id: configId
-      }, {
-        headers: { Authorization: `Token ${token}` }
-      }).then((response) => {
-        if (response.data.success && response.data.oauth_url) {
-          console.log('URL OAuth obtida do backend:', response.data.redirect_uri);
-
-          // IMPORTANTE: Abrir OAuth em popup para manter contexto do parent window
-          const popup = window.open(
-            response.data.oauth_url,
-            'WhatsAppOAuth',
-            'width=600,height=700,scrollbars=yes,resizable=yes'
-          );
-
-          // Listener para quando o popup fechar
-          const checkPopup = setInterval(() => {
-            if (popup.closed) {
-              clearInterval(checkPopup);
-              fetchCanais(token).then(res => {
-                setChannels(Array.isArray(res.data) ? res.data : res.data.results || []);
-              });
-            }
-          }, 500);
-
-          // Listener para mensagens do popup
-          const messageListener = (event) => {
-            if (event.data && event.data.type === 'OAUTH_CALLBACK_PROCESSED') {
-              console.log('OAuth callback processado no popup:', event.data);
-            }
-          };
-
-          window.addEventListener('message', messageListener);
-
-          setTimeout(() => {
-            if (popup.closed) {
-              window.removeEventListener('message', messageListener);
-            }
-          }, 60000);
-
-        } else {
-          console.error('Erro ao obter URL OAuth:', response.data.error);
-          alert(`Erro ao iniciar OAuth: ${response.data.error || 'Erro desconhecido'}`);
-        }
-      }).catch((error) => {
-        console.error('Erro ao chamar endpoint OAuth:', error);
-        const errorMessage = error.response?.data?.error || error.message || 'Erro desconhecido';
-        alert(`Erro ao iniciar OAuth: ${errorMessage}`);
-      });
-
-      return;
-    }
-
-    // Se for Telegram, criar canal vazio diretamente (sem pedir informações)
-    if (tipo === 'telegram') {
-      setShowModal(false);
-      setAdding(true);
-      // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-
-      // Criar canal Telegram vazio com nome padrão
-      const telegramData = {
-        tipo: 'telegram',
-        nome: `Telegram ${Date.now()}`
-      };
-
-      axios.post('/api/canais/', telegramData, {
-        headers: { Authorization: `Token ${token}` }
-      }).then((response) => {
-        setAdding(false);
-
-        // Atualizar lista de canais
-        setLoading(true);
-        fetchCanais(token).then(res => {
-          setChannels(Array.isArray(res.data) ? res.data : res.data.results || []);
-          setLoading(false);
-
-          setToast({ show: true, message: 'Canal Telegram criado! Clique em "Conectar" para configurar.', type: 'success' });
-          setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 5000);
-        }).catch(err => {
-          console.error('Erro ao atualizar lista:', err);
-          setLoading(false);
-        });
-      }).catch(err => {
-        console.error('Erro ao criar canal Telegram:', err);
-        setAdding(false);
-        alert('Erro ao criar canal Telegram. Tente novamente.');
-      });
-
-      return;
-    }
-
     setSelectedType(tipo);
     setInstanceName('');
     setQrCode('');
@@ -2571,6 +2465,7 @@ export default function Integrations({ provedorId }) {
               deletingChannelId={deletingChannelId}
               isProcessing={processingChannels.has(channel.id)}
               providerConfig={providerConfig}
+              onEditName={handleEditName}
               t={t}
             />
             {/* QR Code para WhatsApp */}
@@ -2650,7 +2545,7 @@ export default function Integrations({ provedorId }) {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {selectedType === 'whatsapp' || selectedType === 'whatsapp_session' ? (
+                {selectedType === 'whatsapp' || selectedType === 'whatsapp_session' || selectedType === 'whatsapp_oficial' ? (
                   <div className="flex flex-col gap-4">
                     <div className="flex justify-between items-center">
                       <h4 className="text-lg font-bold text-white">{t('detalhes_canal')}</h4>
@@ -2815,6 +2710,47 @@ export default function Integrations({ provedorId }) {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDIÇÃO DE NOME DO CANAL */}
+      {isEditingName && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card p-8 rounded-xl shadow-lg border border-border w-full max-w-md relative">
+            <button onClick={() => { setIsEditingName(false); setChannelToEdit(null); }} className="absolute top-4 right-4 p-2 rounded hover:bg-muted transition" title="Fechar">
+              <XCircle className="w-5 h-5 text-destructive" />
+            </button>
+            <h3 className="text-xl font-bold text-foreground mb-6">Editar Nome do Canal</h3>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col">
+                <label htmlFor="editChannelName" className="text-sm font-semibold text-white mb-1">Novo Nome</label>
+                <input
+                  type="text"
+                  id="editChannelName"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="bg-[#1a1b2e] border border-[#35365a] text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: WhatsApp Suporte"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => { setIsEditingName(false); setChannelToEdit(null); }}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow transition"
+                >
+                  {t('cancelar')}
+                </button>
+                <button
+                  onClick={handleSaveName}
+                  disabled={savingName || !newName.trim()}
+                  className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingName ? 'Salvando...' : 'Salvar Alteração'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -3068,7 +3004,7 @@ export default function Integrations({ provedorId }) {
       {/* MODAL DE GERENCIAR MODELOS (WhatsApp Oficial) */}
       {showTemplateModal && selectedChannelForTemplates && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className={`bg-[#23243a] p-8 rounded-xl shadow-lg border border-[#35365a] w-full ${showCreateTemplate ? 'max-w-7xl' : 'max-w-4xl'} max-h-[90vh] overflow-y-auto relative`}>
+          <div className={`bg-card border border-border p-8 rounded-xl shadow-lg w-full ${showCreateTemplate ? 'max-w-7xl' : 'max-w-4xl'} max-h-[90vh] overflow-y-auto relative`}>
             {/* Botão fechar */}
             <button
               onClick={() => {
@@ -3098,7 +3034,7 @@ export default function Integrations({ provedorId }) {
                   <button
                     onClick={() => loadTemplates(selectedChannelForTemplates)}
                     disabled={loadingTemplates}
-                    className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white px-6 py-2 rounded-lg text-sm font-semibold shadow transition disabled:opacity-50"
+                    className="bg-[#2d2e4a] hover:bg-[#35365a] text-gray-200 px-6 py-2 rounded-lg text-sm font-semibold shadow border border-[#45466a] transition disabled:opacity-50"
                   >
                     {loadingTemplates ? 'Carregando...' : 'Atualizar Lista'}
                   </button>

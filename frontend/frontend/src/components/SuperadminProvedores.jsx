@@ -36,6 +36,8 @@ export default function SuperadminProvedores() {
     bot_mode: 'ia',
   });
   const [loadingEdit, setLoadingEdit] = useState(false);
+  const [loadingAdd, setLoadingAdd] = useState(false);
+
   const [errorMsg, setErrorMsg] = useState('');
   const [provedoresState, setProvedoresState] = useState([]);
   const [menuId, setMenuId] = useState(null);
@@ -578,14 +580,14 @@ export default function SuperadminProvedores() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-center align-middle">
+                  <td className="px-6 py-4 text-center align-middle text-foreground">
                     {provedor.channels_count || 0}
                   </td>
-                  <td className="px-6 py-4 text-center align-middle">
+                  <td className="px-6 py-4 text-center align-middle text-foreground">
                     {provedor.users_count || 0}
                   </td>
                   <td className="px-6 py-4 text-center align-middle">
-                    <span className="inline-flex items-center gap-1 justify-center w-full">
+                    <span className="inline-flex items-center gap-1 justify-center w-full text-foreground">
                       <MessageCircle className="w-4 h-4 text-muted-foreground" />
                       {provedor.conversations_count?.toLocaleString('pt-BR') || 0}
                     </span>

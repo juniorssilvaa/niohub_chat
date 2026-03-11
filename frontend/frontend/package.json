@@ -1,7 +1,7 @@
 {
   "name": "niochat-frontend",
   "private": true,
-  "version": "2.25.0",
+  "version": "2.26.8",
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.dev.js",

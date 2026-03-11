@@ -53,10 +53,18 @@ class User(AbstractUser):
         default='01.mp3',
         verbose_name='Som para Novas Mensagens'
     )
+    new_message_sound_volume = models.FloatField(
+        default=1.0,
+        verbose_name='Volume das Novas Mensagens'
+    )
     new_conversation_sound = models.CharField(
         max_length=200,
         default='02.mp3',
         verbose_name='Som para Novas Conversas'
+    )
+    new_conversation_sound_volume = models.FloatField(
+        default=1.0,
+        verbose_name='Volume das Novas Conversas'
     )
     session_timeout = models.IntegerField(
         default=30,

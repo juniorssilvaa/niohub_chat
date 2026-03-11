@@ -39,7 +39,8 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     mensagem: '',
     usarTemplate: false,
     templateSelecionado: null,
-    canalId: null
+    inboxId: null,
+    canal_id: null
   });
 
   const [templates, setTemplates] = useState([]);
@@ -51,12 +52,16 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     mensagem: '',
     usarTemplate: false,
     templateSelecionado: null,
-    canalId: null
+    inboxId: null,
+    canal: 'whatsapp',
+    canal_id: null
   });
 
   const [enviandoAtendimento, setEnviandoAtendimento] = useState(false);
   const [buscandoContato, setBuscandoContato] = useState(false);
   const [contatosEncontrados, setContatosEncontrados] = useState([]);
+  const [inboxes, setInboxes] = useState([]);
+  const [carregandoInboxes, setCarregandoInboxes] = useState(false);
 
   //  Função para buscar contatos existentes
   const buscarContatos = async (termo) => {
@@ -83,22 +88,54 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     }
   };
 
+  // Função para buscar inboxes
+  const fetchInboxes = async () => {
+    if (!provedorId) return;
+
+    setCarregandoInboxes(true);
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+
+    try {
+      const response = await axios.get('/api/inboxes/', {
+        headers: { Authorization: `Token ${token}` },
+        params: { provedor_id: provedorId }
+      });
+
+      const results = response.data.results || response.data || [];
+      const filteredInboxes = results.filter(i => i.is_active !== false);
+      setInboxes(filteredInboxes);
+
+      // Auto-selecionar se houver apenas um
+      if (filteredInboxes.length === 1) {
+        const inboxId = filteredInboxes[0].id;
+        setNovoContato(prev => ({ ...prev, inboxId }));
+        setContatoExistente(prev => ({ ...prev, inboxId }));
+      }
+    } catch (error) {
+      console.error('Erro ao buscar inboxes:', error);
+    } finally {
+      setCarregandoInboxes(false);
+    }
+  };
+
   // Removido prompt de desbloqueio (UX simplificada)
   useEffect(() => { }, [authReady]);
 
-  // Buscar templates quando modal abrir e canal for WhatsApp
+  // Buscar templates quando modal abrir
   useEffect(() => {
-    if (modalNovoContato && novoContato.canal === 'whatsapp') {
+    if (modalNovoContato) {
       buscarCanalWhatsApp();
+      fetchInboxes();
     } else if (modalContatoExistente) {
       buscarCanalWhatsApp();
+      fetchInboxes();
     } else if (!modalNovoContato && !modalContatoExistente) {
       // Limpar templates quando fechar modal
       setTemplates([]);
-      setNovoContato(prev => ({ ...prev, usarTemplate: false, templateSelecionado: null, canalId: null }));
-      setContatoExistente(prev => ({ ...prev, usarTemplate: false, templateSelecionado: null, canalId: null }));
+      setNovoContato(prev => ({ ...prev, usarTemplate: false, templateSelecionado: null, canal_id: null, inboxId: null }));
+      setContatoExistente(prev => ({ ...prev, usarTemplate: false, templateSelecionado: null, canal_id: null, inboxId: null }));
     }
-  }, [modalNovoContato, modalContatoExistente, novoContato.canal]);
+  }, [modalNovoContato, modalContatoExistente]);
 
   // Função para buscar templates do canal WhatsApp
   const buscarTemplates = async (canalId) => {
@@ -142,12 +179,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     }
   };
 
-  // Função para buscar canal WhatsApp ativo
+  // Função para buscar canal WhatsApp ativo compatível com templates
   const buscarCanalWhatsApp = async () => {
-    // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     try {
-      // Construir parâmetros da query
       const params = {};
       if (provedorId) {
         params.provedor_id = provedorId;
@@ -158,30 +193,24 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         params: params
       });
 
-      // A resposta pode ter results (paginado) ou ser um array direto
       const canais = response.data.results || response.data || [];
 
-      console.log('Canais encontrados:', canais.length);
-      console.log('Canais disponíveis:', canais.map(c => ({ id: c.id, tipo: c.tipo, ativo: c.ativo, nome: c.name || c.nome })));
-
-      // Filtrar apenas canais WhatsApp Oficial ativos
-      const canalWhatsApp = canais.find(
-        canal => canal.tipo === 'whatsapp_oficial' && canal.ativo === true
-      );
-
-      console.log('Canal WhatsApp encontrado:', canalWhatsApp ? `ID: ${canalWhatsApp.id}, Nome: ${canalWhatsApp.name || canalWhatsApp.nome}` : 'Nenhum');
+      // Tentar encontrar WhatsApp Oficial com WABA_ID primeiro, depois qualquer WhatsApp oficial ativo
+      const canalWhatsApp = canais.find(c => c.tipo === 'whatsapp_oficial' && c.ativo && c.waba_id) || 
+                          canais.find(c => c.tipo === 'whatsapp_oficial' && c.ativo) ||
+                          canais.find(c => c.tipo === 'whatsapp' && c.ativo);
 
       if (canalWhatsApp) {
-        setNovoContato(prev => ({ ...prev, canalId: canalWhatsApp.id }));
-        setContatoExistente(prev => ({ ...prev, canalId: canalWhatsApp.id }));
+        console.log('Canal WhatsApp para templates encontrado:', canalWhatsApp.id);
+        setNovoContato(prev => ({ ...prev, canal_id: canalWhatsApp.id }));
+        setContatoExistente(prev => ({ ...prev, canal_id: canalWhatsApp.id }));
         buscarTemplates(canalWhatsApp.id);
       } else {
-        console.warn('Nenhum canal WhatsApp Oficial ativo encontrado para o provedor');
+        console.warn('Nenhum canal WhatsApp ativo encontrado para templates');
         setTemplates([]);
       }
     } catch (error) {
       console.error('Erro ao buscar canal WhatsApp:', error);
-      console.error('Detalhes do erro:', error.response?.data);
       setTemplates([]);
     }
   };
@@ -216,8 +245,8 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
     try {
-      // Se usar template e canal for WhatsApp, usar endpoint de template
-      if (novoContato.usarTemplate && novoContato.canal === 'whatsapp' && novoContato.canalId) {
+      // Se usar template e canal for WhatsApp (qualquer tipo), usar endpoint de template
+      if (novoContato.usarTemplate && (novoContato.canal === 'whatsapp' || novoContato.canal === 'whatsapp_oficial') && novoContato.canal_id) {
         const template = templates.find(t => t.name === novoContato.templateSelecionado);
 
         if (!template) {
@@ -231,7 +260,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           template_name: template.name,
           template_language: template.language || 'pt_BR',
           template_components: [], // TODO: Adicionar suporte a parâmetros
-          canal_id: novoContato.canalId,
+          canal_id: novoContato.canal_id,
           contact_name: novoContato.nome
         }, {
           headers: { Authorization: `Token ${token}` }
@@ -239,7 +268,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
         if (response.data.success) {
           alert('Template enviado com sucesso! A conversa aparecerá no painel em instantes.');
-          setNovoContato({ nome: '', telefone: '', canal: 'whatsapp', mensagem: '', usarTemplate: false, templateSelecionado: null, canalId: null });
+          setNovoContato({ nome: '', telefone: '', canal: 'whatsapp', mensagem: '', usarTemplate: false, templateSelecionado: null, canal_id: null });
           setModalNovoContato(false);
           setTimeout(() => fetchConversations(true), 1000);
         } else {
@@ -277,23 +306,28 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         }
       }
 
-      // 2. Buscar inbox padrão para o canal
-      const inboxesResponse = await axios.get('/api/inboxes/', {
-        headers: { Authorization: `Token ${token}` }
-      });
+      // 2. Buscar inbox (usar o selecionado ou o padrão)
+      let inboxId = novoContato.inboxId;
 
-      const inbox = inboxesResponse.data.results.find(
-        inbox => inbox.channel_type === novoContato.canal
-      ) || inboxesResponse.data.results[0];
+      if (!inboxId) {
+        const inboxesResponse = await axios.get('/api/inboxes/', {
+          headers: { Authorization: `Token ${token}` }
+        });
 
-      if (!inbox) {
-        throw new Error('Nenhum inbox encontrado');
+        const inbox = inboxesResponse.data.results.find(
+          inbox => inbox.channel_type === novoContato.canal
+        ) || inboxesResponse.data.results[0];
+
+        if (!inbox) {
+          throw new Error('Nenhum inbox encontrado');
+        }
+        inboxId = inbox.id;
       }
 
       // 3. Criar conversa
       const conversationResponse = await axios.post('/api/conversations/', {
         contact_id: contactResponse.data.id,
-        inbox_id: inbox.id,
+        inbox_id: inboxId,
         assignee_id: userResponse.data.id,
         status: 'open'
       }, {
@@ -348,7 +382,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
     try {
       // Se usar template, usar endpoint de template
-      if (contatoExistente.usarTemplate && contatoExistente.canalId) {
+      if (contatoExistente.usarTemplate && contatoExistente.canal_id) {
         const template = templates.find(t => t.name === contatoExistente.templateSelecionado);
 
         if (!template) {
@@ -362,7 +396,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           template_name: template.name,
           template_language: template.language || 'pt_BR',
           template_components: [],
-          canal_id: contatoExistente.canalId,
+          canal_id: contatoExistente.canal_id,
           contact_name: contatoExistente.contato.name
         }, {
           headers: { Authorization: `Token ${token}` }
@@ -370,7 +404,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
         if (response.data.success) {
           alert('Template enviado com sucesso! A conversa aparecerá no painel em instantes.');
-          setContatoExistente({ busca: '', contato: null, mensagem: '', usarTemplate: false, templateSelecionado: null, canalId: null });
+          setContatoExistente({ busca: '', contato: null, mensagem: '', usarTemplate: false, templateSelecionado: null, canal_id: null });
           setModalContatoExistente(false);
           setContatosEncontrados([]);
           setTimeout(() => fetchConversations(true), 1000);
@@ -387,23 +421,28 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         headers: { Authorization: `Token ${token}` }
       });
 
-      // 1. Buscar inbox padrão
-      const inboxesResponse = await axios.get('/api/inboxes/', {
-        headers: { Authorization: `Token ${token}` }
-      });
+      // 1. Buscar inbox (usar o selecionado ou o padrão)
+      let inboxId = contatoExistente.inboxId;
 
-      const inbox = inboxesResponse.data.results.find(
-        inbox => inbox.channel_type === 'whatsapp'
-      ) || inboxesResponse.data.results[0];
+      if (!inboxId) {
+        const inboxesResponse = await axios.get('/api/inboxes/', {
+          headers: { Authorization: `Token ${token}` }
+        });
 
-      if (!inbox) {
-        throw new Error('Nenhum inbox encontrado');
+        const inbox = inboxesResponse.data.results.find(
+          inbox => inbox.channel_type === 'whatsapp'
+        ) || inboxesResponse.data.results[0];
+
+        if (!inbox) {
+          throw new Error('Nenhum inbox encontrado');
+        }
+        inboxId = inbox.id;
       }
 
       // 2. Criar conversa (incluindo assignee_id para inibir IA)
       const conversationResponse = await axios.post('/api/conversations/', {
         contact_id: contatoExistente.contato.id,
-        inbox_id: inbox.id,
+        inbox_id: inboxId,
         assignee_id: userResponse.data.id,
         status: 'open'
       }, {
@@ -849,7 +888,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       count: activeConversations.filter(c => {
         const a = c.assignee;
         if (!a || !user) return false;
-        return (a.id && a.id === user.id) || (a.username && a.username === user.username);
+        return (a.id?.toString() === user.id?.toString()) || (a.username && a.username === user.username);
       }).length,
     });
 
@@ -920,7 +959,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       filtered = filtered.filter(c => {
         const a = c.assignee;
         if (!a || !user) return false;
-        return (a.id && a.id === user.id) || (a.username && a.username === user.username);
+        return (a.id?.toString() === user.id?.toString()) || (a.username && a.username === user.username);
       });
     } else if (activeTab === 'unassigned') {
       // Mostrar conversas não atribuídas em espera (pending) OU com IA (snoozed)
@@ -1312,25 +1351,45 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Canal</label>
-              <select
-                value={novoContato.canal}
-                onChange={(e) => setNovoContato(prev => ({
-                  ...prev,
-                  canal: e.target.value,
-                  usarTemplate: e.target.value === 'whatsapp' ? prev.usarTemplate : false,
-                  templateSelecionado: e.target.value === 'whatsapp' ? prev.templateSelecionado : null
-                }))}
-                className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="whatsapp">WhatsApp</option>
-                <option value="telegram">Telegram</option>
-                <option value="email">Email</option>
-              </select>
-            </div>
 
-            {novoContato.canal === 'whatsapp' && (
+            {/* Seleção de Inbox Específico */}
+            {inboxes.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Canal Específico (Conexão)</label>
+                <select
+                  value={novoContato.inboxId || ''}
+                  onChange={(e) => {
+                    const selectedInboxId = e.target.value;
+                    const selectedInbox = inboxes.find(i => i.id.toString() === selectedInboxId.toString());
+                    const channel_id_value = selectedInbox?.channel_id || null;
+                    setNovoContato(prev => ({
+                      ...prev,
+                      inboxId: selectedInboxId,
+                      canal: selectedInbox?.channel_type || prev.canal,
+                      canal_id: channel_id_value
+                    }));
+                    // Se inbox de whatsapp_oficial, buscar templates pelo ID do canal
+                    if (selectedInbox?.channel_type === 'whatsapp_oficial' && channel_id_value) {
+                      buscarTemplates(channel_id_value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Selecione a conexão</option>
+                  {inboxes
+                    .map(inbox => (
+                      <option key={inbox.id} value={inbox.id}>
+                        {(inbox.custom_name || inbox.name)} ({inbox.channel_type === 'whatsapp_oficial' ? 'WhatsApp' : inbox.channel_type}) {inbox.additional_attributes?.phone_number ? `(${inbox.additional_attributes.phone_number})` : ''}
+                      </option>
+                    ))}
+                </select>
+                {inboxes.length === 0 && (
+                  <p className="text-xs text-destructive mt-1">Nenhuma conexão ativa encontrada.</p>
+                )}
+              </div>
+            )}
+
+            {(novoContato.canal === 'whatsapp' || novoContato.canal === 'whatsapp_oficial') && (
               <div>
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -1349,7 +1408,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               </div>
             )}
 
-            {novoContato.usarTemplate && novoContato.canal === 'whatsapp' ? (
+            {novoContato.usarTemplate && (novoContato.canal === 'whatsapp' || novoContato.canal === 'whatsapp_oficial') ? (
               <div>
                 <label className="block text-sm font-medium mb-2">Template</label>
                 {carregandoTemplates ? (
@@ -1456,6 +1515,39 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               </div>
             )}
 
+            {/* Seleção de Inbox para Contato Existente */}
+            {inboxes.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Canal de Envio</label>
+                <select
+                  value={contatoExistente.inboxId || ''}
+                  onChange={(e) => {
+                    const selectedInboxId = e.target.value;
+                    const selectedInbox = inboxes.find(i => i.id.toString() === selectedInboxId.toString());
+                    const channel_id_value = selectedInbox?.channel_id || null;
+                    setContatoExistente(prev => ({
+                      ...prev,
+                      inboxId: selectedInboxId,
+                      canal: selectedInbox?.channel_type || prev.canal,
+                      canal_id: channel_id_value
+                    }));
+                    // Se inbox de whatsapp_oficial, buscar templates pelo ID do canal
+                    if (selectedInbox?.channel_type === 'whatsapp_oficial' && channel_id_value) {
+                      buscarTemplates(channel_id_value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Selecione a conexão</option>
+                  {inboxes.map(inbox => (
+                    <option key={inbox.id} value={inbox.id}>
+                      {(inbox.custom_name || inbox.name)} ({inbox.channel_type === 'whatsapp_oficial' ? 'WhatsApp' : inbox.channel_type}) {inbox.additional_attributes?.phone_number ? `(${inbox.additional_attributes.phone_number})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div>
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
@@ -1524,7 +1616,13 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               </button>
               <button
                 onClick={handleContatoExistente}
-                disabled={enviandoAtendimento || !contatoExistente.contato}
+                disabled={
+                  enviandoAtendimento || 
+                  !contatoExistente.contato || 
+                  !contatoExistente.inboxId || // Canal obrigatório
+                  (!contatoExistente.usarTemplate && !contatoExistente.mensagem) || // Mensagem obrigatória se não usar template
+                  (contatoExistente.usarTemplate && !contatoExistente.templateSelecionado) // Template obrigatório se selecionado
+                }
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {enviandoAtendimento ? 'Enviando...' : 'Enviar Mensagem'}

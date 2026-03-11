@@ -404,6 +404,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   const getChannelIcon = (channelType) => {
     switch (channelType) {
       case 'whatsapp':
+      case 'whatsapp_oficial':
         return <img src={whatsappIcon} alt="WhatsApp" className="w-3 h-3" />;
       case 'telegram':
         return <img src={telegramIcon} alt="Telegram" className="w-3 h-3" />;
@@ -2210,16 +2211,16 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       return;
     }
 
-    // Verificar se é WhatsApp Oficial
-    if (conversation.inbox.channel_type !== 'whatsapp' && conversation.inbox.channel_type !== 'whatsapp_oficial') {
-      setError('Templates só estão disponíveis para WhatsApp Oficial');
+    // Permitir templates para 'whatsapp' e 'whatsapp_oficial'
+    const channelType = conversation.inbox.channel_type;
+    if (channelType !== 'whatsapp' && channelType !== 'whatsapp_oficial') {
+      setError('Templates só estão disponíveis para WhatsApp');
       return;
     }
 
     setLoadingTemplates(true);
     setError(''); // Limpar erro anterior
     try {
-      // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
       if (!token) {
@@ -2228,13 +2229,12 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         return;
       }
 
-      // Buscar o canal completo (mesma lógica do Integrations.jsx)
-      // Primeiro, tentar usar channel_id se disponível
-      let channelId = conversation.inbox.channel_id;
+      // 1. Tentar usar channel_real_id do backend (preferencial e validado)
+      let channelId = conversation.inbox.channel_real_id;
 
-      // Se não tiver channel_id, buscar canais e encontrar o WhatsApp Oficial do provedor
+      // 2. Fallback: Buscar canais e encontrar o mais compatível (se o backend não resolveu)
       if (!channelId) {
-        console.log('Channel ID não encontrado no inbox, buscando canais...');
+        console.log('ID real do canal não resolvido pelo backend, buscando na lista de canais...');
         const channelsResponse = await axios.get('/api/canais/', {
           headers: { Authorization: `Token ${token}` }
         });
@@ -2243,65 +2243,54 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           ? channelsResponse.data
           : channelsResponse.data.results || [];
 
-        // Buscar canal WhatsApp Oficial do mesmo provedor
         const provedorId = conversation.inbox?.provedor?.id;
-        const whatsappOficial = channelsList.find(c =>
-          c.tipo === 'whatsapp_oficial' &&
+        
+        // Tentar encontrar um canal que case com o provedor, seja do tipo oficial e TENHA WABA_ID
+        const bestMatch = channelsList.find(c => 
+          (c.tipo === 'whatsapp_oficial' || c.tipo === 'whatsapp') && 
+          c.ativo &&
+          c.waba_id && // Importante: priorizar canal com WABA configurado para templates
+          (!provedorId || c.provedor === provedorId || c.provedor?.id === provedorId)
+        ) || channelsList.find(c => 
+          (c.tipo === 'whatsapp_oficial' || c.tipo === 'whatsapp') && 
+          c.ativo &&
           (!provedorId || c.provedor === provedorId || c.provedor?.id === provedorId)
         );
 
-        if (whatsappOficial) {
-          channelId = whatsappOficial.id;
-          console.log('Canal WhatsApp Oficial encontrado:', channelId);
-        } else {
-          setError('Canal WhatsApp Oficial não encontrado. Verifique se o canal está configurado corretamente.');
-          setLoadingTemplates(false);
-          return;
+        if (bestMatch) {
+          channelId = bestMatch.id;
+          console.log('Canal compatível encontrado via fallback:', channelId);
         }
+      }
+
+      if (!channelId) {
+        setError('Não foi possível identificar o canal do WhatsApp para carregar templates. Verifique as configurações de integração.');
+        setLoadingTemplates(false);
+        return;
       }
 
       console.log('Buscando templates para canal:', channelId);
 
-      // Buscar templates (mesma lógica do Integrations.jsx loadTemplates)
       const response = await axios.get(`/api/canais/${channelId}/message-templates/`, {
         headers: { Authorization: `Token ${token}` }
       });
 
-      console.log('Resposta da API de templates:', response.data);
-
       if (response.data && response.data.success) {
-        if (response.data.templates && response.data.templates.length > 0) {
-          setTemplates(response.data.templates);
-          setError(''); // Limpar erro se houver sucesso
-        } else {
-          setTemplates([]);
-          setError(''); // Não é erro, apenas não há templates
-        }
+        setTemplates(response.data.templates || []);
       } else {
-        setTemplates([]);
         setError(response.data?.error || 'Erro ao buscar templates');
       }
     } catch (error) {
       console.error('Erro ao buscar templates:', error);
-      console.error('Detalhes do erro:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
-
       let errorMessage = 'Erro ao carregar templates';
       if (error.response?.status === 404) {
-        errorMessage = 'Canal não encontrado. Verifique se o canal está configurado corretamente.';
-      } else if (error.response?.status === 401) {
-        errorMessage = 'Erro de autenticação. Faça login novamente.';
+        errorMessage = 'Canal de templates não encontrado. Verifique se a integração do WhatsApp Oficial está ativa.';
       } else if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
       } else {
         errorMessage = error.message || 'Erro desconhecido';
       }
-
       setError(errorMessage);
-      setTemplates([]);
     } finally {
       setLoadingTemplates(false);
     }
@@ -2601,11 +2590,12 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                   {getChannelIcon(conversation.inbox?.channel_type)}
                   <span className="capitalize">
                     {conversation.inbox?.channel_type === 'whatsapp' ? 'WhatsApp' :
-                      conversation.inbox?.channel_type === 'telegram' ? 'Telegram' :
-                        conversation.inbox?.channel_type === 'email' ? 'Email' :
-                          conversation.inbox?.channel_type === 'instagram' ? 'Instagram' :
-                            conversation.inbox?.channel_type === 'webchat' ? 'Web Chat' :
-                              conversation.inbox?.channel_type || 'Chat'}
+                      conversation.inbox?.channel_type === 'whatsapp_oficial' ? 'WhatsApp' :
+                        conversation.inbox?.channel_type === 'telegram' ? 'Telegram' :
+                          conversation.inbox?.channel_type === 'email' ? 'Email' :
+                            conversation.inbox?.channel_type === 'instagram' ? 'Instagram' :
+                              conversation.inbox?.channel_type === 'webchat' ? 'Web Chat' :
+                                conversation.inbox?.channel_type || 'Chat'}
                   </span>
                 </div>
               </div>

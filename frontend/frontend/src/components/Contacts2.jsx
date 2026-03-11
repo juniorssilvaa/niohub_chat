@@ -293,7 +293,7 @@ export default function Contacts({ provedorId }) {
 
   // Componente do canal com logo
   const CanalDisplay = ({ canal }) => {
-    if (canal === 'whatsapp') {
+    if (canal === 'whatsapp' || canal === 'whatsapp_oficial') {
       return (
         <div className="flex flex-col items-center gap-1">
           <img src={whatsappIcon} alt="WhatsApp" className="w-6 h-6" />

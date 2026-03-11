@@ -31,7 +31,9 @@ export default function ProfilePage() {
     notifications: {
       soundNotifications: false,
       newMessageSound: '01.mp3',
-      newConversationSound: '02.mp3'
+      newMessageVolume: 1.0,
+      newConversationSound: '02.mp3',
+      newConversationVolume: 1.0
     },
     security: {
       twoFactorAuth: false,
@@ -98,7 +100,9 @@ export default function ProfilePage() {
               ? user.sound_notifications_enabled
               : (storedSoundEnabled ? storedSoundEnabled === 'true' : settings.notifications.soundNotifications),
             newMessageSound: user.new_message_sound || storedMsgSound || settings.notifications.newMessageSound,
-            newConversationSound: user.new_conversation_sound || storedConvSound || settings.notifications.newConversationSound
+            newMessageVolume: user.new_message_sound_volume !== undefined ? user.new_message_sound_volume : settings.notifications.newMessageVolume,
+            newConversationSound: user.new_conversation_sound || storedConvSound || settings.notifications.newConversationSound,
+            newConversationVolume: user.new_conversation_sound_volume !== undefined ? user.new_conversation_sound_volume : settings.notifications.newConversationVolume
           },
           security: {
             ...settings.security,
@@ -213,6 +217,7 @@ export default function ProfilePage() {
           } else {
             audioRef.current.src = src;
           }
+          audioRef.current.volume = settings.notifications.newMessageVolume;
           audioRef.current.currentTime = 0;
           await audioRef.current.play().catch(() => { });
         } catch (_) { }
@@ -245,7 +250,26 @@ export default function ProfilePage() {
     }
   };
 
-  const handlePreviewSound = async (fileName) => {
+  const handleVolumeChange = async (type, value) => {
+    const volume = parseFloat(value);
+    setSettings({
+      ...settings,
+      notifications: { ...settings.notifications, [type]: volume }
+    });
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch('/api/auth/me/', {
+        [type === 'newMessageVolume' ? 'new_message_sound_volume' : 'new_conversation_sound_volume']: volume
+      }, {
+        headers: { Authorization: `Token ${token}` }
+      });
+    } catch (e) {
+      console.error('Erro ao salvar volume no servidor:', e);
+    }
+  };
+
+  const handlePreviewSound = async (fileName, volume = 1.0) => {
     try {
       if (!fileName) {
         console.warn('Nenhum arquivo de som selecionado');
@@ -253,7 +277,7 @@ export default function ProfilePage() {
       }
 
       const src = `/sounds/${fileName}`;
-      console.log('Tentando reproduzir som:', src);
+      console.log('Tentando reproduzir som:', src, 'Volume:', volume);
 
       // Verificar se o arquivo existe fazendo uma requisição HEAD
       try {
@@ -276,6 +300,7 @@ export default function ProfilePage() {
 
       // Criar novo elemento de áudio
       const audio = new Audio(src);
+      audio.volume = volume;
       audioRef.current = audio;
 
       // Configurar eventos de erro
@@ -532,13 +557,37 @@ export default function ProfilePage() {
                     <option value="">Carregando sons...</option>
                   )}
                 </select>
+
+                <div className="mt-4">
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      Volume
+                    </label>
+                    <span className="text-xs font-medium text-primary">
+                      {Math.round(settings.notifications.newMessageVolume * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={settings.notifications.newMessageVolume}
+                    onChange={(e) => handleVolumeChange('newMessageVolume', e.target.value)}
+                    className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                    style={{
+                      backgroundImage: `linear-gradient(to right, #fff 0%, #fff ${settings.notifications.newMessageVolume * 100}%, transparent ${settings.notifications.newMessageVolume * 100}%, transparent 100%)`
+                    }}
+                  />
+                </div>
               </div>
-              <div>
+              <div className="pb-1">
                 <button
                   type="button"
-                  onClick={() => handlePreviewSound(settings.notifications.newMessageSound)}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+                  onClick={() => handlePreviewSound(settings.notifications.newMessageSound, settings.notifications.newMessageVolume)}
+                  className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 flex items-center justify-center gap-2 transition-colors"
                 >
+                  <Volume2 className="w-4 h-4" />
                   {t('reproduzir')}
                 </button>
               </div>
@@ -561,13 +610,37 @@ export default function ProfilePage() {
                     <option value="">Carregando sons...</option>
                   )}
                 </select>
+
+                <div className="mt-4">
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      Volume
+                    </label>
+                    <span className="text-xs font-medium text-primary">
+                      {Math.round(settings.notifications.newConversationVolume * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={settings.notifications.newConversationVolume}
+                    onChange={(e) => handleVolumeChange('newConversationVolume', e.target.value)}
+                    className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                    style={{
+                      backgroundImage: `linear-gradient(to right, #fff 0%, #fff ${settings.notifications.newConversationVolume * 100}%, transparent ${settings.notifications.newConversationVolume * 100}%, transparent 100%)`
+                    }}
+                  />
+                </div>
               </div>
-              <div>
+              <div className="pb-1">
                 <button
                   type="button"
-                  onClick={() => handlePreviewSound(settings.notifications.newConversationSound)}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+                  onClick={() => handlePreviewSound(settings.notifications.newConversationSound, settings.notifications.newConversationVolume)}
+                  className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 flex items-center justify-center gap-2 transition-colors"
                 >
+                  <Volume2 className="w-4 h-4" />
                   {t('reproduzir')}
                 </button>
               </div>
