@@ -22,10 +22,11 @@ def add_canal_if_not_exists(apps, schema_editor):
     if not exists:
         # Get historical models
         ChatbotFlow = apps.get_model('core', 'ChatbotFlow')
+        Canal = apps.get_model('core', 'Canal')
         
         # Create the field instance
         field = models.ForeignKey(
-            to='core.Canal',
+            to=Canal,
             on_delete=django.db.models.deletion.SET_NULL,
             null=True,
             blank=True,
