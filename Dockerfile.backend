@@ -109,6 +109,7 @@ with connection.cursor() as cursor:
         else:
             cursor.execute(\"DELETE FROM django_migrations WHERE app='core' AND name=%s\", [name])
             print(f'[MIGRATE-FIX] {name} removida do historico (NAO existe fisicamente).')
+    connection.commit()
 "
 python manage.py migrate --noinput
 
