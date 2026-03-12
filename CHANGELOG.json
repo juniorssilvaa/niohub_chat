@@ -1,6 +1,32 @@
 {
-  "current_version": "2.26.9",
+  "current_version": "2.27.0",
   "versions": [
+    {
+      "version": "2.27.0",
+      "version_type": "minor",
+      "date": "2026-03-12",
+      "title": "Múltiplos Fluxos & Isolamento de Canais",
+      "changes": [
+        {
+          "type": "feature",
+          "module": "Chatbot",
+          "title": "Gestão de Múltiplos Fluxos",
+          "description": "Implementada interface para criação e gestão de múltiplos fluxos de atendimento por provedor."
+        },
+        {
+          "type": "feature",
+          "module": "Chatbot",
+          "title": "Isolamento por Canal",
+          "description": "Agora é possível vincular fluxos específicos a canais de comunicação (WhatsApp, Uazapi, etc), garantindo que cada canal tenha sua própria lógica de automação."
+        },
+        {
+          "type": "improvement",
+          "module": "Interface",
+          "title": "Novo Chatbot Manager",
+          "description": "Painel renovado para visualização rápida dos fluxos ativos e seus respectivos canais vinculados."
+        }
+      ]
+    },
     {
       "version": "2.26.9",
       "version_type": "patch",

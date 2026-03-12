@@ -130,8 +130,8 @@ class DashboardConsumer(SafeConsumerMixin, AsyncWebsocketConsumer):
         try:
             dashboard_data = await self.get_dashboard_data()
             await self._safe_send(text_data=json.dumps({
-                'type': 'dashboard_initial',
-                'data': dashboard_data
+                'type': 'dashboard_update', # Frontend espera dashboard_update
+                'stats': dashboard_data
             }))
         except Exception as e:
             logger.error(f"Erro ao enviar dados iniciais: {e}")
@@ -142,7 +142,7 @@ class DashboardConsumer(SafeConsumerMixin, AsyncWebsocketConsumer):
             dashboard_data = await self.get_dashboard_data()
             await self._safe_send(text_data=json.dumps({
                 'type': 'dashboard_update',
-                'data': dashboard_data
+                'stats': dashboard_data
             }))
         except Exception as e:
             logger.error(f"Erro ao enviar atualização: {e}")
@@ -152,8 +152,8 @@ class DashboardConsumer(SafeConsumerMixin, AsyncWebsocketConsumer):
         try:
             dashboard_data = await self.get_dashboard_data()
             await self._safe_send(text_data=json.dumps({
-                'type': 'dashboard_stats_update',
-                'data': dashboard_data
+                'type': 'dashboard_update', # Frontend espera dashboard_update
+                'stats': dashboard_data
             }))
         except Exception as e:
             logger.error(f"Erro ao enviar atualização de estatísticas: {e}")
@@ -187,77 +187,53 @@ class DashboardConsumer(SafeConsumerMixin, AsyncWebsocketConsumer):
     
     @database_sync_to_async
     def get_dashboard_data(self):
-        """Obter dados do dashboard"""
+        """Obter dados do dashboard usando a lógica oficial sincronizada"""
         try:
             from django.contrib.auth import get_user_model
-            from core.models import Provedor
-            from conversations.models import Conversation, Message, Contact
             from django.db.models import Q, Count
+            from conversations.models import Conversation, Message
+            from conversations.views import ConversationViewSet
+            from rest_framework.test import APIRequestFactory
             
-            User = get_user_model()
             provedor_id = self.provedor_id
+            user = self.user
             
-            # Estatísticas de conversas
-            total_conversas = Conversation.objects.filter(
-                inbox__provedor_id=provedor_id
-            ).count()
+            # Simular request para usar get_queryset do ConversationViewSet
+            factory = APIRequestFactory()
+            request = factory.get('/')
+            request.user = user
             
-            conversas_abertas = Conversation.objects.filter(
-                inbox__provedor_id=provedor_id,
-                status='open'
-            ).count()
+            viewset = ConversationViewSet()
+            viewset.request = request
+            viewset.action = 'list'
             
-            conversas_pendentes = Conversation.objects.filter(
-                inbox__provedor_id=provedor_id,
-                status='pending'
-            ).count()
+            # Queryset oficial (respeita equipes e permissões)
+            qs_ativas = viewset.get_queryset()
             
-            conversas_resolvidas = Conversation.objects.filter(
-                inbox__provedor_id=provedor_id,
-                status='closed'
-            ).count()
-            
-            # Estatísticas de mensagens (últimos 30 dias)
-            data_30_dias_atras = timezone.now() - timedelta(days=30)
-            mensagens_30_dias = Message.objects.filter(
-                conversation__inbox__provedor_id=provedor_id,
-                created_at__gte=data_30_dias_atras
-            ).count()
-            
-            # Estatísticas por canal
-            canais_stats = Conversation.objects.filter(
-                inbox__provedor_id=provedor_id
-            ).values('inbox__channel_type').annotate(
-                total=Count('id')
-            ).order_by('-total')
-            
-            # Performance dos atendentes
-            atendentes_stats = []
-            usuarios_provedor = User.objects.filter(
-                Q(provedores_admin=provedor_id) | 
-                Q(user_type='agent', provedores_admin=provedor_id)
+            # Estatísticas sincronizadas com DashboardStatsView
+            stats = qs_ativas.aggregate(
+                atendimento=Count('id', filter=Q(assignee__isnull=False)),
+                ia=Count('id', filter=Q(assignee__isnull=True, status='snoozed')),
+                espera=Count('id', filter=Q(assignee__isnull=True) & (Q(status='pending') | Q(additional_attributes__has_key='assigned_team')))
             )
             
-            for usuario in usuarios_provedor[:5]:
-                conversas_atendidas = Conversation.objects.filter(
-                    inbox__provedor_id=provedor_id,
-                    assignee=usuario
-                ).count()
-                
-                atendentes_stats.append({
-                    'name': f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username,
-                    'conversations': conversas_atendidas,
-                    'satisfaction': 4.5  # Simulado
-                })
+            # Totais históricos
+            total_stats = Conversation.objects.filter(inbox__provedor_id=provedor_id).aggregate(
+                total=Count('id'),
+                finalizadas=Count('id', filter=Q(status__in=['closed', 'encerrada', 'resolved', 'finalizada']))
+            )
+            
+            conversas_abertas = stats['atendimento'] or 0
+            conversas_pendentes = stats['espera'] or 0
+            conversas_ia = stats['ia'] or 0
             
             return {
-                'total_conversas': total_conversas,
                 'conversas_abertas': conversas_abertas,
                 'conversas_pendentes': conversas_pendentes,
-                'conversas_resolvidas': conversas_resolvidas,
-                'mensagens_30_dias': mensagens_30_dias,
-                'canais': list(canais_stats),
-                'atendentes': atendentes_stats,
+                'na_automacao': conversas_ia,
+                'conversas_resolvidas': total_stats['finalizadas'] or 0,
+                'total_conversas': total_stats['total'] or 0,
+                'conversas_em_andamento': conversas_abertas + conversas_pendentes + conversas_ia,
                 'timestamp': timezone.now().isoformat()
             }
             

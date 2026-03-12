@@ -229,14 +229,7 @@ class WhatsAppSessionDeleteView(APIView):
                 'error': f'Método não encontrado: {str(e)}'
             }, status=500)
 
-class WhatsAppEvolutionLogoutView(APIView):
-    """
-    Endpoint para desconectar WhatsApp Evolution API (legado).
-    Wrapper para logout_whatsapp do CanalViewSet.
-    """
-    def post(self, request):
-        viewset = _get_viewset_instance(request)
-        return viewset.logout_whatsapp(request)
+# WhatsAppEvolutionLogoutView removida
 
 class WhatsAppServeFileView(APIView):
     permission_classes = [AllowAny]
@@ -392,5 +385,5 @@ urlpatterns = [
     # ===================================================================
     # 🔵 WhatsApp Evolution (Legado)
     # ===================================================================
-    path('evolution/logout/', WhatsAppEvolutionLogoutView.as_view(), name='whatsapp_evolution_logout'),
+    # evolution/logout removido
 ]

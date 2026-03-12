@@ -66,7 +66,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
     { id: 'users', icon: Users, label: t('users'), path: `/app/accounts/${provedorId}/users` },
     { id: 'teams', icon: UserCog, label: t('equipes'), path: `/app/accounts/${provedorId}/equipes` },
     { id: 'audit', icon: ScrollText, label: t('audit'), path: `/app/accounts/${provedorId}/audit` },
-    { id: 'chatbot-builder', icon: Bot, label: t('chatbot_builder'), path: `/app/accounts/${provedorId}/chatbot-builder` },
+    { id: 'chatbot-builder', icon: Bot, label: t('chatbot_builder'), path: `/app/accounts/${provedorId}/chatbot-manager` },
     { id: 'planos', icon: Wifi, label: t('planos'), path: `/app/accounts/${provedorId}/planos` },
     { id: 'csat', icon: Smile, label: t('csat'), path: `/app/accounts/${provedorId}/csat` },
     { id: 'respostas-rapidas', icon: Zap, label: 'Respostas Rápidas', path: `/app/accounts/${provedorId}/respostas-rapidas` },

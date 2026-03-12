@@ -433,15 +433,17 @@ class ConversationViewSet(viewsets.ModelViewSet):
         
         # Admin vê todas as conversas do seu provedor (exceto fechadas)
         elif user.user_type == 'admin':
-            provedores = Provedor.objects.filter(admins=user)
-            if provedores.exists():
+            # Tentar obter provedores onde o usuário é admin explicitamente ou pelo campo provedor
+            provedores_obj = Provedor.objects.filter(Q(admins=user) | Q(id=getattr(user, 'provedor_id', None)))
+            
+            if provedores_obj.exists():
                 # Verificar se algum provedor está suspenso
-                for provedor in provedores:
-                    if not provedor.is_active:
+                for prov in provedores_obj:
+                    if not prov.is_active:
                         from rest_framework.exceptions import PermissionDenied
                         raise PermissionDenied('Seu provedor está temporariamente suspenso. Entre em contato com o suporte.')
                 return apply_optimizations(
-                    base_queryset.filter(inbox__provedor__in=provedores)
+                    base_queryset.filter(inbox__provedor__in=provedores_obj)
                 )
             return Conversation.objects.none()
         
@@ -2740,7 +2742,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 logger.info(f"[SEND_TEXT] Enviando para Telegram...")
                 success, telegram_response = self._send_telegram_message(conversation, formatted_content, reply_to_message_id)
                 logger.info(f"[SEND_TEXT] Resultado Telegram: success={success}, response={telegram_response}")
-            elif channel_type == 'whatsapp':
+            elif channel_type in ['whatsapp', 'whatsapp_oficial']:
                 # Obter canal específico vinculado ao inbox
                 canal_oficial = conversation.inbox.get_canal_instance()
                 
@@ -2819,13 +2821,18 @@ class MessageViewSet(viewsets.ModelViewSet):
                         whatsapp_reply_id  # reply_to_message_id (external_id/wamid)
                     )
                     logger.info(f"[SEND_TEXT] Resultado WhatsApp Oficial: success={success}")
-                else:
-                    # Fallback para Uazapi (WhatsApp não oficial)
+                elif channel_type == 'whatsapp':
+                    # Fallback para Uazapi apenas se o canal for explicitamente 'whatsapp' (não oficial)
                     logger.info(f"[SEND_TEXT] Enviando via Uazapi (WhatsApp não oficial)...")
                     success, whatsapp_response = send_via_uazapi(conversation, formatted_content, 'text', None, reply_to_message_id)
+                else:
+                    logger.warning(f"[SEND_TEXT] Canal {channel_type} configurado mas sem método de envio adequado.")
+                    success = False
+                    whatsapp_response = "Canal não suportado ou não configurado adequadamente."
             else:
-                # Enviar para o WhatsApp (usar conteúdo formatado) - fallback genérico
-                success, whatsapp_response = send_via_uazapi(conversation, formatted_content, 'text', None, reply_to_message_id)
+                # Se não for telegram nem whatsapp, falhar silenciosamente ou logar
+                logger.warning(f"[SEND_TEXT] Tipo de canal desconhecido: {channel_type}")
+                success = False
             
             # Se o envio foi bem-sucedido, atualizar a mensagem
             if success:
@@ -3597,13 +3604,14 @@ class MessageViewSet(viewsets.ModelViewSet):
             if media_type == 'ptt':
                 content_to_save = caption if caption else "Mensagem de voz"
             else:
-                # Para outros tipos de mídia, usar o nome do arquivo como conteúdo
-                content_to_save = caption if caption else f"Arquivo: {file.name}"
+                # Para outros tipos de mídia, não usar caption automático
+                content_to_save = caption if caption else ""
             
             message = Message.objects.create(
                 conversation=conversation,
                 content=content_to_save,
                 message_type=media_type,
+                file_url=file_url,
                 additional_attributes=additional_attrs,
                 is_from_customer=False
             )
@@ -3617,7 +3625,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 # Enviar mídia para o Telegram (usar caption formatada se houver)
                 caption_to_send = formatted_caption if formatted_caption else caption
                 success, response_msg = self._send_telegram_media(conversation, final_file_path, media_type, caption_to_send)
-            else:
+            elif channel_type in ['whatsapp', 'whatsapp_oficial']:
                 # Detectar se é WhatsApp Oficial (Cloud) ou Uazapi
                 caption_to_send = formatted_caption if formatted_caption else caption
                 canal_oficial = Canal.objects.filter(
@@ -3740,11 +3748,18 @@ class MessageViewSet(viewsets.ModelViewSet):
                                     message.save(update_fields=["external_id", "additional_attributes"])
                     except Exception:
                         pass
-                else:
-                    # Enviar para o WhatsApp via Uazapi com a URL da mídia
+                elif channel_type == 'whatsapp':
+                    # Enviar para o WhatsApp via Uazapi com a URL da mídia apenas se o canal for explicitamente 'whatsapp'
                     success, response_msg = send_media_via_uazapi(
                         conversation, file_url, media_type, caption_to_send, reply_to_message_id, local_message_id=str(message.id)
                     )
+                else:
+                    logger.warning(f"[SEND_MEDIA] Canal {channel_type} configurado mas sem método de envio adequado.")
+                    success = False
+                    response_msg = "Canal não suportado para mídia ou não configurado."
+            else:
+                logger.warning(f"[SEND_MEDIA] Tipo de canal desconhecido: {channel_type}")
+                success = False
             
             # Atualizar mensagem do banco antes de serializar para WebSocket (garantir external_id e atributos atualizados)
             message.refresh_from_db()
@@ -3892,7 +3907,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                         whatsapp_message_id = message.external_id or (message.additional_attributes or {}).get('whatsapp_message_id')
                         
                         # 3. API EXTERNA (Se for WhatsApp) - fazer ANTES de salvar no banco
-                        if conversation.inbox.channel_type == 'whatsapp' and whatsapp_message_id:
+                        if conversation.inbox.channel_type in ['whatsapp', 'whatsapp_oficial'] and whatsapp_message_id:
                             from integrations.whatsapp_cloud_send import send_reaction
                             success, response_msg = send_reaction(conversation, whatsapp_message_id, emoji)
                             
@@ -4304,7 +4319,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                     return Response({'success': True, 'message': 'Ignorado: usuário não é o atendente atribuído'})
 
             # 2. VALIDAÇÃO: Apenas WhatsApp e mensagens recebidas
-            if not message.is_from_customer or conversation.inbox.channel_type != 'whatsapp':
+            if not message.is_from_customer or conversation.inbox.channel_type not in ['whatsapp', 'whatsapp_oficial']:
                 return Response({'error': 'Apenas mensagens do cliente via WhatsApp podem ser marcadas como lidas'}, status=status.HTTP_400_BAD_REQUEST)
 
             # 3. CONCORRÊNCIA E IDEMPOTÊNCIA
@@ -4803,22 +4818,39 @@ class DashboardStatsView(APIView):
         from django.utils import timezone
         from datetime import timedelta
         
-        # Filtros baseados no provedor
-        provedor_filter = Q(inbox__provedor=provedor)
+        # ETAPA 5: Sincronizar com a lógica do ConversationViewSet
+        # Instanciar o viewset para obter o queryset oficial (respeita equipes e permissões)
+        viewset = ConversationViewSet()
+        viewset.request = request
+        viewset.action = 'list'
         
-        # OTIMIZAÇÃO: Buscar todas as estatísticas de conversas em uma única query
-        conversas_stats = Conversation.objects.filter(provedor_filter).aggregate(
-            total=Count('id'),
-            abertas=Count('id', filter=Q(status='open')),
-            pendentes=Count('id', filter=Q(status='pending')),
-            resolvidas=Count('id', filter=Q(status='closed'))
+        # Queryset de conversas ATIVAS (excludes closed/closing) para o provedor
+        qs_ativas = viewset.get_queryset()
+        
+        # Estatísticas sincronizadas com ConversasDashboard.jsx
+        conversas_stats = qs_ativas.aggregate(
+            atendimento=Count('id', filter=Q(assignee__isnull=False)),
+            ia=Count('id', filter=Q(assignee__isnull=True, status='snoozed')),
+            espera=Count('id', filter=Q(assignee__isnull=True) & (Q(status='pending') | Q(additional_attributes__has_key='assigned_team')))
         )
         
-        total_conversas_local = conversas_stats['total'] or 0
-        conversas_abertas = conversas_stats['abertas'] or 0
-        conversas_pendentes = conversas_stats['pendentes'] or 0
-        conversas_resolvidas_local = conversas_stats['resolvidas'] or 0
-        conversas_em_andamento = conversas_abertas
+        conversas_abertas = conversas_stats['atendimento'] or 0
+        conversas_pendentes = conversas_stats['espera'] or 0
+        conversas_ia = conversas_stats['ia'] or 0
+        
+        # Filtros baseados no provedor para estatísticas históricas
+        provedor_filter = Q(inbox__provedor=provedor)
+        
+        # Buscar totais históricos (incluindo finalizadas)
+        total_stats = Conversation.objects.filter(provedor_filter).aggregate(
+            total=Count('id'),
+            finalizadas_local=Count('id', filter=Q(status__in=['closed', 'encerrada', 'resolved', 'finalizada']))
+        )
+        
+        total_conversas_local = total_stats['total'] or 0
+        conversas_resolvidas_local = total_stats['finalizadas_local'] or 0
+        
+        conversas_em_andamento = conversas_abertas + conversas_pendentes + conversas_ia
         
         # Estatísticas de conversas - Supabase (encerradas)
         # OTIMIZAÇÃO: Usar count=exact para obter apenas o total sem buscar todos os registros
@@ -5029,6 +5061,7 @@ class DashboardStatsView(APIView):
             'total_conversas': total_conversas,
             'conversas_abertas': conversas_abertas,
             'conversas_pendentes': conversas_pendentes,
+            'conversas_ia': conversas_ia,
             'conversas_resolvidas': conversas_resolvidas,
             'conversas_em_andamento': conversas_em_andamento,
             'contatos_unicos': contatos_unicos,

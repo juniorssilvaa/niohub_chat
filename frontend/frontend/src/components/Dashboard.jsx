@@ -22,6 +22,7 @@ const Dashboard = ({ provedorId }) => {
     conversas_abertas: 0,
     conversas_pendentes: 0,
     conversas_resolvidas: 0,
+    conversas_ia: 0,
     conversas_em_andamento: 0,
     contatos_unicos: 0,
     mensagens_30_dias: 0,
@@ -151,9 +152,10 @@ const Dashboard = ({ provedorId }) => {
 
   // Dados para gráficos baseados nos dados reais
   const conversationStatusData = [
-    { name: 'Abertas', value: stats?.conversas_abertas || 0, color: '#10b981' },
-    { name: 'Pendentes', value: stats?.conversas_pendentes || 0, color: '#f59e0b' },
-    { name: 'Resolvidas', value: stats?.conversas_resolvidas || 0, color: '#6b7280' }
+    { name: 'Finalizadas', value: stats?.conversas_resolvidas || 0, color: '#6b7280' },
+    { name: 'Em Atendimento', value: stats?.conversas_abertas || 0, color: '#10b981' },
+    { name: 'Em Espera', value: stats?.conversas_pendentes || 0, color: '#f59e0b' },
+    { name: 'Na Automação', value: stats?.conversas_ia || 0, color: '#2d5eff' }
   ].filter(item => item.value > 0); // Filtrar apenas itens com valor > 0
 
   // Função para traduzir tipos de canal
@@ -212,7 +214,7 @@ const Dashboard = ({ provedorId }) => {
       change: (stats?.conversas_em_andamento || 0) > 0 ? '+5%' : '0%',
       trend: (stats?.conversas_em_andamento || 0) > 0 ? 'up' : 'neutral',
       icon: MessageCircle,
-      color: 'text-blue-500'
+      color: 'text-emerald-500'
     },
     {
       title: 'Tempo de Primeira Resposta',

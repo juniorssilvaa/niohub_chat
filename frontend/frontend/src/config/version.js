@@ -1,9 +1,9 @@
 // Este arquivo é atualizado automaticamente pelo sistema de versionamento
 // Não edite manualmente!
 
-export const APP_VERSION = '2.26.9';
+export const APP_VERSION = '2.27.0';
 export const APP_NAME = 'NioChat';
-export const BUILD_DATE = '2026-03-11';
+export const BUILD_DATE = '2026-03-12';
 
 // Informações adicionais da versão
 export const VERSION_INFO = {

@@ -73,7 +73,7 @@ const getMediaUrl = () => {
   
   // PRIORIDADE 2: Modo de desenvolvimento - SEMPRE usar localhost
   if (isDev) {
-    return 'http://localhost:8010';
+    return ''; // Usa proxy do Vite em desenvolvimento
   }
   
   // PRIORIDADE 3: Detecção por hostname (apenas em produção/staging)
@@ -114,13 +114,17 @@ export const config = {
 export const buildMediaUrl = (fileUrl) => {
   if (!fileUrl) return null
   
-  // Se já é uma URL completa, retorna como está
+  // Se já é uma URL completa
   if (fileUrl.startsWith('http')) {
-    return fileUrl
+    // Remover barra final se houver
+    return fileUrl.endsWith('/') ? fileUrl.slice(0, -1) : fileUrl
   }
   
   const path = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`
-  return `${config.mediaUrl}${path}`
+  let fullUrl = `${config.mediaUrl}${path}`
+  
+  // SEMPRE remover barra final para URLs de arquivo
+  return fullUrl.endsWith('/') ? fullUrl.slice(0, -1) : fullUrl
 }
 
 // Função para construir URLs de API

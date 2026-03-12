@@ -98,15 +98,32 @@ def download_whatsapp_media(media_id: str, canal: Canal, conversation_id: int, f
             if ct:
                 ext = mimetypes.guess_extension(ct)
         if not ext:
+            if mime_type:
+                if 'image' in mime_type: ext = ".jpg"
+                elif 'video' in mime_type: ext = ".mp4"
+                elif 'audio' in mime_type: ext = ".ogg"
+            
+        if not ext:
             ext = ".bin"
 
         import os
+        import time
         
-        # IMPORTANTE: Para documentos, preservar o filename original com extensão
-        # Para outros tipos de mídia (áudio), remover extensão e adicionar a correta baseada no mime_type
-        filename_base = filename_hint or f"media_{media_id[-6:]}"
+        # Lista de nomes genéricos que a Meta ou o sistema passa e que devem ser ignorados
+        generic_hints = ["image", "video", "audio", "voice", "document", "image.jpg", "video.mp4", "audio.ogg"]
         
-        # Verificar se filename_hint parece ser um documento (tem extensão comum de documento)
+        # IMPORTANTE: Usar timestamp + ID da mídia para garantir unicidade absoluta
+        ts = int(time.time())
+        
+        if not filename_hint or filename_hint.lower() in generic_hints:
+            filename_base = f"media_{ts}_{media_id}"
+        else:
+            # Parece ser um nome de arquivo real (ex: documento)
+            # Adicionamos o ID curto no final para evitar colisão se dois arquivos tiverem o mesmo nome
+            name_without_ext, old_ext = os.path.splitext(filename_hint)
+            filename_base = f"{name_without_ext}_{media_id[-6:]}"
+
+        # Verificar se filename_base parece ser um documento (por ter extensão de documento)
         document_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt']
         name_without_ext, old_ext = os.path.splitext(filename_base)
         is_document_with_ext = old_ext and old_ext.lower() in document_extensions
@@ -134,7 +151,9 @@ def download_whatsapp_media(media_id: str, canal: Canal, conversation_id: int, f
         with open(file_path, "wb") as f:
             f.write(file_resp.content)
 
+        # No Windows, garantir que barras normais sejam usadas para a URL do banco
         local_url = f"/api/media/messages/{conversation_id}/{filename}/"
+        local_url = local_url.replace('\\', '/')
 
         meta_saved = {
             "mime_type": mime_type,
@@ -578,18 +597,18 @@ def process_message_echoes(waba_id: str, value: dict):
                 image_data = echo.get("image", {})
                 content = image_data.get("caption", "")
                 file_url = image_data.get("id")
-                file_name = "image.jpg"
+                file_name = None  # Será definido pelo download_whatsapp_media usando o ID da mídia
             elif message_type == "audio":
                 audio_data = echo.get("audio", {})
                 file_url = audio_data.get("id")
-                # Usar apenas "audio" sem extensão - a extensão será determinada pelo mime_type durante o download
-                file_name = "audio"
-                content = "[áudio]"
+                # A extensão será determinada pelo mime_type durante o download
+                file_name = None
+                content = ""
             elif message_type == "video":
                 video_data = echo.get("video", {})
                 content = video_data.get("caption", "")
                 file_url = video_data.get("id")
-                file_name = "video.mp4"
+                file_name = None
             elif message_type == "document":
                 doc_data = echo.get("document", {})
                 content = doc_data.get("caption", "")
@@ -620,7 +639,7 @@ def process_message_echoes(waba_id: str, value: dict):
             
             Message.objects.create(
                 conversation=conversation,
-                content=content or f"[{message_type}]",
+                content=content or "",
                 message_type=message_type,
                 is_from_customer=False,
                 external_id=message_id,
@@ -747,18 +766,18 @@ def process_history_sync(waba_id: str, value: dict):
                 image_data = msg_data.get("image", {})
                 content = image_data.get("caption", "")
                 file_url = image_data.get("id")
-                file_name = "image.jpg"
+                file_name = None
             elif message_type == "audio":
                 audio_data = msg_data.get("audio", {})
                 file_url = audio_data.get("id")
-                # Usar apenas "audio" sem extensão - a extensão será determinada pelo mime_type durante o download
-                file_name = "audio"
-                content = "[áudio]"
+                # A extensão será determinada pelo mime_type durante o download
+                file_name = None
+                content = ""
             elif message_type == "video":
                 video_data = msg_data.get("video", {})
                 content = video_data.get("caption", "")
                 file_url = video_data.get("id")
-                file_name = "video.mp4"
+                file_name = None
             elif message_type == "document":
                 doc_data = msg_data.get("document", {})
                 content = doc_data.get("caption", "")
@@ -789,7 +808,7 @@ def process_history_sync(waba_id: str, value: dict):
             
             Message.objects.create(
                 conversation=conversation,
-                content=content or f"[{message_type}]",
+                content=content or "",
                 message_type=message_type,
                 is_from_customer=(direction == "incoming"),
                 external_id=message_id,
@@ -1050,7 +1069,7 @@ def process_incoming_messages(waba_id: str, value: dict):
                 conversation = Conversation.objects.create(
                     contact=contact,
                     inbox=inbox,
-                    status="snoozed" if bot_mode == 'ia' else "pending",
+                    status="snoozed",
                     team=ia_team,       # Atribuir à equipe IA se for modo IA
                     assignee=None       # Sem atendente específico
                 )
@@ -1060,7 +1079,7 @@ def process_incoming_messages(waba_id: str, value: dict):
             
             # Se a conversa já existia mas estava fechada ou em closing, reabrir
             if conversation.status in ["closed", "resolved", "finalizada", "closing"]:
-                conversation.status = "snoozed" if bot_mode == 'ia' else "pending"
+                conversation.status = "snoozed"
                 conversation.team = ia_team
                 conversation.assignee = None
                 conversation.save()
@@ -1082,16 +1101,12 @@ def process_incoming_messages(waba_id: str, value: dict):
                 image_data = msg.get("image", {})
                 content = image_data.get("caption", "")
                 file_url = image_data.get("id")
-                file_name = "image.jpg"
+                file_name = None
             elif message_type == "audio":
                 audio_data = msg.get("audio", {})
                 file_url = audio_data.get("id")
-                # Detectar se é mensagem de voz (.ogg/OPUS) ou áudio básico
-                # A Meta não envia campo 'voice' no webhook, mas podemos detectar pelo mime_type depois do download
-                # Por padrão, assumimos .ogg para mensagens de voz
-                # Usar apenas "audio" sem extensão - a extensão será determinada pelo mime_type durante o download
-                file_name = "audio"
-                content = "[áudio]"
+                file_name = None
+                content = ""
                 # Salvar indicador inicial de que pode ser voz (será confirmado após download)
                 additional_attrs["is_audio_message"] = True
             elif message_type == "reaction":
@@ -1148,7 +1163,7 @@ def process_incoming_messages(waba_id: str, value: dict):
                 video_data = msg.get("video", {})
                 content = video_data.get("caption", "")
                 file_url = video_data.get("id")
-                file_name = "video.mp4"
+                file_name = None
             elif message_type == "document":
                 doc_data = msg.get("document", {})
                 content = doc_data.get("caption", "")
@@ -1298,7 +1313,7 @@ def process_incoming_messages(waba_id: str, value: dict):
             # Dessa forma, o file_url já está correto quando a mensagem é salva e o signal é disparado
             message_obj = Message.objects.create(
                 conversation=conversation,
-                content=content or f"[{message_type}]",
+                content=content or "",
                 message_type=message_type,
                 is_from_customer=True,
                 external_id=message_id,
@@ -1391,16 +1406,10 @@ def process_incoming_messages(waba_id: str, value: dict):
                 elif bot_mode == 'chatbot':
                     # VERIFICAR SUPRESSÃO DO CHATBOT (Atribuído, Status Ativo ou Transferido para Equipe Humana)
                     is_assigned = conversation.assignee_id is not None
-                    is_active_agent_status = conversation.status in ['open', 'closed', 'closing']
+                    is_active_agent_status = conversation.status in ['open', 'pending', 'closed', 'closing']
                     # Só suprimir por equipe se não for a equipe "IA"
-                    is_transferred_to_human_team = (
-                        conversation.team_id is not None and 
-                        conversation.team is not None and 
-                        conversation.team.name != "IA"
-                    )
-                    
-                    if is_assigned or is_active_agent_status or is_transferred_to_human_team:
-                        logger.info(f"[WhatsAppWebhook] ChatbotEngine suprimido para conversa {conversation.id}: atribuída (assignee_id={conversation.assignee_id}), status ativo (status={conversation.status}) ou transferida para equipe humana (team={conversation.team.name if conversation.team else 'N/A'}).")
+                    if is_assigned or is_active_agent_status:
+                        logger.info(f"[WhatsAppWebhook] ChatbotEngine suprimido para conversa {conversation.id}: atribuída (assignee_id={conversation.assignee_id}) ou status ativo/fila (status={conversation.status}).")
                         chatbot_handled = False
                     else:
                         # Verificar se o contato está bloqueado para atendimento (toggle ATENDER desativado)
@@ -1413,11 +1422,14 @@ def process_incoming_messages(waba_id: str, value: dict):
                             try:
                                 from asgiref.sync import async_to_sync
                                 async def run_chatbot_engine():
+                                    canal = conversation.inbox.get_canal_instance()
+                                    canal_id = canal.id if canal else None
                                     return await ChatbotEngine.process_message(
                                         provedor_id=provedor.id,
                                         conversation_id=conversation.id,
                                         message_content=content or "",
-                                        button_id=additional_attrs.get("button_id")
+                                        button_id=additional_attrs.get("button_id"),
+                                        canal_id=canal_id
                                     )
                                 
                                 # Sempre tenta processar pelo chatbot se estiver no modo chatbot
@@ -1582,7 +1594,7 @@ def call_ai_and_respond_whatsapp(conversation, contact, provedor, content: str, 
         # A IA deve responder quando:
         # - A conversa NÃO está atribuída (assignee is None)
         # - A conversa NÃO está em 'pending', 'closed', ou 'closing'
-        # - Pode estar em 'open' (status padrão quando não atribuída)
+        # - Pode estar em 'open' ou 'snoozed'
         if conversation.assignee_id or conversation.status in ['pending', 'closed', 'closing']:
             logger.info(f"[WhatsAppWebhook] IA ignorada: conversa {conversation.id} está atribuída (assignee_id={conversation.assignee_id}) ou em status inválido (status={conversation.status}).")
             return

@@ -7,7 +7,6 @@ import {
   User,
   MessageCircle,
   Globe,
-  ChevronDown,
   UserCheck,
   CheckCircle2,
   ArrowRightLeft,
@@ -15,7 +14,11 @@ import {
   MicOff,
   Square,
   FileText,
-  Zap
+  Zap,
+  X,
+  Image as ImageIcon,
+  Film,
+  Music
 } from 'lucide-react';
 import axios from 'axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogPortal, DialogOverlay } from './ui/dialog';
@@ -106,14 +109,12 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const wsRef = useRef(null);
   const [loadingProfilePic, setLoadingProfilePic] = useState(false);
-  const [showResolverDropdown, setShowResolverDropdown] = useState(false);
   const [showTransferDropdown, setShowTransferDropdown] = useState(false);
   const [agents, setAgents] = useState([]);
   const [agentsStatus, setAgentsStatus] = useState({});
   const [profilePicture, setProfilePicture] = useState(null);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [sendingMedia, setSendingMedia] = useState(false);
-  const dropdownRef = useRef(null);
 
   // Estados para visualização de mídia
   const [selectedImage, setSelectedImage] = useState(null);
@@ -148,6 +149,12 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
   //  ESTADO PARA CONTROLE DE MENSAGENS PENDENTES
   const [pendingMessages, setPendingMessages] = useState(new Set());
+
+  // Estados para mídias pendentes (prévia antes de enviar)
+  const [pendingFile, setPendingFile] = useState(null);
+  const [pendingFileType, setPendingFileType] = useState(null);
+  const [pendingFileCaption, setPendingFileCaption] = useState('');
+  const [pendingFilePreview, setPendingFilePreview] = useState(null);
 
   // Respostas Rápidas
   const [quickReplies, setQuickReplies] = useState([]);
@@ -649,19 +656,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     };
   }, [conversation?.id, messages.length, user?.id]);
 
-  // Fechar dropdown quando clicar fora
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowResolverDropdown(false);
-      }
-    };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   // Monitorar status dos usuários via WebSocket (tempo real)
   useEffect(() => {
@@ -1812,8 +1807,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         headers: { Authorization: `Token ${token}` }
       });
 
+
       // Log removido('Conversa atribuída com sucesso:', response.data);
-      setShowResolverDropdown(false);
 
       // O WebSocket ou o callback onConversationUpdate cuidará da atualização da UI
       if (onConversationUpdate && response.data.conversation) {
@@ -1838,8 +1833,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         headers: { Authorization: `Token ${token}` }
       });
 
+
       // Log removido('Conversa encerrada com sucesso:', response.data);
-      setShowResolverDropdown(false);
 
       // CORREÇÃO: Limpar conversa selecionada do localStorage imediatamente
       localStorage.removeItem('selectedConversation');
@@ -1935,7 +1930,6 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
   // Função para transferir conversa
   const handleTransferConversation = async () => {
-    setShowResolverDropdown(false);
     await fetchAgents();
   };
 
@@ -2432,17 +2426,31 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
     if (file.type.startsWith('image/')) {
       mediaType = 'image';
+      setPendingFilePreview(URL.createObjectURL(file));
     } else if (file.type.startsWith('video/')) {
       mediaType = 'video';
+      setPendingFilePreview(URL.createObjectURL(file));
     } else if (file.type.startsWith('audio/')) {
       mediaType = 'audio';
     }
 
-    // Enviar arquivo
-    handleSendMedia(file, mediaType);
+    // Em vez de enviar direto, colocar em estado pendente para prévia
+    setPendingFile(file);
+    setPendingFileType(mediaType);
+    setPendingFileCaption('');
 
     // Limpar input
     event.target.value = '';
+  };
+
+  const cancelPendingFile = () => {
+    if (pendingFilePreview) {
+      URL.revokeObjectURL(pendingFilePreview);
+    }
+    setPendingFile(null);
+    setPendingFileType(null);
+    setPendingFileCaption('');
+    setPendingFilePreview(null);
   };
 
   // Função para abrir modal de imagem
@@ -2631,42 +2639,35 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               </button>
             )}
 
-            {/* Dropdown de ações */}
-            <div className="relative" ref={dropdownRef}>
+            {/* Botões de Ação Diretos */}
+            <div className="flex items-center space-x-1 border-l border-border pl-2 ml-2">
               <button
-                onClick={() => setShowResolverDropdown(!showResolverDropdown)}
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors"
-                title="Ações da conversa"
+                onClick={handleAssignToMe}
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors flex items-center space-x-2"
+                title="Atribuir para mim"
               >
-                <ChevronDown className="w-4 h-4" />
+                <UserCheck className="w-4 h-4" />
+                <span className="text-xs font-medium">Atribuir</span>
               </button>
-
-              {showResolverDropdown && (
-                <div className="absolute right-0 top-full mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg py-1 z-10">
-                  <button
-                    onClick={handleAssignToMe}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center space-x-2"
-                  >
-                    <UserCheck className="w-4 h-4" />
-                    <span>Atribuir para mim</span>
-                  </button>
-                  <button
-                    onClick={handleTransferConversation}
-                    disabled={loadingAgents}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center space-x-2 disabled:opacity-50"
-                  >
-                    <ArrowRightLeft className="w-4 h-4" />
-                    <span>{loadingAgents ? 'Carregando...' : 'Transferir'}</span>
-                  </button>
-                  <button
-                    onClick={handleCloseConversation}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center space-x-2 text-red-600"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Encerrar conversa</span>
-                  </button>
-                </div>
-              )}
+              
+              <button
+                onClick={handleTransferConversation}
+                disabled={loadingAgents}
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-50"
+                title="Transferir conversa"
+              >
+                <ArrowRightLeft className="w-4 h-4" />
+                <span className="text-xs font-medium">Transferir</span>
+              </button>
+              
+              <button
+                onClick={handleCloseConversation}
+                className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors flex items-center space-x-2"
+                title="Encerrar conversa"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span className="text-xs font-medium">Encerrar</span>
+              </button>
             </div>
           </div>
         </div>
@@ -3040,8 +3041,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                         </div>
                       )}
 
-                      {/* Conteúdo da mensagem - NÃO mostrar se for mídia pura */}
-                      {content && !hasImage && !hasVideo && !hasAudio && !hasDocument && (
+                      {/* Conteúdo da mensagem */}
+                      {content && (
                         <div className="whitespace-pre-wrap break-words break-all" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                           {(() => {
                             const displayContent = !isCustomer && content.includes('*') && content.includes('disse:*')
@@ -3221,6 +3222,86 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                 className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
               >
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prévia de Mídia Pendente */}
+      {pendingFile && (
+        <div className="border-t border-border bg-card p-4 animate-in slide-in-from-bottom-2">
+          <div className="flex flex-col space-y-4 max-w-lg mx-auto bg-muted/30 p-4 rounded-xl border border-border/50">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                  {pendingFileType === 'image' ? (
+                    <img src={pendingFilePreview} alt="Preview" className="w-full h-full object-cover" />
+                  ) : pendingFileType === 'video' ? (
+                    <Film className="w-6 h-6 text-primary" />
+                  ) : pendingFileType === 'audio' ? (
+                    <Music className="w-6 h-6 text-primary" />
+                  ) : (
+                    <FileText className="w-6 h-6 text-primary" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{pendingFile.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(pendingFile.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={cancelPendingFile}
+                className="p-1 hover:bg-muted rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            {pendingFileType !== 'audio' && (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Legenda (opcional)
+                </label>
+                <textarea
+                  value={pendingFileCaption}
+                  onChange={(e) => setPendingFileCaption(e.target.value)}
+                  placeholder="Escreva uma legenda..."
+                  className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  rows={2}
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={cancelPendingFile}
+                className="px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-muted transition-colors"
+                disabled={sendingMedia}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  await handleSendMedia(pendingFile, pendingFileType, pendingFileCaption);
+                  cancelPendingFile();
+                }}
+                disabled={sendingMedia}
+                className="px-6 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center space-x-2 shadow-lg hover:shadow-xl"
+              >
+                {sendingMedia ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <span>Enviando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>Enviar Arquivo</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

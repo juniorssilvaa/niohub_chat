@@ -198,7 +198,7 @@ class WhatsAppIntegration(models.Model):
     instance_name = models.CharField(
         max_length=100,
         verbose_name='Nome da Instância',
-        help_text='Nome da instância no Evolution API',
+        help_text='Nome da instância no Uazapi',
         null=True,
         blank=True
     )

@@ -688,21 +688,11 @@ class CanalSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at', 'provedor']
 
     def get_state(self, obj):
-        # Para WhatsApp normal - usar Evolution API
-        if obj.tipo == 'whatsapp' and obj.nome:
-            try:
-                url = f'{settings.EVOLUTION_URL}/instance/connectionState/{obj.nome}'
-                headers = {'apikey': settings.EVOLUTION_API_KEY}
-                resp = requests.get(url, headers=headers, timeout=5)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    return data.get('instance', {}).get('state')
-            except Exception as e:
-                pass
+        # Evolution API removida
         
         # Para sessão WhatsApp (Uazapi) - usar Uazapi
         # whatsapp_session é o valor do banco de dados para sessões Uazapi
-        elif obj.tipo == 'whatsapp_session' and obj.nome:
+        if obj.tipo == 'whatsapp_session' and obj.nome:
             try:
                 from .uazapi_client import UazapiClient
                 provedor = obj.provedor
@@ -810,20 +800,7 @@ class CanalSerializer(serializers.ModelSerializer):
                 logger.warning(f"Erro ao buscar foto de perfil Telegram para {obj.nome}: {e}")
                 pass
         
-        # Para WhatsApp normal - usar Evolution API
-        if obj.tipo == 'whatsapp' and obj.nome:
-            try:
-                url = f'{settings.EVOLUTION_URL}/instance/fetchInstances'
-                headers = {'apikey': settings.EVOLUTION_API_KEY}
-                resp = requests.get(url, headers=headers, timeout=5)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    for inst in data:
-                        if inst.get('name') == obj.nome:
-                            profile_pic = inst.get('profilePicUrl')
-                            return profile_pic
-            except Exception as e:
-                pass
+        # Evolution API removida
         
         # Para WhatsApp Oficial - buscar via Graph API (endpoint whatsapp_business_profile) e cachear em dados_extras
         if obj.tipo == 'whatsapp_oficial':
@@ -896,7 +873,7 @@ class CanalSerializer(serializers.ModelSerializer):
         
         # Para sessão WhatsApp (Uazapi) - usar Uazapi
         # whatsapp_session é o valor do banco de dados para sessões Uazapi
-        elif obj.tipo == 'whatsapp_session' and obj.nome:
+        if obj.tipo == 'whatsapp_session' and obj.nome:
             try:
                 from .uazapi_client import UazapiClient
                 provedor = obj.provedor
@@ -1280,10 +1257,15 @@ class MensagemSistemaSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class ChatbotFlowSerializer(serializers.ModelSerializer):
+    canal_nome = serializers.SerializerMethodField()
+
     class Meta:
         model = ChatbotFlow
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_canal_nome(self, obj):
+        return obj.canal.nome if obj.canal else None
 
 
 class PlanoSerializer(serializers.ModelSerializer):

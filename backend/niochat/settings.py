@@ -43,7 +43,7 @@ import logging
 # BASE
 # ============================================
 
-VERSION = "2.26.2"
+VERSION = "2.27.0"
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Sempre usar config que prioriza variáveis de ambiente sobre arquivo .env
@@ -418,11 +418,6 @@ SUPABASE_AUDIT_TABLE = config('SUPABASE_AUDIT_TABLE', default='auditoria')
 SUPABASE_MESSAGES_TABLE = config('SUPABASE_MESSAGES_TABLE', default='mensagens')
 SUPABASE_CSAT_TABLE = config('SUPABASE_CSAT_TABLE', default='csat_feedback')
 
-# ============================================
-# EVOLUTION API
-# ============================================
-EVOLUTION_URL = config('EVOLUTION_URL', default='https://evo.niochat.com.br')
-EVOLUTION_API_KEY = config('EVOLUTION_API_KEY', default='')
 
 # ============================================
 # LOGGING

@@ -3,62 +3,19 @@ from .models import Contact, Inbox, Conversation, Message, Team, TeamMember, CSA
 from core.serializers import UserSerializer, LabelSerializer
 
 
-class ContactSerializer(serializers.ModelSerializer):
-    inbox = serializers.SerializerMethodField()
-    avatar = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = Contact
-        fields = [
-            'id', 'name', 'email', 'phone', 'avatar',
-            'additional_attributes', 'provedor', 'created_at', 'updated_at', 'inbox',
-            'bloqueado_atender', 'bloqueado_disparos'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
-    
-    def validate_email(self, value):
-        """Permite string vazia e converte para None (EmailField aceita null, não '')."""
-        if value is None or (isinstance(value, str) and value.strip() == ''):
-            return None
-        return value
-    
-    def validate_phone(self, value):
-        """Normaliza telefone: remove espaços."""
-        if value is None:
-            return ''
-        return str(value).strip().replace(' ', '') if value else ''
-    
-    def get_inbox(self, obj):
-        # Buscar a conversa mais recente do contato
-        latest_conversation = obj.conversations.order_by('-last_message_at').first()
-        if latest_conversation and latest_conversation.inbox:
-            return InboxSerializer(latest_conversation.inbox).data
-        return None
-    
-    def get_avatar(self, obj):
-        """Retorna a URL do avatar, usando a mesma lógica do canal Telegram"""
-        # Se já tem avatar (WhatsApp), retornar diretamente
-        if obj.avatar:
-            return obj.avatar
-        
-        # Se tem foto do Telegram salva em additional_attributes (mesma lógica do canal)
-        if obj.additional_attributes and obj.additional_attributes.get('telegram_photo'):
-            # Retornar diretamente como data URL (mesmo formato usado no canal)
-            return obj.additional_attributes.get('telegram_photo')
-        
-        # Retornar None se não tiver foto
-        return None
+
 
 
 class InboxSerializer(serializers.ModelSerializer):
     custom_name = serializers.SerializerMethodField()
     channel_real_id = serializers.SerializerMethodField()
+    bot_mode = serializers.SerializerMethodField()
 
     class Meta:
         model = Inbox
         fields = [
             'id', 'name', 'channel_type', 'channel_id', 'provedor',
-            'is_active', 'created_at', 'custom_name', 'channel_real_id'
+            'is_active', 'created_at', 'custom_name', 'channel_real_id', 'bot_mode'
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -130,6 +87,57 @@ class InboxSerializer(serializers.ModelSerializer):
         """Retorna o ID real (numérico) do Canal no banco de dados"""
         canal = self.get_canal_instancia(obj)
         return canal.id if canal else None
+
+    def get_bot_mode(self, obj):
+        """Retorna o modo de bot do provedor vinculado"""
+        return getattr(obj.provedor, 'bot_mode', 'ia')
+
+
+class ContactSerializer(serializers.ModelSerializer):
+    inbox = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Contact
+        fields = [
+            'id', 'name', 'email', 'phone', 'avatar',
+            'additional_attributes', 'provedor', 'created_at', 'updated_at', 'inbox',
+            'bloqueado_atender', 'bloqueado_disparos'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def validate_email(self, value):
+        """Permite string vazia e converte para None (EmailField aceita null, não '')."""
+        if value is None or (isinstance(value, str) and value.strip() == ''):
+            return None
+        return value
+    
+    def validate_phone(self, value):
+        """Normaliza telefone: remove espaços."""
+        if value is None:
+            return ''
+        return str(value).strip().replace(' ', '') if value else ''
+    
+    def get_inbox(self, obj):
+        # Buscar a conversa mais recente do contato
+        latest_conversation = obj.conversations.order_by('-last_message_at').first()
+        if latest_conversation and latest_conversation.inbox:
+            return InboxSerializer(latest_conversation.inbox).data
+        return None
+    
+    def get_avatar(self, obj):
+        """Retorna a URL do avatar, usando a mesma lógica do canal Telegram"""
+        # Se já tem avatar (WhatsApp), retornar diretamente
+        if obj.avatar:
+            return obj.avatar
+        
+        # Se tem foto do Telegram salva em additional_attributes (mesma lógica do canal)
+        if obj.additional_attributes and obj.additional_attributes.get('telegram_photo'):
+            # Retornar diretamente como data URL (mesmo formato usado no canal)
+            return obj.additional_attributes.get('telegram_photo')
+        
+        # Retornar None se não tiver foto
+        return None
 
 
 class MessageReactionSerializer(serializers.ModelSerializer):

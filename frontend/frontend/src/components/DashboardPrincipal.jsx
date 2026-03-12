@@ -299,7 +299,7 @@ const DashboardPrincipal = ({ provedorId }) => {
   const metrics = React.useMemo(() => {
     return {
       conversasAtivas: {
-        value: (stats.conversas_abertas || 0) + (stats.conversas_pendentes || 0),
+        value: (stats.conversas_abertas || 0) + (stats.conversas_pendentes || 0) + (stats.conversas_ia || 0),
         change: '0%',
         trend: 'neutral'
       },
@@ -384,9 +384,10 @@ const DashboardPrincipal = ({ provedorId }) => {
             <h3 className="text-lg font-semibold text-foreground mb-4">Status das Conversas</h3>
             <ConversationsPieChart
               data={[
-                { name: 'Abertas', value: stats.conversas_abertas || 0 },
-                { name: 'Pendentes', value: stats.conversas_pendentes || 0 },
-                { name: 'Resolvidas', value: stats.conversas_resolvidas || 0 }
+                { name: 'Em Atendimento', value: stats.conversas_abertas || 0 },
+                { name: 'Em Espera', value: stats.conversas_pendentes || 0 },
+                { name: 'Na Automação', value: stats.conversas_ia || 0 },
+                { name: 'Finalizadas', value: stats.conversas_resolvidas || 0 }
               ]}
             />
           </CardContent>

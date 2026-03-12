@@ -55,83 +55,20 @@ def send_whatsapp_message(phone, message, provedor):
         return False
 
 
-def fetch_whatsapp_profile_picture(phone, instance_name, integration_type='evolution', provedor=None, is_client=True):
+def fetch_whatsapp_profile_picture(phone, instance_name, integration_type='uazapi', provedor=None, is_client=True):
     """
     Busca a foto do perfil do WhatsApp de forma automática
-    
-    Args:
-        phone: Número do telefone do contato
-        instance_name: Nome da instância WhatsApp
-        integration_type: 'evolution' ou 'uazapi'
-        provedor: Objeto Provedor (necessário para Uazapi)
-        is_client: True para buscar foto do cliente, False para buscar foto da instância conectada
-    
-    Returns:
-        str: URL da foto do perfil ou None se não encontrada
     """
-    
     # Limpar o número do telefone
     clean_phone = phone.replace('@s.whatsapp.net', '').replace('@c.us', '')
     
-    if integration_type == 'evolution':
-        if is_client:
-            return _fetch_evolution_client_profile_picture(phone, instance_name)
-        else:
-            return _fetch_evolution_profile_picture(clean_phone, instance_name)
-    elif integration_type == 'uazapi':
+    if integration_type == 'uazapi':
         return _fetch_uazapi_profile_picture(clean_phone, instance_name, provedor, is_client)
     else:
+        # Fallback para Uazapi se houver provedor
+        if provedor:
+            return _fetch_uazapi_profile_picture(clean_phone, instance_name, provedor, is_client)
         return None
-
-
-def _fetch_evolution_profile_picture(phone, instance_name):
-    """Busca foto do perfil via Evolution API - mesma lógica do CanalSerializer"""
-    try:
-        # Usar a mesma lógica do CanalSerializer para buscar a foto do perfil
-        url = f'{settings.EVOLUTION_URL}/instance/fetchInstances'
-        headers = {'apikey': settings.EVOLUTION_API_KEY}
-        
-        response = requests.get(url, headers=headers, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            # Procurar pela instância específica
-            for inst in data:
-                if inst.get('name') == instance_name:
-                    profile_pic = inst.get('profilePicUrl')
-                    if profile_pic:
-                        return profile_pic
-                    else:
-                        break
-            
-    except Exception as e:
-        pass
-    
-    return None
-
-
-def _fetch_evolution_client_profile_picture(phone, instance_name):
-    """Busca foto do perfil do cliente via Evolution API - usando findContact"""
-    try:
-        # Buscar a foto do perfil do cliente específico
-        contact_url = f"{settings.EVOLUTION_URL}/chat/findContact/{instance_name}"
-        contact_data = {
-            'number': phone.replace('@s.whatsapp.net', '').replace('@c.us', '')
-        }
-        headers = {'apikey': settings.EVOLUTION_API_KEY}
-        
-        response = requests.post(contact_url, headers=headers, json=contact_data, timeout=10)
-        
-        if response.status_code == 200:
-            contact_info = response.json()
-            profile_pic_url = contact_info.get('profilePicUrl')
-            if profile_pic_url:
-                return profile_pic_url
-            
-    except Exception as e:
-        pass
-    
-    return None
 
 
 def _fetch_uazapi_profile_picture(phone, instance_name, provedor, is_client=True):
@@ -210,14 +147,14 @@ def update_contact_profile_picture(contact, instance_name, integration_type='evo
         return False
     
     # Determinar o tipo de integração baseado no provedor se não especificado
-    if integration_type == 'auto':
+    if integration_type == 'auto' or integration_type == 'evolution':
         if contact.provedor and contact.provedor.integracoes_externas:
             if contact.provedor.integracoes_externas.get('whatsapp_url'):
                 integration_type = 'uazapi'
             else:
-                integration_type = 'evolution'
+                integration_type = 'uazapi' # Fallback para uazapi
         else:
-            integration_type = 'evolution'
+            integration_type = 'uazapi'
     
     # Buscar a foto do perfil do cliente
     profile_pic_url = fetch_whatsapp_profile_picture(

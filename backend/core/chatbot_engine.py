@@ -74,16 +74,29 @@ class ChatbotEngine:
         return data
 
     @staticmethod
-    async def process_message(provedor_id: int, conversation_id: int, message_content: str, button_id: Optional[str] = None):
+    async def process_message(provedor_id: int, conversation_id: int, message_content: str, button_id: Optional[str] = None, canal_id: Optional[int] = None):
         """
         Processa uma mensagem recebida e avança o fluxo.
         """
-        logger.info(f"[ChatbotEngine][TRACE] Iniciando process_message | conv={conversation_id} | texto='{message_content}' | button='{button_id}'")
-        logger.info(f"[ChatbotEngine][TRACE] Iniciando process_message | conv={conversation_id} | texto='{message_content}' | button='{button_id}'")
-        # 1. Obter o fluxo ativo para o provedor
-        flow = await ChatbotFlow.objects.filter(provedor_id=provedor_id).order_by('-updated_at').afirst()
+        logger.info(f"[ChatbotEngine][TRACE] Iniciando process_message | conv={conversation_id} | texto='{message_content}' | button='{button_id}' | canal={canal_id}")
+        # 1. Obter o fluxo ativo para o provedor (priorizando o canal se informado)
+        query = ChatbotFlow.objects.filter(provedor_id=provedor_id)
+        
+        flow = None
+        if canal_id:
+            # 1a. Tentar fluxo específico para o canal
+            flow = await query.filter(canal_id=canal_id).order_by('-updated_at').afirst()
+            if flow:
+                logger.info(f"[ChatbotEngine] Fluxo específico para canal {canal_id} encontrado: {flow.id}")
+        
         if not flow:
-            logger.info(f"[ChatbotEngine] Nenhum fluxo encontrado para provedor {provedor_id}")
+            # 1b. Fallback para fluxo global (sem canal definido)
+            flow = await query.filter(canal__isnull=True).order_by('-updated_at').afirst()
+            if flow:
+                logger.info(f"[ChatbotEngine] Fluxo global (sem canal) encontrado: {flow.id}")
+
+        if not flow:
+            logger.info(f"[ChatbotEngine] Nenhum fluxo encontrado para provedor {provedor_id} (Canal: {canal_id})")
             return False, "Nenhum fluxo encontrado"
 
         nodes = flow.nodes
@@ -1077,7 +1090,7 @@ class ChatbotEngine:
     @staticmethod
     async def send_message_agnostic(conv, text, msg_btns=None, msg_header=None, msg_footer=None, msg_rows=None, msg_btn_text=None, msg_sec_title=None) -> Tuple[bool, Any]:
         """
-        Helper para enviar mensagem baseada na integração (WhatsApp Cloud, Evolution, Uazapi).
+        Helper para enviar mensagem baseada na integração (WhatsApp Cloud, Uazapi).
         Persiste no banco ANTES de enviar para garantir experiência em tempo real.
         """
         inbox = conv.inbox
@@ -1086,7 +1099,7 @@ class ChatbotEngine:
         logger.info(f"[ChatbotEngine] Processando envio de mensagem para inbox {inbox.id} | Texto: {text[:100]}...")
 
         # Persistir no banco ANTES do envio real para garantir exibição instantânea no painel
-        # Isso elimina o atraso causado pela latência da API externa (WhatsApp Cloud / Evolution)
+        # Isso elimina o atraso causado pela latência da API externa
         await ChatbotEngine._persist_chatbot_message(conv, text, msg_btns, msg_rows)
 
         success = False
@@ -1115,7 +1128,7 @@ class ChatbotEngine:
             
             return success, response
 
-        # 2. Evolution / Uazapi (Baseado em integrations/views.py)
+        # 2. Uazapi
         uazapi_token = provedor.integracoes_externas.get('whatsapp_token')
         uazapi_url = provedor.integracoes_externas.get('whatsapp_url')
         uazapi_instance = provedor.integracoes_externas.get('whatsapp_instance')
@@ -1150,7 +1163,7 @@ class ChatbotEngine:
             }
             
             try:
-                # Tenta enviar via Evolution (mais comum no projeto)
+                # Tenta enviar via Uazapi
                 resp = await sync_to_async(requests.post)(
                     uazapi_url,
                     json=payload,
@@ -1161,14 +1174,14 @@ class ChatbotEngine:
                 response = resp.text
                 return success, response
             except Exception as e:
-                logger.error(f"[ChatbotEngine] Erro ao enviar Evolution/Uazapi: {e}")
+                logger.error(f"[ChatbotEngine] Erro ao enviar Uazapi: {e}")
                 return False, str(e)
         
         return False, "Nenhuma integração compatível encontrada"
     
     @staticmethod
     async def send_message_agnostic_document(conv, text, file_url, file_name=None) -> Tuple[bool, Any]:
-        """Envia um documento (PDF, etc) via Cloud API ou Evolution."""
+        """Envia um documento (PDF, etc) via Cloud API ou Uazapi."""
         inbox = conv.inbox
         provedor = inbox.provedor
         
@@ -1180,7 +1193,7 @@ class ChatbotEngine:
                 file_url=file_url,
                 file_name=file_name
             )
-        # Evolution fallback placeholder
+        # Uazapi fallback placeholder
         return await ChatbotEngine.send_message_agnostic(conv, f"{text}\n\nLink: {file_url}")
 
     @staticmethod

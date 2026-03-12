@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -23,7 +23,8 @@ const NODE_TYPES = {
 
 const ChatbotBuilder = () => {
     const { t } = useLanguage();
-    const { provedorId } = useParams();
+    const { provedorId, flowId } = useParams();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [currentFlow, setCurrentFlow] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -55,27 +56,33 @@ const ChatbotBuilder = () => {
     const [availablePlanos, setAvailablePlanos] = useState([]);
 
     useEffect(() => {
-        const fetchFlows = async () => {
-            console.log("Iniciando fetchFlows para provedor:", provedorId);
+        const fetchFlowData = async () => {
+            console.log("Iniciando carregamento de fluxo:", flowId || 'primeiro disponível');
             setLoading(true);
             try {
-                const response = await axios.get(`/api/chatbot-flows/?provedor=${provedorId}`);
-                console.log("Resposta fetchFlows:", response.data);
+                let flow;
+                if (flowId) {
+                    const response = await axios.get(`/api/chatbot-flows/${flowId}/`);
+                    flow = response.data;
+                } else {
+                    const response = await axios.get(`/api/chatbot-flows/?provedor=${provedorId}`);
+                    const flows = Array.isArray(response.data) ? response.data : (response.data.results || []);
+                    if (flows.length > 0) {
+                        flow = flows[0];
+                    }
+                }
 
-                // Handle both direct array and paginated results
-                const flows = Array.isArray(response.data) ? response.data : (response.data.results || []);
-
-                if (flows.length > 0) {
-                    const flow = flows[0];
+                if (flow) {
                     console.log("Fluxo carregado:", flow.id, "Nodes:", flow.nodes?.length);
                     setCurrentFlow(flow);
                     setNodes(flow.nodes || []);
                     setEdges(flow.edges || []);
                 } else {
-                    console.log("Nenhum fluxo encontrado para este provedor.");
+                    console.log("Nenhum fluxo encontrado.");
+                    // Se não houver fluxo e estivermos no builder sem ID, talvez redirecionar para o manager em breve
                 }
             } catch (error) {
-                console.error('Erro ao buscar fluxos:', error);
+                console.error('Erro ao buscar fluxo:', error);
             } finally {
                 setLoading(false);
             }
@@ -102,11 +109,11 @@ const ChatbotBuilder = () => {
         };
 
         if (provedorId) {
-            fetchFlows();
+            fetchFlowData();
             fetchTeams();
             fetchPlanos();
         }
-    }, [provedorId]);
+    }, [provedorId, flowId]);
 
     const handleCreateFlow = async () => {
         setLoading(true);
@@ -568,12 +575,25 @@ const ChatbotBuilder = () => {
             {/* Top Toolbar */}
             <div className="flex items-center justify-between px-6 py-4 bg-white/80 dark:bg-background/80 backdrop-blur-md border-b border-slate-200 dark:border-border shadow-sm z-50">
                 <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => navigate(`/app/accounts/${provedorId}/chatbot-manager`)}
+                        className="p-2 hover:bg-muted rounded-xl transition-all text-muted-foreground hover:text-foreground"
+                        title="Voltar para Gestão"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div className="h-6 w-px bg-border mx-1" />
                     <div className="text-foreground/70 dark:text-[#888888]">
                         <Bot size={28} strokeWidth={1.5} />
                     </div>
-                    <h1 className="text-xl font-bold text-slate-800 dark:text-white leading-none tracking-tight">
-                        Chatbot
-                    </h1>
+                    <div>
+                        <h1 className="text-xl font-bold text-slate-800 dark:text-white leading-none tracking-tight">
+                            Chatbot
+                        </h1>
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">
+                            {currentFlow?.name || t('fluxo_principal')}
+                        </p>
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-3">

@@ -22,9 +22,10 @@ export default function ConversationsPieChart({ data, title = "Distribuição" }
     const n = (name || '').toLowerCase();
     
     // Cores para Status das Conversas
-    if (n.includes('ativa') || n.includes('aberta')) return '#10b981'; // Verde
-    if (n.includes('aguard') || n.includes('pendente')) return '#f59e0b'; // Laranja  
-    if (n.includes('fech') || n.includes('resolvida')) return '#94a3b8'; // Cinza
+    if (n.includes('atendiment')) return '#10b981'; // Verde
+    if (n.includes('esper')) return '#f59e0b'; // Laranja  
+    if (n.includes('autom')) return '#2d5eff'; // Azul (IA)
+    if (n.includes('finalizad') || n.includes('resolvida')) return '#94a3b8'; // Cinza
     
     // Cores para Canais de Atendimento
     if (n.includes('whatsapp')) return '#10b981'; // Verde (WhatsApp)

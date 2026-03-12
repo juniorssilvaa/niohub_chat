@@ -20,6 +20,7 @@ import ProviderDataForm from './ProviderDataForm';
 import ProviderScheduleForm from './ProviderScheduleForm';
 import Changelog from './Changelog';
 import ChatbotBuilder from './ChatbotBuilder';
+import ChatbotManager from './ChatbotManager';
 import PlanosPage from './PlanosPage';
 import RespostasRapidas from './RespostasRapidas';
 
@@ -136,7 +137,9 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
               <Route path="recovery" element={<ConversationRecovery provedorId={provedorId} />} />
               <Route path="companies" element={<CompanyManagement provedorId={provedorId} />} />
               <Route path="csat" element={<CSATDashboard provedorId={provedorId} />} />
+              <Route path="chatbot-manager" element={<ChatbotManager />} />
               <Route path="chatbot-builder" element={<ChatbotBuilder />} />
+              <Route path="chatbot-builder/:flowId" element={<ChatbotBuilder />} />
               <Route path="planos" element={<PlanosPage provedorId={provedorId} />} />
               <Route path="respostas-rapidas" element={<RespostasRapidas provedorId={provedorId} />} />
               <Route path="integracoes" element={<Integrations provedorId={provedorId} />} />

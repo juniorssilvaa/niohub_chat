@@ -47,6 +47,15 @@ class ConversationNotificationService:
                 event_data
             )
             
+            # 2. Notificar o Dashboard (grupo de estatísticas em tempo real)
+            dashboard_group = f'dashboard_{provedor_id}'
+            async_to_sync(channel_layer.group_send)(
+                dashboard_group,
+                {
+                    'type': 'dashboard_stats_update'
+                }
+            )
+            
         except Exception as e:
             pass
     @staticmethod

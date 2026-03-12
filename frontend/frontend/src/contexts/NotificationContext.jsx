@@ -44,8 +44,22 @@ export const NotificationProvider = ({ children }) => {
   const processedEventsRef = useRef(new Set());
   const PROCESSED_EVENTS_LIMIT = 50;
 
+  const refreshSettings = useCallback(() => {
+    // Carregar configurações do localStorage para atualização imediata
+    const storedEnabled = localStorage.getItem('sound_notifications_enabled');
+    const storedMsgSound = localStorage.getItem('sound_new_message');
+    const storedConvSound = localStorage.getItem('sound_new_conversation');
+    const storedMsgVolume = localStorage.getItem('sound_new_message_volume');
+    const storedConvVolume = localStorage.getItem('sound_new_conversation_volume');
+
+    if (storedEnabled !== null) soundEnabledRef.current = storedEnabled === 'true';
+    if (storedMsgSound) newMsgSoundRef.current = storedMsgSound;
+    if (storedConvSound) newConvSoundRef.current = storedConvSound;
+    if (storedMsgVolume) newMsgVolumeRef.current = parseFloat(storedMsgVolume);
+    if (storedConvVolume) newConvVolumeRef.current = parseFloat(storedConvVolume);
+  }, []);
+
   // ✅ Sincronizar usuário do AuthContext com currentUser local
-  // Isso evita chamadas desnecessárias de /me
   useEffect(() => {
     if (authUser) {
       setCurrentUser(authUser);
@@ -57,11 +71,26 @@ export const NotificationProvider = ({ children }) => {
     } else {
       setCurrentUser(null);
     }
-  }, [authUser]);
+    // Sempre tentar carregar do localStorage também para garantir o estado mais recente
+    refreshSettings();
+  }, [authUser, refreshSettings]);
+
+  // Ouvir eventos de atualização de configurações
+  useEffect(() => {
+    const handleSettingsUpdate = () => refreshSettings();
+    window.addEventListener('notification-settings-updated', handleSettingsUpdate);
+    window.addEventListener('storage', (e) => {
+      if (e.key && e.key.includes('sound_')) refreshSettings();
+    });
+    return () => {
+      window.removeEventListener('notification-settings-updated', handleSettingsUpdate);
+      window.removeEventListener('storage', handleSettingsUpdate);
+    };
+  }, [refreshSettings]);
 
   useEffect(() => {
     if (currentUser?.id) {
-      console.log('[NOTIF-DEBUG] Iniciando conexões para usuário:', currentUser.id, 'Provedor:', currentUser.provedor_id);
+
       connectWebSocket();
       connectPainelWebSocket();
       connectInternalChatWebSocket();
@@ -310,18 +339,16 @@ export const NotificationProvider = ({ children }) => {
       }
 
       if (!pId) {
-        console.warn('[NOTIF-DEBUG] Sem provedorId, WebSocket do painel não será conectado.');
         return;
       }
       // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       if (!token) {
-        console.warn('[NOTIF-DEBUG] Sem token, WebSocket do painel não será conectado.');
         return;
       }
       // CORREÇÃO: Usar função centralizada para construir URL de WebSocket
       const wsUrl = buildWebSocketUrl(`/ws/painel/${pId}/`, { token });
-      console.log('[NOTIF-DEBUG] Conectando WebSocket do painel:', wsUrl);
+
       if (painelWsRef.current?.readyState === WebSocket.OPEN) return;
       if (painelWsRef.current && painelWsRef.current.readyState !== WebSocket.CLOSED) {
         painelWsRef.current.close();
@@ -338,7 +365,9 @@ export const NotificationProvider = ({ children }) => {
           const data = JSON.parse(event.data);
           // PRIORIDADE: event_type é mais específico que type no WebSocket do painel
           const evt = data.event_type || data.type || data.action;
-          console.log('[NOTIF-DEBUG] Evento recebido:', evt, data);
+
+
+          const isMessageEvent = evt === 'message_received' || evt === 'message_created' || evt === 'new_message' || evt === 'chat_message';
 
           // Gerar um ID único mais abrangente
           const eventId = data.id ||
@@ -349,7 +378,7 @@ export const NotificationProvider = ({ children }) => {
             (data.conversation_id ? `conv_${data.conversation_id}_${evt}` : null);
 
           if (eventId && processedEventsRef.current.has(eventId)) {
-            console.log('[NOTIF-DEBUG] Evento ignorado (já processado):', eventId);
+
             return;
           }
 
@@ -362,14 +391,14 @@ export const NotificationProvider = ({ children }) => {
 
             // Se a conversa tem um atendente e não é o usuário atual, ignorar som
             if (assigneeId && currentUser?.id && parseInt(assigneeId) !== currentUser.id) {
-              console.log('[NOTIF-DEBUG] Som de MENSAGEM ignorado: Conversa atribuída a outro atendente (', assigneeId, ')');
+
               return;
             }
 
             // Verificar se esta mensagem pertence a uma conversa que ACABOU de tocar som de "Nova Conversa"
             const convId = data.conversation_id || data.conversation?.id || data.data?.conversation_id;
             if (convId && processedEventsRef.current.has(`silence_msg_${convId}`)) {
-              console.log('[NOTIF-DEBUG] Som de MENSAGEM silenciado pois houve som de NOVA CONVERSA recente para conv:', convId);
+
               return;
             }
 
@@ -380,14 +409,14 @@ export const NotificationProvider = ({ children }) => {
                 processedEventsRef.current.delete(first);
               }
             }
-            console.log('[NOTIF-DEBUG] Evento de MENSAGEM detectado. Som:', newMsgSoundRef.current, 'Volume:', newMsgVolumeRef.current);
+
             playSound(newMsgSoundRef.current, newMsgVolumeRef.current);
             startBlinkingFavicon();
           } else if (evt === 'conversation_created' || evt === 'chat_created') {
             // LÓGICA: Som de "Novas Conversas" APENAS em eventos de criação real
             const conv = data.conversation || data.payload || data.data || data.data?.conversation;
 
-            console.log('[NOTIF-DEBUG] Evento de NOVA CONVERSA detectado. Som:', newConvSoundRef.current, 'Volume:', newConvVolumeRef.current);
+
             playSound(newConvSoundRef.current, newConvVolumeRef.current);
             startBlinkingFavicon();
 
@@ -412,7 +441,7 @@ export const NotificationProvider = ({ children }) => {
             const isCriticalStatus = status === 'pending' || status === 'snoozed';
 
             if (isCriticalStatus && (isUnassigned || isMine)) {
-              console.log('[NOTIF-DEBUG] Re-atendimento detectado. Status:', status, 'Som:', newConvSoundRef.current);
+
               playSound(newConvSoundRef.current, newConvVolumeRef.current);
               startBlinkingFavicon();
             }
@@ -445,10 +474,7 @@ export const NotificationProvider = ({ children }) => {
   const playSound = (fileName, volume = 1.0) => {
     // Fallback: se soundEnabledRef.current for falso, verificar localStorage por garantia
     const isEnabled = soundEnabledRef.current || localStorage.getItem('sound_notifications_enabled') === 'true';
-    if (!isEnabled) {
-      console.log('[NOTIF-DEBUG] playSound ignorado: Notificações sonoras desativadas (Ref:', soundEnabledRef.current, ')');
-      return;
-    }
+
 
     // DEBOUNCE: Reduzido para 1.0s para ser mais responsivo em conversas rápidas
     const now = Date.now();

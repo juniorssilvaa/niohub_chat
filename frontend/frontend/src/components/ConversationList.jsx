@@ -1040,13 +1040,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           <div className="flex items-center space-x-2">
             {/* Botão de ativar sons removido */}
 
-            {/* Notificação de nova mensagem */}
-            {newMessageNotification && (
-              <div className="flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs animate-pulse">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span>Nova mensagem!</span>
-              </div>
-            )}
+
 
             <button
               onClick={() => fetchConversations(true)}
@@ -1278,10 +1272,22 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                     <p className={`text-sm truncate mt-1 ${selectedConversation?.id === conversation.id ? 'text-topbar-foreground/80' : 'text-muted-foreground'}`}>
                       {(() => {
                         const msg = conversation.last_message;
-                        // ... código existente ...
                         if (!msg) return 'Nenhuma mensagem';
 
-                        // Se o conteúdo for vazio ou apenas pontos, verificar se é mensagem interativa
+                        // PRIORIDADE: Mostrar o tipo de mídia na barra lateral sempre que for uma mídia
+                        // (Mesmo que tenha legenda, o usuário quer ver o tipo aqui)
+                        const type = msg.message_type;
+                        const labels = {
+                          'image': 'Você recebeu uma imagem',
+                          'video': 'Você recebeu um vídeo',
+                          'audio': 'Você recebeu um áudio',
+                          'document': 'Você recebeu um documento',
+                          'voice': 'Você recebeu uma mensagem de voz'
+                        };
+                        
+                        if (labels[type]) return labels[type];
+
+                        // Fallback para mensagens interativas se o conteúdo for vazio
                         if (!msg.content || msg.content === '...') {
                           const attrs = msg.additional_attributes;
                           if (attrs?.interactive_rows?.length > 0) return '📋 Menu de Opções';

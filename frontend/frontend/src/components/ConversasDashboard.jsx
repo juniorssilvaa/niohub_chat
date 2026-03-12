@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Users, AlertTriangle, Flame, HelpCircle, Clock, MoreVertical, Bot, MessageCircle, User, X, Volume2, BrainCircuit, Timer } from 'lucide-react';
+import { Users, AlertTriangle, Flame, HelpCircle, Clock, MoreVertical, Bot, MessageCircle, User, X, Volume2, BrainCircuit, Timer, FileText, Image as ImageIcon, Film, UserCheck, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
@@ -20,6 +20,12 @@ const statusMap = [
     titulo: 'Em Espera',
     cor: 'bg-[#ffd600]',
     textoCor: 'text-black',
+  },
+  {
+    key: 'chatbot',
+    titulo: 'Navegando',
+    cor: 'bg-[#2d5eff]',
+    textoCor: 'text-white',
   },
   {
     key: 'open',
@@ -114,13 +120,19 @@ export default function ConversasDashboard() {
   const getChannelDisplayName = (inbox) => {
     if (!inbox) return 'Canal';
 
+    // Priorizar o nome customizado se existir
+    if (inbox.custom_name) {
+      return inbox.custom_name;
+    }
+
     const channelTypes = {
       'whatsapp': 'WhatsApp',
       'email': 'Email',
       'telegram': 'Telegram',
       'webchat': 'Chat Web',
       'facebook': 'Facebook',
-      'instagram': 'Instagram'
+      'instagram': 'Instagram',
+      'whatsapp_oficial': 'WhatsApp Oficial'
     };
 
     return channelTypes[inbox.channel_type] || inbox.channel_type || 'Canal';
@@ -532,6 +544,28 @@ export default function ConversasDashboard() {
     setModalConversa(conversa);
     setMenuOpenId(null);
   }
+  async function handleAssignToMe(conversa) {
+    if (!conversa?.id) return;
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    try {
+      const response = await axios.post(`/api/conversations/${conversa.id}/assign/`, {}, {
+        headers: { Authorization: `Token ${token}` }
+      });
+      alert('Conversa atribuída para você!');
+      // Atualizar a conversa na lista
+      setConversas(prev => prev.map(c =>
+        c.id === conversa.id
+          ? { ...c, assignee: response.data.conversation?.assignee }
+          : c
+      ));
+      if (modalConversa?.id === conversa.id) {
+        setModalConversa(prev => ({ ...prev, assignee: response.data.conversation?.assignee, status: 'open' }));
+      }
+    } catch (error) {
+      console.error('Erro ao atribuir conversa:', error);
+      alert('Erro ao atribuir conversa.');
+    }
+  }
   function handleTransferir(conversa) {
     setModalTransferir(conversa);
     setMenuOpenId(null);
@@ -648,18 +682,25 @@ export default function ConversasDashboard() {
         const timestamp = new Date().getTime();
         const res = await axios.get(`/api/conversations/?page_size=500&ordering=-last_message_at&_t=${timestamp}`, { headers });
         const conversasData = res.data.results || res.data;
-        setConversas(conversasData);
-
+        
+        // CORREÇÃO: Administradores da empresa (admin) também devem ver tudo do seu provedor
+        const hasFullAccess = user?.user_type === 'superadmin' || user?.user_type === 'admin';
         const userPermissions = user?.permissions || [];
         let filteredConversas = conversasData;
 
-        if (!userPermissions.includes('view_ai_conversations')) {
-          filteredConversas = filteredConversas.filter(conv => !isComIA(conv));
+        // Se não tiver acesso total, aplicar filtros de permissão específicos
+        if (!hasFullAccess) {
+          if (!userPermissions.includes('view_ai_conversations')) {
+            filteredConversas = filteredConversas.filter(conv => !isComIA(conv));
+          }
+
+          if (!userPermissions.includes('view_team_unassigned')) {
+            filteredConversas = filteredConversas.filter(conv => !isEmEspera(conv));
+          }
         }
 
-        if (!userPermissions.includes('view_team_unassigned')) {
-          filteredConversas = filteredConversas.filter(conv => !isEmEspera(conv));
-        }
+        // Armazenar apenas as conversas que o usuário tem permissão de ver
+        setConversas(filteredConversas);
 
         const ia = filteredConversas.filter(isComIA).length;
         const fila = filteredConversas.filter(isEmEspera).length;
@@ -720,9 +761,23 @@ export default function ConversasDashboard() {
                 // Filtrar a conversa antiga se existir
                 const listaSemAntiga = prev.filter(c => c.id !== convAtualizada.id);
                 // Adicionar a nova no topo (Ordenação em Tempo Real)
-                const novaLista = [convAtualizada, ...listaSemAntiga];
+                let novaLista = [convAtualizada, ...listaSemAntiga];
 
-                // Recalcular contagens
+                // Aplicar filtros de permissão na lista atualizada (WebSocket)
+                // CORREÇÃO: Administradores da empresa (admin) também devem ver tudo
+                const hasFullAccess = user?.user_type === 'superadmin' || user?.user_type === 'admin';
+                const userPermissions = user?.permissions || [];
+                
+                if (!hasFullAccess) {
+                  if (!userPermissions.includes('view_ai_conversations')) {
+                    novaLista = novaLista.filter(conv => !isComIA(conv));
+                  }
+                  if (!userPermissions.includes('view_team_unassigned')) {
+                    novaLista = novaLista.filter(conv => !isEmEspera(conv));
+                  }
+                }
+
+                // Recalcular contagens baseadas na lista filtrada
                 let ia = 0, fila = 0, atendimento = 0;
                 novaLista.forEach(conv => {
                   if (isComIA(conv)) ia++;
@@ -962,7 +1017,8 @@ export default function ConversasDashboard() {
       if (conv.assignee) {
         return 'Em Atendimento';
       } else if (status === 'snoozed') {
-        return 'Com IA';
+        const isChatbot = conv.inbox?.bot_mode === 'chatbot' || providerConfig?.chatbot_mode;
+        return isChatbot ? 'Navegando' : 'Com IA';
       } else if (status === 'pending') {
         return 'Em Espera';
       }
@@ -1162,10 +1218,48 @@ export default function ConversasDashboard() {
         )}
         <div className={`max-w-[70%] ${(isAtendente || isBot) ? 'order-2' : 'order-1'}`}>
           <div className={`px-4 py-3 rounded-2xl shadow-sm ${bg}`}>
-            {msg.content_type === 'audio' && msg.audio_url ? (
-              <audio controls src={msg.audio_url} className="w-full">
-                Seu navegador não suporta áudio.
-              </audio>
+            {/* Renderização de Mídias */}
+            {(msg.message_type === 'image' || msg.content_type === 'image' || (msg.attachments && msg.attachments.some(a => a.file_type === 'image'))) ? (
+              <div className="mb-1">
+                <img 
+                  src={msg.file_url || msg.image_url || (msg.attachments && msg.attachments.find(a => a.file_type === 'image')?.data_url)} 
+                  alt="Imagem" 
+                  className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                  style={{ maxHeight: '300px' }}
+                  onClick={() => window.open(msg.file_url || msg.image_url || (msg.attachments && msg.attachments.find(a => a.file_type === 'image')?.data_url), '_blank')}
+                />
+                {msg.content && <p className="text-sm mt-2 whitespace-pre-line">{renderMessageWithLinks(msg.content)}</p>}
+              </div>
+            ) : (msg.message_type === 'video' || msg.content_type === 'video' || (msg.attachments && msg.attachments.some(a => a.file_type === 'video'))) ? (
+              <div className="mb-1">
+                <video controls className="max-w-full h-auto rounded-lg" style={{ maxHeight: '300px' }}>
+                  <source src={msg.file_url || msg.video_url || (msg.attachments && msg.attachments.find(a => a.file_type === 'video')?.data_url)} />
+                  Seu navegador não suporta vídeos.
+                </video>
+                {msg.content && <p className="text-sm mt-2 whitespace-pre-line">{renderMessageWithLinks(msg.content)}</p>}
+              </div>
+            ) : (msg.message_type === 'audio' || msg.message_type === 'ptt' || msg.content_type === 'audio' || (msg.attachments && msg.attachments.some(a => a.file_type === 'audio'))) ? (
+              <div className="mb-1">
+                <audio controls src={msg.file_url || msg.audio_url || (msg.attachments && msg.attachments.find(a => a.file_type === 'audio')?.data_url)} className="w-full">
+                  Seu navegador não suporta áudio.
+                </audio>
+                {msg.content && <p className="text-sm mt-2 whitespace-pre-line">{renderMessageWithLinks(msg.content)}</p>}
+              </div>
+            ) : (msg.message_type === 'document' || msg.content_type === 'document' || msg.message_type === 'file' || (msg.attachments && msg.attachments.some(a => a.file_type === 'file'))) ? (
+              <div className="mb-1">
+                <a 
+                  href={msg.file_url || (msg.attachments && msg.attachments.find(a => a.file_type === 'file')?.data_url)} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-3 bg-black/10 rounded-lg hover:bg-black/20 transition-all border border-white/10"
+                >
+                  <FileText className="w-6 h-6" />
+                  <span className="text-sm truncate max-w-[200px]">
+                    {msg.file_name || (msg.attachments && msg.attachments.find(a => a.file_type === 'file')?.file_name) || 'Documento'}
+                  </span>
+                </a>
+                {msg.content && <p className="text-sm mt-2 whitespace-pre-line">{renderMessageWithLinks(msg.content)}</p>}
+              </div>
             ) : (
               <p className="text-sm whitespace-pre-line leading-relaxed">
                 {renderMessageWithLinks(msg.content)}
@@ -1574,6 +1668,36 @@ export default function ConversasDashboard() {
                         })() : 'N/A'}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Botões de Ação Diretos */}
+                  <div className="flex items-center space-x-1 border-l border-border pl-2 ml-2">
+                    <button
+                      onClick={() => handleAssignToMe(modalConversa)}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors flex items-center space-x-2"
+                      title="Atribuir para mim"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      <span className="text-xs font-medium hidden sm:inline">Atribuir</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => handleTransferir(modalConversa)}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors flex items-center space-x-2"
+                      title="Transferir conversa"
+                    >
+                      <ArrowRightLeft className="w-4 h-4" />
+                      <span className="text-xs font-medium hidden sm:inline">Transferir</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => handleEncerrar(modalConversa)}
+                      className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors flex items-center space-x-2"
+                      title="Encerrar conversa"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="text-xs font-medium hidden sm:inline">Encerrar</span>
+                    </button>
                   </div>
                 </div>
 

@@ -361,6 +361,7 @@ class MensagemSistema(models.Model):
 class ChatbotFlow(models.Model):
     name = models.CharField(max_length=200, verbose_name='Nome do Fluxo')
     provedor = models.ForeignKey(Provedor, on_delete=models.CASCADE, related_name='chatbot_flows', verbose_name='Provedor')
+    canal = models.ForeignKey(Canal, on_delete=models.SET_NULL, null=True, blank=True, related_name='chatbot_flows', verbose_name='Canal')
     nodes = models.JSONField(default=list, blank=True, verbose_name='Nós do Fluxo')
     edges = models.JSONField(default=list, blank=True, verbose_name='Conexões do Fluxo')
     is_active = models.BooleanField(default=True, verbose_name='Ativo')

@@ -201,30 +201,8 @@ export default function ProfilePage() {
       notifications: { ...settings.notifications, soundNotifications: checked }
     });
     localStorage.setItem('sound_notifications_enabled', String(checked));
-    try {
-      const token = localStorage.getItem('token');
-      await axios.patch('/api/auth/me/', {
-        sound_notifications_enabled: checked
-      }, {
-        headers: { Authorization: `Token ${token}` }
-      });
-      // Desbloquear autoplay imediatamente quando o usuário habilitar
-      if (checked) {
-        try {
-          const src = `/sounds/${settings.notifications.newMessageSound}`;
-          if (!audioRef.current) {
-            audioRef.current = new Audio(src);
-          } else {
-            audioRef.current.src = src;
-          }
-          audioRef.current.volume = settings.notifications.newMessageVolume;
-          audioRef.current.currentTime = 0;
-          await audioRef.current.play().catch(() => { });
-        } catch (_) { }
-      }
-    } catch (e) {
-      console.error('Erro ao salvar preferência de som no servidor:', e);
-    }
+    // Disparar evento para o NotificationContext
+    window.dispatchEvent(new CustomEvent('notification-settings-updated'));
   };
 
   const handleSelectSound = async (type, value) => {
@@ -238,6 +216,8 @@ export default function ProfilePage() {
     if (type === 'newConversationSound') {
       localStorage.setItem('sound_new_conversation', value);
     }
+    // Disparar evento para o NotificationContext
+    window.dispatchEvent(new CustomEvent('notification-settings-updated'));
     try {
       const token = localStorage.getItem('token');
       await axios.patch('/api/auth/me/', {
@@ -256,6 +236,12 @@ export default function ProfilePage() {
       ...settings,
       notifications: { ...settings.notifications, [type]: volume }
     });
+    
+    // Salvar volume no localStorage para atualização imediata
+    localStorage.setItem(type === 'newMessageVolume' ? 'sound_new_message_volume' : 'sound_new_conversation_volume', volume.toString());
+    
+    // Disparar evento para o NotificationContext
+    window.dispatchEvent(new CustomEvent('notification-settings-updated'));
 
     try {
       const token = localStorage.getItem('token');
@@ -277,7 +263,7 @@ export default function ProfilePage() {
       }
 
       const src = `/sounds/${fileName}`;
-      console.log('Tentando reproduzir som:', src, 'Volume:', volume);
+
 
       // Verificar se o arquivo existe fazendo uma requisição HEAD
       try {
@@ -285,7 +271,7 @@ export default function ProfilePage() {
         if (!response.ok) {
           throw new Error(`Arquivo não encontrado: ${src} (Status: ${response.status})`);
         }
-        console.log('Arquivo de som encontrado:', src);
+
       } catch (fetchError) {
         console.error('Erro ao verificar arquivo:', fetchError);
         alert(`Arquivo de som não encontrado: ${fileName}`);
@@ -309,17 +295,12 @@ export default function ProfilePage() {
         alert('Erro ao carregar arquivo de som. Verifique se o arquivo existe.');
       };
 
-      audio.onloadstart = () => {
-        console.log('Iniciando carregamento do som...');
-      };
 
-      audio.oncanplay = () => {
-        console.log('Som carregado e pronto para reproduzir');
-      };
+
+
 
       // Tentar reproduzir
       await audio.play();
-      console.log('Som reproduzido com sucesso');
 
     } catch (error) {
       console.error('Erro ao reproduzir som:', error);
