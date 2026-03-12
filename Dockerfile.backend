@@ -87,6 +87,7 @@ checks = [
     ('0061_canal_ia_ativa', column_exists('core_canal', 'ia_ativa')),
     ('0062_chatbotflow', table_exists('core_chatbotflow')),
     ('0063_add_bot_mode_to_provedor', column_exists('core_provedor', 'bot_mode')),
+    ('0067_add_canal_to_chatbotflow', column_exists('core_chatbotflow', 'canal_id')),
 ]
 
 with connection.cursor() as cursor:
