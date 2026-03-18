@@ -426,12 +426,8 @@ def send_via_whatsapp_cloud_api(
     try:
         provedor = conversation.inbox.provedor
         
-        # Buscar canal WhatsApp Oficial do provedor
-        canal = Canal.objects.filter(
-            provedor=provedor,
-            tipo="whatsapp_oficial",
-            ativo=True
-        ).first()
+        # Buscar instancia do canal vinculada a este inbox
+        canal = conversation.inbox.get_canal_instance()
         
         if not canal:
             return False, "Canal WhatsApp Oficial não encontrado"
@@ -847,12 +843,8 @@ def send_reaction(
     try:
         provedor = conversation.inbox.provedor
         
-        # Buscar canal WhatsApp Oficial do provedor
-        canal = Canal.objects.filter(
-            provedor=provedor,
-            tipo="whatsapp_oficial",
-            ativo=True
-        ).first()
+        # Buscar instancia do canal vinculada a este inbox
+        canal = conversation.inbox.get_canal_instance()
         
         if not canal:
             return False, "Canal WhatsApp Oficial não encontrado"
@@ -1010,12 +1002,8 @@ def mark_message_as_read(conversation, message_id: str) -> Tuple[bool, Optional[
     try:
         provedor = conversation.inbox.provedor
         
-        # Buscar canal WhatsApp Oficial do provedor
-        canal = Canal.objects.filter(
-            provedor=provedor,
-            tipo="whatsapp_oficial",
-            ativo=True
-        ).first()
+        # Buscar instancia do canal vinculada a este inbox
+        canal = conversation.inbox.get_canal_instance()
         
         if not canal:
             return False, "Canal WhatsApp Oficial não encontrado"

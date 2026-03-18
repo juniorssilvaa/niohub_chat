@@ -580,6 +580,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                     'id': inbox.id if inbox else None,
                     'channel_type': inbox.channel_type if inbox else None,
                     'name': inbox.name if inbox else None,
+                    'custom_name': InboxSerializer(inbox).data.get('custom_name') if inbox else None,
                     'channel_real_id': InboxSerializer(inbox).data.get('channel_real_id') if inbox else None,
                     'provedor': {
                         'id': provedor.id if provedor else None,

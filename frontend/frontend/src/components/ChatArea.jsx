@@ -426,6 +426,37 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     }
   };
 
+  // Função para obter nome limpo do canal
+  const getChannelDisplayName = (inbox) => {
+    if (!inbox) return 'Canal';
+
+    // Priorizar o nome customizado se existir
+    if (inbox.custom_name) {
+      return inbox.custom_name;
+    }
+
+    // Fallback para o nome do inbox (preenchido no backend)
+    // Se o nome não for genérico/vazio, usar ele
+    if (inbox.name && 
+        inbox.name !== 'whatsapp_oficial' && 
+        inbox.name !== 'WhatsApp Oficial' &&
+        !inbox.name.includes('WhatsApp - null')) {
+      return inbox.name;
+    }
+
+    const channelTypes = {
+      'whatsapp': 'WhatsApp',
+      'email': 'Email',
+      'telegram': 'Telegram',
+      'webchat': 'Chat Web',
+      'facebook': 'Facebook',
+      'instagram': 'Instagram',
+      'whatsapp_oficial': 'WhatsApp Oficial'
+    };
+
+    return channelTypes[inbox.channel_type] || inbox.channel_type || 'Canal';
+  };
+
   // Função para buscar mensagens
   const fetchMessages = async () => {
     if (!conversation) return;
@@ -2596,14 +2627,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                 </h3>
                 <div className="flex items-center space-x-1 text-xs text-muted-foreground">
                   {getChannelIcon(conversation.inbox?.channel_type)}
-                  <span className="capitalize">
-                    {conversation.inbox?.channel_type === 'whatsapp' ? 'WhatsApp' :
-                      conversation.inbox?.channel_type === 'whatsapp_oficial' ? 'WhatsApp' :
-                        conversation.inbox?.channel_type === 'telegram' ? 'Telegram' :
-                          conversation.inbox?.channel_type === 'email' ? 'Email' :
-                            conversation.inbox?.channel_type === 'instagram' ? 'Instagram' :
-                              conversation.inbox?.channel_type === 'webchat' ? 'Web Chat' :
-                                conversation.inbox?.channel_type || 'Chat'}
+                  <span className="font-medium">
+                    Canal: {getChannelDisplayName(conversation.inbox)}
                   </span>
                 </div>
               </div>

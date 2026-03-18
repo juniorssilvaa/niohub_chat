@@ -150,7 +150,8 @@ def process_embedded_signup_finish(
     code: Optional[str] = None,
     phone_number_id: Optional[str] = None,
     business_id: Optional[str] = None,
-    page_ids: Optional[list] = None
+    page_ids: Optional[list] = None,
+    channel_id: Optional[int] = None
 ) -> Tuple[bool, Optional[Canal], Optional[str]]:
     """
     Processa a finalização do WhatsApp Embedded Signup.
@@ -167,7 +168,19 @@ def process_embedded_signup_finish(
                 return False, None, "Falha na troca de token com a Meta (Code expirado ou inválido)"
 
         # 2. Localizar ou criar o canal
-        canal = Canal.objects.filter(provedor=provedor, tipo="whatsapp_oficial").first()
+        if channel_id:
+            canal = Canal.objects.filter(id=channel_id, provedor=provedor).first()
+            if not canal:
+                # Se o ID foi passado mas não existe, talvez tenha sido deletado
+                # Criar um novo como fallback conservador
+                canal = Canal.objects.create(
+                    provedor=provedor, tipo="whatsapp_oficial", 
+                    nome=f"WhatsApp Oficial", status="connecting", ativo=True
+                )
+        else:
+            # Fallback original: buscar o primeiro canal whatsapp_oficial do provedor
+            canal = Canal.objects.filter(provedor=provedor, tipo="whatsapp_oficial").first()
+            
         if not canal:
             canal = Canal.objects.create(
                 provedor=provedor, tipo="whatsapp_oficial", 

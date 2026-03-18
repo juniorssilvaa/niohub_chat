@@ -4442,6 +4442,7 @@ class CanalViewSet(viewsets.ModelViewSet):
             
             waba_id = request.data.get('waba_id')
             provider_id = request.data.get('provider_id')
+            channel_id = request.data.get('channel_id')
             code = request.data.get('code') # Suporte ao code do SDK
             
             # Dados adicionais do evento (opcionais)
@@ -4467,7 +4468,7 @@ class CanalViewSet(viewsets.ModelViewSet):
                         'error': 'provider_id é obrigatório'
                     }, status=400)
             
-            logger.info(f"Processando finish do Embedded Signup - waba_id: {waba_id}, code: {'presente' if code else 'ausente'}, provider_id: {provider_id}")
+            logger.info(f"Processando finish do Embedded Signup - waba_id: {waba_id}, channel_id: {channel_id}, code: {'presente' if code else 'ausente'}, provider_id: {provider_id}")
             
             # Processar finish
             success, canal, error_message = process_embedded_signup_finish(
@@ -4476,7 +4477,8 @@ class CanalViewSet(viewsets.ModelViewSet):
                 code=code,
                 phone_number_id=phone_number_id,
                 business_id=business_id,
-                page_ids=page_ids
+                page_ids=page_ids,
+                channel_id=channel_id
             )
             
             if not success:
@@ -6084,6 +6086,57 @@ class ChatbotFlowViewSet(viewsets.ModelViewSet):
             logger.info(f"[CHATBOT-FLOW]   Edge: {e.get('source')} → {e.get('target')} | handle={e.get('sourceHandle')}")
         instance = serializer.save()
         logger.info(f"[CHATBOT-FLOW] Salvo com sucesso. Nodes no DB: {len(instance.nodes)}")
+
+    @action(detail=True, methods=['get'])
+    def export_flow(self, request, pk=None):
+        """Exporta o fluxo em formato JSON para download."""
+        flow = self.get_object()
+        export_data = {
+            'name': flow.name,
+            'nodes': flow.nodes,
+            'edges': flow.edges
+        }
+        
+        from django.http import JsonResponse
+        response = JsonResponse(export_data)
+        response['Content-Disposition'] = f'attachment; filename="flow_{flow.id}_{flow.name.replace(" ", "_")}.json"'
+        return response
+
+    @action(detail=False, methods=['post'])
+    def import_flow(self, request):
+        """Importa um fluxo a partir de um JSON e cria um novo fluxo."""
+        import json
+        from core.models import ChatbotFlow, Provedor
+        from core.serializers import ChatbotFlowSerializer
+        
+        try:
+            # Pode vir como arquivo ou como JSON no body
+            if 'file' in request.FILES:
+                import_data = json.load(request.FILES['file'])
+            else:
+                import_data = request.data
+            
+            provedor_id = request.data.get('provedor')
+            if not provedor_id:
+                return Response({'error': 'ID do provedor é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
+                
+            provedor = Provedor.objects.get(id=provedor_id)
+            
+            # Criar novo fluxo herdando as configurações
+            new_flow = ChatbotFlow.objects.create(
+                name=f"{import_data.get('name', 'Fluxo Importado')} (Cópia)",
+                nodes=import_data.get('nodes', []),
+                edges=import_data.get('edges', []),
+                provedor=provedor,
+                is_active=True
+            )
+            
+            serializer = ChatbotFlowSerializer(new_flow)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"[CHATBOT-FLOW] Erro ao importar fluxo: {str(e)}")
+            return Response({'error': f'Erro ao importar fluxo: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PlanoViewSet(viewsets.ModelViewSet):

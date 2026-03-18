@@ -25,7 +25,7 @@ class ConversationNotificationService:
             # Buscar a conversa e serializar para enviar dados completos
             # Isso permite que o front atualize a lista instantaneamente
             try:
-                conv = Conversation.objects.select_related('contact', 'assignee', 'inbox').get(id=conversation_id)
+                conv = Conversation.objects.select_related('contact', 'assignee', 'inbox', 'inbox__provedor').get(id=conversation_id)
                 serializer = ConversationSerializer(conv)
                 full_conversation_data = serializer.data
             except Exception:

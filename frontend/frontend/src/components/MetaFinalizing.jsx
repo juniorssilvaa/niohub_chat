@@ -9,6 +9,7 @@ const MetaFinalizing = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const providerId = searchParams.get('provider_id') || '1';
+  const channelId = searchParams.get('channel_id');
 
   const [step, setStep] = useState('waiting');
   const [error, setError] = useState(null);
@@ -64,7 +65,7 @@ const MetaFinalizing = () => {
     try {
       const fullPayloadData = { ...eventData, code };
 
-      const response = await sendFinishToBackend(wabaId, providerId, { payload: fullPayloadData });
+      const response = await sendFinishToBackend(wabaId, providerId, { payload: fullPayloadData, channelId });
 
       if (response.success) {
         setResultData(response.canal);

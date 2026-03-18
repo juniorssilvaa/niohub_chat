@@ -598,15 +598,77 @@ const ChatbotBuilder = () => {
 
                 <div className="flex items-center gap-3">
                     {currentFlow && (
-                        <button
-                            onClick={handleSaveFlow}
-                            disabled={isSaving}
-                            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-xl transition-all shadow-sm ${isSaving ? 'bg-[#242424] text-[#444444]' : 'bg-emerald-600 text-white hover:bg-emerald-500 hover:shadow-lg active:scale-95 border-b-4 border-emerald-800'
-                                }`}
-                        >
-                            <Save size={16} />
-                            {isSaving ? 'Salvando...' : 'Salvar Fluxo'}
-                        </button>
+                        <>
+                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 mr-2">
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const res = await axios.get(`/api/chatbot-flows/${currentFlow.id}/export_flow/`, {
+                                                responseType: 'blob'
+                                            });
+                                            const url = window.URL.createObjectURL(new Blob([res.data]));
+                                            const link = document.createElement('a');
+                                            link.href = url;
+                                            link.setAttribute('download', `flow_${currentFlow.id}.json`);
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                        } catch (error) {
+                                            console.error('Erro ao exportar:', error);
+                                            alert('Erro ao exportar fluxo.');
+                                        }
+                                    }}
+                                    className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-all"
+                                    title="Exportar Fluxo (JSON)"
+                                >
+                                    <Share2 size={18} />
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const input = document.createElement('input');
+                                        input.type = 'file';
+                                        input.accept = '.json';
+                                        input.onchange = (e) => {
+                                            const file = e.target.files[0];
+                                            if (!file) return;
+                                            const reader = new FileReader();
+                                            reader.onload = (event) => {
+                                                try {
+                                                    const json = JSON.parse(event.target.result);
+                                                    if (json.nodes && json.edges) {
+                                                        if (window.confirm('Deseja importar este fluxo? Isso substituirá o layout atual no editor (você deve salvar para persistir).')) {
+                                                            setNodes(json.nodes);
+                                                            setEdges(json.edges);
+                                                            alert('Fluxo importado para o editor! Clique em Salvar para confirmar no banco de dados.');
+                                                        }
+                                                    } else {
+                                                        alert('Formato de arquivo inválido.');
+                                                    }
+                                                } catch (err) {
+                                                    alert('Erro ao ler arquivo JSON.');
+                                                }
+                                            };
+                                            reader.readAsText(file);
+                                        };
+                                        input.click();
+                                    }}
+                                    className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-400 hover:text-green-500 transition-all"
+                                    title="Importar Layout (JSON)"
+                                >
+                                    <Plus size={18} />
+                                </button>
+                            </div>
+
+                            <button
+                                onClick={handleSaveFlow}
+                                disabled={isSaving}
+                                className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-xl transition-all shadow-sm ${isSaving ? 'bg-[#242424] text-[#444444]' : 'bg-emerald-600 text-white hover:bg-emerald-500 hover:shadow-lg active:scale-95 border-b-4 border-emerald-800'
+                                    }`}
+                            >
+                                <Save size={16} />
+                                {isSaving ? 'Salvando...' : 'Salvar Fluxo'}
+                            </button>
+                        </>
                     )}
 
                     <button

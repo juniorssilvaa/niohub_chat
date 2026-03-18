@@ -28,6 +28,9 @@ def notify_new_message(sender, instance, created, **kwargs):
             def _notify_in_background():
                 try:
                     conversation = instance.conversation
+                    # Recarregar com select_related para garantir dados completos na serialização
+                    conversation = Conversation.objects.select_related('contact', 'assignee', 'inbox', 'inbox__provedor').get(id=conversation.id)
+                    
                     provedor_id = conversation.inbox.provedor.id if conversation.inbox and conversation.inbox.provedor else None
                     
                     if not provedor_id:

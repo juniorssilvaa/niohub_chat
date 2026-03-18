@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Bot, Plus, Play, Trash2, Edit3,
     Search, Calendar, MessageSquare, ChevronRight,
-    X, Check, AlertCircle, Layout
+    X, Check, AlertCircle, Layout, Share2
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -161,16 +161,54 @@ const ChatbotManager = () => {
                         </div>
                     </div>
 
-                    <button
-                        onClick={() => {
-                            setNewFlowName('');
-                            setIsCreateModalOpen(true);
-                        }}
-                        className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white font-bold rounded-full transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/40 active:scale-95 border-b-2 border-green-800"
-                    >
-                        <Plus size={20} />
-                        {t('criar_novo_fluxo')}
-                    </button>
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            onClick={() => {
+                                const input = document.createElement('input');
+                                input.type = 'file';
+                                input.accept = '.json';
+                                input.onchange = async (e) => {
+                                    const file = e.target.files[0];
+                                    if (!file) return;
+                                    
+                                    const formData = new FormData();
+                                    formData.append('file', file);
+                                    formData.append('provedor', provedorId);
+
+                                    try {
+                                        setIsCreating(true);
+                                        const response = await axios.post('/api/chatbot-flows/import_flow/', formData, {
+                                            headers: { 'Content-Type': 'multipart/form-data' }
+                                        });
+                                        setFlows(prev => [response.data, ...prev]);
+                                        alert('Fluxo importado com sucesso!');
+                                    } catch (error) {
+                                        console.error('Erro ao importar fluxo:', error);
+                                        alert('Erro ao importar fluxo. Verifique o arquivo JSON.');
+                                    } finally {
+                                        setIsCreating(false);
+                                    }
+                                };
+                                input.click();
+                            }}
+                            disabled={isCreating}
+                            className="flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-full transition-all shadow-md hover:shadow-lg active:scale-95 border border-border"
+                        >
+                            <Share2 size={20} className="rotate-180" />
+                            {t('importar_fluxo') || 'Importar Fluxo'}
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                setNewFlowName('');
+                                setIsCreateModalOpen(true);
+                            }}
+                            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white font-bold rounded-full transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/40 active:scale-95 border-b-2 border-green-800"
+                        >
+                            <Plus size={20} />
+                            {t('criar_novo_fluxo')}
+                        </button>
+                    </div>
                 </div>
             </div>
 

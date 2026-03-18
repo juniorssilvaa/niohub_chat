@@ -538,19 +538,19 @@ def process_message_echoes(waba_id: str, value: dict):
             )
             
             from conversations.models import Inbox, Team
-            # Buscar inbox existente ou criar novo (evitar erro de múltiplos resultados)
+            # Lógica corrigida: Bucar inbox específico do canal para evitar mistura de mensagens
             inbox = Inbox.objects.filter(
-                channel_type="whatsapp",
-                provedor=provedor,
-                channel_id="whatsapp_cloud_api"
+                channel_type='whatsapp_oficial',
+                channel_id=str(canal.id),
+                provedor=provedor
             ).first()
             
             if not inbox:
                 inbox = Inbox.objects.create(
-                    channel_type="whatsapp",
+                    channel_type='whatsapp_oficial',
                     provedor=provedor,
-                    name=f"WhatsApp - {provedor.nome}",
-                    channel_id="whatsapp_cloud_api",
+                    name=f"WhatsApp - {canal.nome}",
+                    channel_id=str(canal.id),
                     is_active=True
                 )
             
@@ -727,19 +727,19 @@ def process_history_sync(waba_id: str, value: dict):
             )
             
             from conversations.models import Inbox
-            # Buscar inbox existente ou criar novo (evitar erro de múltiplos resultados)
+            # Lógica corrigida: Bucar inbox específico do canal para evitar mistura de mensagens
             inbox = Inbox.objects.filter(
-                channel_type="whatsapp",
-                provedor=provedor,
-                channel_id="whatsapp_cloud_api"
+                channel_type='whatsapp_oficial',
+                channel_id=str(canal.id),
+                provedor=provedor
             ).first()
             
             if not inbox:
                 inbox = Inbox.objects.create(
-                    channel_type="whatsapp",
+                    channel_type='whatsapp_oficial',
                     provedor=provedor,
-                    name=f"WhatsApp - {provedor.nome}",
-                    channel_id="whatsapp_cloud_api",
+                    name=f"WhatsApp - {canal.nome}",
+                    channel_id=str(canal.id),
                     is_active=True
                 )
             
@@ -1034,22 +1034,22 @@ def process_incoming_messages(waba_id: str, value: dict):
                     inbox = conv_existente.inbox
                     logger.info(f"[WhatsAppWebhook] Reutilizando inbox da conversa existente: {inbox.id} ({inbox.channel_type}) para contato {normalized_from}")
 
-            # 3. Fallback: buscar inbox genérico whatsapp ou criar um
-            if not inbox:
+            # 3. Fallback: buscar inbox específico do canal que recebeu
+            if not inbox and canal:
                 inbox = Inbox.objects.filter(
-                    channel_type="whatsapp",
-                    provedor=provedor,
-                    channel_id="whatsapp_cloud_api"
+                    channel_type='whatsapp_oficial',
+                    channel_id=str(canal.id),
+                    provedor=provedor
                 ).first()
-            
-            if not inbox:
-                inbox = Inbox.objects.create(
-                    channel_type="whatsapp",
-                    provedor=provedor,
-                    name=f"WhatsApp - {provedor.nome}",
-                    channel_id="whatsapp_cloud_api",
-                    is_active=True
-                )
+                
+                if not inbox:
+                    inbox = Inbox.objects.create(
+                        channel_type='whatsapp_oficial',
+                        provedor=provedor,
+                        name=f"WhatsApp - {canal.nome}",
+                        channel_id=str(canal.id),
+                        is_active=True
+                    )
             
             # Verificar modo de atendimento
             bot_mode = getattr(provedor, 'bot_mode', 'ia')
@@ -1422,7 +1422,9 @@ def process_incoming_messages(waba_id: str, value: dict):
                             try:
                                 from asgiref.sync import async_to_sync
                                 async def run_chatbot_engine():
-                                    canal = conversation.inbox.get_canal_instance()
+                                    from asgiref.sync import sync_to_async
+                                    # Obter instância do canal de forma segura em contexto async
+                                    canal = await sync_to_async(inbox.get_canal_instance)()
                                     canal_id = canal.id if canal else None
                                     return await ChatbotEngine.process_message(
                                         provedor_id=provedor.id,

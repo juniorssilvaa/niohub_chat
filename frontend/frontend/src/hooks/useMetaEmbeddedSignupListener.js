@@ -155,7 +155,8 @@ function useMetaEmbeddedSignupListener({
       // Preparar payload com todos os dados do evento
       const payload = {
         waba_id: wabaId,
-        provider_id: finalProviderId
+        provider_id: finalProviderId,
+        channel_id: eventData?.channelId
       };
 
       // Se eventData foi fornecido, incluir todos os dados do payload do evento

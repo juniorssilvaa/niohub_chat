@@ -819,12 +819,16 @@ export default function Integrations({ provedorId }) {
         // Obter provider_id do contexto atual
         const currentProviderId = provedorId || 1;
 
-        // Encontrar o canal WhatsApp Oficial e colocá-lo em processing
+        // Encontrar o canal WhatsApp Oficial específico e colocá-lo em processing
         // (caso ainda não esteja)
         if (token) {
           fetchCanais(token).then(res => {
             const channelsList = Array.isArray(res.data) ? res.data : res.data.results || [];
-            const whatsappOficial = channelsList.find(c => c.tipo === 'whatsapp_oficial');
+            
+            // Tentar encontrar pelo waba_id se já estiver vinculado, ou usar o canal que originou o evento
+            // Mas aqui no listener global, o mais seguro é buscar pelo waba_id recebido
+            const whatsappOficial = channelsList.find(c => c.tipo === 'whatsapp_oficial' && (c.waba_id === wabaId || !c.waba_id));
+            
             if (whatsappOficial) {
               setProcessingChannels(prev => new Set(prev).add(whatsappOficial.id));
             }
@@ -1258,8 +1262,8 @@ export default function Integrations({ provedorId }) {
         return;
       }
 
-      // IMEDIATO: Ir para a tela que gerencia o fluxo automático da Meta
-      navigate(`/app/meta/finalizando?provider_id=${provedorId}`);
+      // IMEDIATO: Ir para a tela que gerencia o fluxo automático da Meta, passando o ID do canal
+      navigate(`/app/meta/finalizando?provider_id=${provedorId}&channel_id=${id}`);
       return;
     }
 
