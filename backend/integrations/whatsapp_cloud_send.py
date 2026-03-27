@@ -104,40 +104,7 @@ def translate_whatsapp_error(error_code: int, error_subcode: Optional[int] = Non
         final_msg = f"{final_msg} (Código: {error_code})"
         
     return final_msg
-rifique se o arquivo é válido.",
-        133093: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133094: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133095: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133096: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133097: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133098: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133099: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133100: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-    }
-    
-    # Verificar se há tradução específica para o código
-    if error_code in error_translations:
-        return error_translations[error_code]
-    
-    # Verificar se há tradução para o subcódigo
-    if error_subcode and error_subcode in error_translations:
-        return error_translations[error_subcode]
-    
-    # Para códigos de erro genéricos por faixa
-    if 131000 <= error_code <= 131999:
-        if error_code == 131009:
-            return "A janela de atendimento ao cliente está fechada. Use uma mensagem de template para iniciar uma nova conversa."
-        return "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp ou não é válido."
-    elif 132000 <= error_code <= 132999:
-        return "Template de mensagem não encontrado ou não aprovado."
-    elif 133000 <= error_code <= 133999:
-        return "Erro ao processar mídia. Verifique se o arquivo é válido."
-    
-    # Se não houver tradução específica, retornar mensagem genérica com o código
-    if error_message:
-        return f"{error_message} (Código: {error_code})"
-    
-    return f"Erro ao processar requisição. Código de erro: {error_code}"
+
 
 
 def upload_media_to_whatsapp(canal: Canal, file_path: str, media_type: str, mime_type: str) -> Tuple[bool, Optional[str]]:
