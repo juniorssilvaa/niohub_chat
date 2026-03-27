@@ -12,8 +12,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-
-def translate_whatsapp_error(error_code: int, error_subcode: Optional[int] = None, error_message: str = "") -> str:
+def translate_whatsapp_error(error_code: int, error_subcode: Optional[int] = None, error_message: str = "", details: str = "") -> str:
     """
     Traduz códigos de erro da API do WhatsApp para português.
     Baseado em: https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes
@@ -22,6 +21,7 @@ def translate_whatsapp_error(error_code: int, error_subcode: Optional[int] = Non
         error_code: Código de erro principal
         error_subcode: Subcódigo de erro (opcional)
         error_message: Mensagem de erro original (opcional)
+        details: Detalhes adicionais do erro (opcional)
     
     Returns:
         str: Mensagem de erro traduzida em português
@@ -29,283 +29,82 @@ def translate_whatsapp_error(error_code: int, error_subcode: Optional[int] = Non
     # Erros comuns da API do WhatsApp
     error_translations = {
         # Erros de autenticação e permissão
+        0: "Erro desconhecido na API do WhatsApp.",
+        1: "Erro interno no servidor do Facebook/WhatsApp. Tente novamente mais tarde.",
+        2: "Serviço temporariamente indisponível. Tente novamente em alguns minutos.",
+        3: "Recurso não encontrado ou indisponível.",
         190: "Token de acesso expirado ou inválido. Por favor, reconecte o canal WhatsApp.",
-        10: "Permissão negada. Verifique se o token tem as permissões necessárias.",
-        200: "Permissão negada. O token não tem acesso a este recurso.",
+        10: "Permissão negada. Verifique se o token tem as permissões necessárias para enviar mensagens.",
+        200: "Permissão negada. O token não possui acesso a este recurso ou número de telefone.",
         
         # Erros de rate limiting
-        4: "Limite de requisições excedido. Aguarde alguns minutos antes de tentar novamente.",
-        17: "Muitas requisições. Por favor, aguarde antes de tentar novamente.",
-        32: "Limite de requisições excedido. Tente novamente mais tarde.",
+        4: "Limite de requisições excedido. O WhatsApp restringiu o envio temporariamente por excesso de velocidade.",
+        17: "Muitas requisições ao servidor. Por favor, aguarde antes de tentar novamente.",
+        32: "Limite de envio da conta excedido. Verifique seu nível de mensagens (Tiering) no painel da Meta.",
+        80007: "Limite de taxa atingido. O número de mensagens enviadas ultrapassa a capacidade atual.",
         
-        # Erros de mensagens
+        # Erros de mensagens (Janela de 24h e Destinatário)
         131000: "Número de telefone inválido. Verifique se o número está correto e no formato internacional.",
-        131001: "Número de telefone não está registrado no WhatsApp.",
-        131002: "Número de telefone não está registrado no WhatsApp.",
-        131003: "Número de telefone não está registrado no WhatsApp.",
-        131004: "Número de telefone não está registrado no WhatsApp.",
-        131005: "Número de telefone não está registrado no WhatsApp.",
-        131006: "Número de telefone não está registrado no WhatsApp.",
-        131007: "Número de telefone não está registrado no WhatsApp.",
-        131008: "Número de telefone não está registrado no WhatsApp.",
-        131009: "A janela de atendimento ao cliente está fechada. Use uma mensagem de template para iniciar uma nova conversa.",
-        131010: "A mensagem não pode ser entregue porque o número de telefone não está registrado no WhatsApp.",
-        131016: "Mensagem não pode ser entregue. O número pode estar bloqueado ou não estar mais no WhatsApp.",
-        131021: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131026: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp ou não é válido.",
-        131031: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131042: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131045: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131047: "Mais de 24 horas se passaram desde que o cliente respondeu pela última vez. Para enviar mensagens após este período, é necessário usar um modelo de mensagem (template). O cliente precisa entrar em contato primeiro para reabrir a janela de atendimento.",
-        131048: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131051: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131052: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131053: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131054: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131055: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131056: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131057: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131058: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131059: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131060: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131061: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131062: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131063: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131064: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131065: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131066: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131067: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131068: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131069: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131070: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131071: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131072: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131073: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131074: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131075: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131076: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131077: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131078: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131079: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131080: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131081: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131082: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131083: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131084: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131085: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131086: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131087: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131088: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131089: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131090: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131091: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131092: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131093: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131094: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131095: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131096: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131097: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131098: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131099: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
-        131100: "Mensagem não pode ser entregue. O número de telefone não está registrado no WhatsApp.",
+        131005: "Não foi possível enviar para este número. O destinatário pode não ter WhatsApp.",
+        131008: "Mensagem muito longa. Reduza o texto e tente novamente.",
+        131009: "A janela de atendimento (24h) está fechada. Este cliente não responde há mais de 24h. Use um Modelo de Mensagem (Template) para retomar o contato.",
+        131010: "O destinatário não possui uma conta de WhatsApp ativa.",
+        131016: "A mensagem não pôde ser entregue. O número pode estar bloqueado ou indisponível.",
+        131021: "O destinatário não pode receber mensagens no momento. Pode ser devido a restrições de privacidade ou bloqueio.",
+        131026: "Falha na entrega da mensagem. Tente reenviar mais tarde.",
+        131042: "Erro no processamento da mensagem pelo servidor do WhatsApp.",
+        131047: "Janela de 24 horas encerrada. Para enviar mensagens após este período, é obrigatório o uso de um Modelo de Mensagem (Template) aprovado.",
+        131051: "Tipo de mensagem não suportado pelo destinatário.",
+        131052: "Mídia inválida ou formato não suportado. Verifique o arquivo antes de enviar.",
+        131053: "Mídia muito grande. O WhatsApp limita o tamanho de arquivos dependendo do tipo.",
+        131057: "Falha ao processar o arquivo de mídia. Tente novamente.",
         
         # Erros de template
-        132000: "Template de mensagem não encontrado ou não aprovado.",
-        132001: "Template de mensagem não encontrado ou não aprovado.",
-        132002: "Template de mensagem não encontrado ou não aprovado.",
-        132003: "Template de mensagem não encontrado ou não aprovado.",
-        132004: "Template de mensagem não encontrado ou não aprovado.",
-        132005: "Template de mensagem não encontrado ou não aprovado.",
-        132006: "Template de mensagem não encontrado ou não aprovado.",
-        132007: "Template de mensagem não encontrado ou não aprovado.",
-        132008: "Template de mensagem não encontrado ou não aprovado.",
-        132009: "Template de mensagem não encontrado ou não aprovado.",
-        132010: "Template de mensagem não encontrado ou não aprovado.",
-        132011: "Template de mensagem não encontrado ou não aprovado.",
-        132012: "Template de mensagem não encontrado ou não aprovado.",
-        132013: "Template de mensagem não encontrado ou não aprovado.",
-        132014: "Template de mensagem não encontrado ou não aprovado.",
-        132015: "Template de mensagem não encontrado ou não aprovado.",
-        132016: "Template de mensagem não encontrado ou não aprovado.",
-        132017: "Template de mensagem não encontrado ou não aprovado.",
-        132018: "Template de mensagem não encontrado ou não aprovado.",
-        132019: "Template de mensagem não encontrado ou não aprovado.",
-        132020: "Template de mensagem não encontrado ou não aprovado.",
-        132021: "Template de mensagem não encontrado ou não aprovado.",
-        132022: "Template de mensagem não encontrado ou não aprovado.",
-        132023: "Template de mensagem não encontrado ou não aprovado.",
-        132024: "Template de mensagem não encontrado ou não aprovado.",
-        132025: "Template de mensagem não encontrado ou não aprovado.",
-        132026: "Template de mensagem não encontrado ou não aprovado.",
-        132027: "Template de mensagem não encontrado ou não aprovado.",
-        132028: "Template de mensagem não encontrado ou não aprovado.",
-        132029: "Template de mensagem não encontrado ou não aprovado.",
-        132030: "Template de mensagem não encontrado ou não aprovado.",
-        132031: "Template de mensagem não encontrado ou não aprovado.",
-        132032: "Template de mensagem não encontrado ou não aprovado.",
-        132033: "Template de mensagem não encontrado ou não aprovado.",
-        132034: "Template de mensagem não encontrado ou não aprovado.",
-        132035: "Template de mensagem não encontrado ou não aprovado.",
-        132036: "Template de mensagem não encontrado ou não aprovado.",
-        132037: "Template de mensagem não encontrado ou não aprovado.",
-        132038: "Template de mensagem não encontrado ou não aprovado.",
-        132039: "Template de mensagem não encontrado ou não aprovado.",
-        132040: "Template de mensagem não encontrado ou não aprovado.",
-        132041: "Template de mensagem não encontrado ou não aprovado.",
-        132042: "Template de mensagem não encontrado ou não aprovado.",
-        132043: "Template de mensagem não encontrado ou não aprovado.",
-        132044: "Template de mensagem não encontrado ou não aprovado.",
-        132045: "Template de mensagem não encontrado ou não aprovado.",
-        132046: "Template de mensagem não encontrado ou não aprovado.",
-        132047: "Template de mensagem não encontrado ou não aprovado.",
-        132048: "Template de mensagem não encontrado ou não aprovado.",
-        132049: "Template de mensagem não encontrado ou não aprovado.",
-        132050: "Template de mensagem não encontrado ou não aprovado.",
-        132051: "Template de mensagem não encontrado ou não aprovado.",
-        132052: "Template de mensagem não encontrado ou não aprovado.",
-        132053: "Template de mensagem não encontrado ou não aprovado.",
-        132054: "Template de mensagem não encontrado ou não aprovado.",
-        132055: "Template de mensagem não encontrado ou não aprovado.",
-        132056: "Template de mensagem não encontrado ou não aprovado.",
-        132057: "Template de mensagem não encontrado ou não aprovado.",
-        132058: "Template de mensagem não encontrado ou não aprovado.",
-        132059: "Template de mensagem não encontrado ou não aprovado.",
-        132060: "Template de mensagem não encontrado ou não aprovado.",
-        132061: "Template de mensagem não encontrado ou não aprovado.",
-        132062: "Template de mensagem não encontrado ou não aprovado.",
-        132063: "Template de mensagem não encontrado ou não aprovado.",
-        132064: "Template de mensagem não encontrado ou não aprovado.",
-        132065: "Template de mensagem não encontrado ou não aprovado.",
-        132066: "Template de mensagem não encontrado ou não aprovado.",
-        132067: "Template de mensagem não encontrado ou não aprovado.",
-        132068: "Template de mensagem não encontrado ou não aprovado.",
-        132069: "Template de mensagem não encontrado ou não aprovado.",
-        132070: "Template de mensagem não encontrado ou não aprovado.",
-        132071: "Template de mensagem não encontrado ou não aprovado.",
-        132072: "Template de mensagem não encontrado ou não aprovado.",
-        132073: "Template de mensagem não encontrado ou não aprovado.",
-        132074: "Template de mensagem não encontrado ou não aprovado.",
-        132075: "Template de mensagem não encontrado ou não aprovado.",
-        132076: "Template de mensagem não encontrado ou não aprovado.",
-        132077: "Template de mensagem não encontrado ou não aprovado.",
-        132078: "Template de mensagem não encontrado ou não aprovado.",
-        132079: "Template de mensagem não encontrado ou não aprovado.",
-        132080: "Template de mensagem não encontrado ou não aprovado.",
-        132081: "Template de mensagem não encontrado ou não aprovado.",
-        132082: "Template de mensagem não encontrado ou não aprovado.",
-        132083: "Template de mensagem não encontrado ou não aprovado.",
-        132084: "Template de mensagem não encontrado ou não aprovado.",
-        132085: "Template de mensagem não encontrado ou não aprovado.",
-        132086: "Template de mensagem não encontrado ou não aprovado.",
-        132087: "Template de mensagem não encontrado ou não aprovado.",
-        132088: "Template de mensagem não encontrado ou não aprovado.",
-        132089: "Template de mensagem não encontrado ou não aprovado.",
-        132090: "Template de mensagem não encontrado ou não aprovado.",
-        132091: "Template de mensagem não encontrado ou não aprovado.",
-        132092: "Template de mensagem não encontrado ou não aprovado.",
-        132093: "Template de mensagem não encontrado ou não aprovado.",
-        132094: "Template de mensagem não encontrado ou não aprovado.",
-        132095: "Template de mensagem não encontrado ou não aprovado.",
-        132096: "Template de mensagem não encontrado ou não aprovado.",
-        132097: "Template de mensagem não encontrado ou não aprovado.",
-        132098: "Template de mensagem não encontrado ou não aprovado.",
-        132099: "Template de mensagem não encontrado ou não aprovado.",
-        132100: "Template de mensagem não encontrado ou não aprovado.",
+        132000: "Modelo de mensagem (Template) não encontrado nas configurações.",
+        132001: "O Template selecionado ainda não foi aprovado pela Meta.",
+        132007: "Erro no formato do Template. Verifique os parâmetros e variáveis.",
+        132012: "Número de parâmetros no Template não coincide com o esperado.",
+        132015: "Template desativado ou pausado por baixa qualidade.",
         
         # Erros de mídia
-        133000: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133001: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133002: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133003: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133004: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133005: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133006: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133007: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133008: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133009: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133010: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133011: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133012: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133013: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133014: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133015: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133016: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133017: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133018: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133019: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133020: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133021: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133022: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133023: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133024: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133025: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133026: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133027: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133028: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133029: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133030: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133031: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133032: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133033: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133034: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133035: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133036: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133037: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133038: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133039: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133040: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133041: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133042: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133043: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133044: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133045: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133046: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133047: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133048: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133049: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133050: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133051: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133052: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133053: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133054: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133055: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133056: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133057: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133058: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133059: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133060: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133061: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133062: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133063: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133064: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133065: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133066: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133067: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133068: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133069: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133070: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133071: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133072: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133073: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133074: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133075: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133076: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133077: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133078: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133079: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133080: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133081: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133082: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133083: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133084: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133085: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133086: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133087: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133088: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133089: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133090: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133091: "Erro ao processar mídia. Verifique se o arquivo é válido.",
-        133092: "Erro ao processar mídia. Verifique se o arquivo é válido.",
+        133000: "Falha geral no processamento de mídia.",
+        133004: "O arquivo enviado não corresponde ao tipo de mídia declarado.",
+        133010: "URL da mídia está inacessível ou inválida.",
+        
+        # Erros de pagamento e conta
+        135000: "Problema com a conta de anúncios ou método de pagamento da Meta Business.",
+    }
+    
+    # Adicionar traduções em massa para faixas se necessário (opcional)
+    # Por enquanto os principais já estão no dicionário
+    
+    # Determinar a mensagem base
+    translated_msg = ""
+    if error_code in error_translations:
+        translated_msg = error_translations[error_code]
+    elif error_subcode and error_subcode in error_translations:
+        translated_msg = error_translations[error_subcode]
+    elif 131000 <= error_code <= 131999:
+        translated_msg = "Erro na entrega: O número de destino é inválido ou a janela de 24h está fechada."
+    elif 132000 <= error_code <= 132999:
+        translated_msg = "Erro no Modelo de Mensagem: Verifique se o template está aprovado e configurado corretamente."
+    elif 133000 <= error_code <= 133999:
+        translated_msg = "Erro de Mídia: O arquivo enviado possui problemas ou o formato não é aceito."
+    else:
+        translated_msg = error_message or "Erro durante o processamento da requisição no WhatsApp."
+
+    # Adicionar detalhes se existirem e não estiverem inclusos na mensagem original
+    final_msg = translated_msg
+    if details and details not in final_msg:
+        # Se os detalhes forem técnicos em inglês, podemos tentar simplificar ou apenas anexar
+        final_msg = f"{translated_msg} ({details})"
+    
+    # Se ainda assim não tiver código na mensagem, adicionar para referência técnica
+    if str(error_code) not in final_msg:
+        final_msg = f"{final_msg} (Código: {error_code})"
+        
+    return final_msg
+rifique se o arquivo é válido.",
         133093: "Erro ao processar mídia. Verifique se o arquivo é válido.",
         133094: "Erro ao processar mídia. Verifique se o arquivo é válido.",
         133095: "Erro ao processar mídia. Verifique se o arquivo é válido.",
@@ -800,7 +599,7 @@ def send_via_whatsapp_cloud_api(
             error_details = error_data.get('error_data', {}).get('details', '')
             
             # Traduzir o erro para português
-            translated_error = translate_whatsapp_error(error_code, error_subcode, error_message)
+            translated_error = translate_whatsapp_error(error_code, error_subcode, error_message, error_details)
             
             # Retornar erro em formato JSON para incluir código e mensagem
             error_response = {
@@ -961,8 +760,9 @@ def send_typing_indicator(canal: Canal, message_id: str) -> Tuple[bool, Optional
             error_code = error_info.get("code")
             error_message = error_info.get("message", "Erro desconhecido")
             error_type = error_info.get("type", "Unknown")
+            error_details = error_info.get("error_data", {}).get("details", "")
             
-            translated_error = translate_whatsapp_error(error_code, error_message=error_message)
+            translated_error = translate_whatsapp_error(error_code, error_message=error_message, details=error_details)
             logger.warning(
                 f"[WhatsAppTypingIndicator] Falha ao enviar indicador (HTTP {response.status_code}): "
                 f"{translated_error} (code: {error_code}, type: {error_type})"
@@ -1148,9 +948,10 @@ def send_template_message(
             error_code = error_data.get('code', response.status_code)
             error_subcode = error_data.get('error_subcode')
             error_message = error_data.get('message', response.text)
+            error_details = error_data.get('error_data', {}).get('details', '')
             
             # Traduzir o erro para português
-            translated_error = translate_whatsapp_error(error_code, error_subcode, error_message)
+            translated_error = translate_whatsapp_error(error_code, error_subcode, error_message, error_details)
             
             logger.error(f"[WhatsAppCloud] Erro ao enviar template: HTTP {response.status_code} - Código: {error_code} - {translated_error}")
             return False, translated_error, None

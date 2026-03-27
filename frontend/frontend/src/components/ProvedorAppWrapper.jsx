@@ -23,6 +23,7 @@ import ChatbotBuilder from './ChatbotBuilder';
 import ChatbotManager from './ChatbotManager';
 import PlanosPage from './PlanosPage';
 import RespostasRapidas from './RespostasRapidas';
+import RemindersModal from './RemindersModal';
 
 export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWhatsappDisconnected }) {
   const { provedorId } = useParams();
@@ -34,6 +35,7 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
     return saved === 'true';
   });
   const [showChangelog, setShowChangelog] = useState(false);
+  const [showRemindersModal, setShowRemindersModal] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
 
   // Proteção de rotas baseada no papel do usuário
   const isAdminRoute = (path) => {
-    const adminRoutes = ['users', 'equipes', 'audit', 'companies', 'integracoes', 'dados-provedor', 'horario-provedor'];
+    const adminRoutes = ['dashboard', 'users', 'equipes', 'audit', 'companies', 'integracoes', 'dados-provedor', 'horario-provedor'];
     return adminRoutes.some(route => path.includes(route));
   };
 
@@ -106,6 +108,7 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
         mobileOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onCollapseChange={setSidebarCollapsed}
+        onRemindersClick={() => setShowRemindersModal(true)}
       />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 w-full h-full">
         <Topbar
@@ -153,6 +156,11 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
         </div>
       </div>
       <Changelog isOpen={showChangelog} onClose={() => setShowChangelog(false)} />
+      <RemindersModal 
+        isOpen={showRemindersModal} 
+        onClose={() => setShowRemindersModal(false)} 
+        provedorId={provedorId}
+      />
     </div>
   );
 }

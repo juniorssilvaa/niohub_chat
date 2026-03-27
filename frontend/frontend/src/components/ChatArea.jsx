@@ -21,6 +21,7 @@ import {
   Music
 } from 'lucide-react';
 import axios from 'axios';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogPortal, DialogOverlay } from './ui/dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import whatsappIcon from '../assets/whatsapp.png';
@@ -55,7 +56,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           </div>
 
           {/* Texto principal */}
-          <p className="text-base text-foreground mb-2">
+          <p className="text-base text-muted-foreground mb-2">
             Selecione uma conversa para iniciar o atendimento
           </p>
 
@@ -145,10 +146,42 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   // Estados para reprodução de áudio
   const [playingAudio, setPlayingAudio] = useState(null);
   const [audioProgress, setAudioProgress] = useState({});
-  const audioRefs = useRef({});
+  const [audioRefs] = useState({});
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef(null);
 
-  //  ESTADO PARA CONTROLE DE MENSAGENS PENDENTES
+  // Lista abrangente de emojis categorizada
+  const emojiList = [
+    // Smiles & People
+    '😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿', '👹', '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾',
+    // Hands & Body
+    '👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦵', '🦿', '🦶', '👂', '🦻', '👃', '🧠', '🦷', '🦴', '👀', '👁️', '👅', '👄', '💋', '🩸',
+    // Heart & Symbols
+    '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓',
+    // Activities & Objects
+    '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🏓', '🏸', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸️', '🎿', '⛷️', '🏂', '🏋️', '🤺', '🤼', '🤸', '⛹️', '🤺', '🧗', '🚵', '🚴', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🏵️', '🎗️', '🎫', '🎟️', '🎪', '🎭', '🖼️', '🎨', '🧵', '🪡', '🧶', '✨', '🎈', '🎆', '🎇', '🧨', '🧧', '🎀', '🎁', '🎂', '🎉', '🎊', '🎋', '🎍', '🎑', '🎐', '🎏', '💎'
+  ];
   const [pendingMessages, setPendingMessages] = useState(new Set());
+
+  // Efeito para fechar o seletor de emojis ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+        setShowEmojiPicker(false);
+      }
+    }
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showEmojiPicker]);
+
+  const addEmoji = (emoji) => {
+    setMessage(prev => prev + emoji);
+    // Não fechamos o picker para permitir adicionar vários emojis seguidos
+  };
 
   // Estados para mídias pendentes (prévia antes de enviar)
   const [pendingFile, setPendingFile] = useState(null);
@@ -1309,7 +1342,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
     if (is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp') {
-      setError('⚠️ Mais de 24 horas se passaram desde que o cliente respondeu pela última vez. Para enviar mensagens após este período, é necessário usar um modelo de mensagem (template). O cliente precisa entrar em contato primeiro para reabrir a janela de atendimento.');
+      const msg24h = '⚠️ Janela de 24 horas fechada. Use um template para reabrir o contato.';
+      setError(msg24h);
+      toast.error(msg24h);
       return;
     }
 
@@ -1418,8 +1453,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         errorMessage.includes('janela de atendimento')) {
         errorMessage = '⚠️ ' + errorMessage;
       }
-
       setError(errorMessage);
+      toast.error(errorMessage);
 
       //  Remover das pendentes em caso de erro
       setPendingMessages(prev => {
@@ -1563,7 +1598,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
     if (is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp') {
-      setError('⚠️ Mais de 24 horas se passaram desde que o cliente respondeu pela última vez. Para enviar mensagens após este período, é necessário usar um modelo de mensagem (template). O cliente precisa entrar em contato primeiro para reabrir a janela de atendimento.');
+      const msg24h = '⚠️ Janela de 24 horas fechada. Use um template para reabrir o contato.';
+      setError(msg24h);
+      toast.error(msg24h);
       return;
     }
 
@@ -1696,7 +1733,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
     if (is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp') {
-      setError('⚠️ Mais de 24 horas se passaram desde que o cliente respondeu pela última vez. Para enviar mensagens após este período, é necessário usar um modelo de mensagem (template). O cliente precisa entrar em contato primeiro para reabrir a janela de atendimento.');
+      const msg24h = '⚠️ Janela de 24 horas fechada. Use um template para reabrir o contato.';
+      setError(msg24h);
+      toast.error(msg24h);
       return;
     }
 
@@ -1820,8 +1859,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       } else {
         errorMessage = 'Erro ao enviar mídia: ' + errorMessage;
       }
-
       setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setSendingMedia(false);
     }
@@ -1848,7 +1887,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     } catch (error) {
       console.error('Erro ao atribuir conversa:', error);
       console.error('Detalhes do erro:', error.response?.data);
-      alert('Erro ao atribuir conversa. Tente novamente.');
+      toast.error('Erro ao atribuir conversa. Tente novamente.');
     }
   };
 
@@ -1888,7 +1927,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     } catch (error) {
       console.error('Erro ao encerrar conversa:', error);
       console.error('Detalhes do erro:', error.response?.data);
-      alert('Erro ao encerrar conversa. Tente novamente.');
+      toast.error('Erro ao encerrar conversa. Tente novamente.');
     }
   };
 
@@ -1984,7 +2023,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       });
 
       // Log removido('Conversa transferida com sucesso!');
-      alert('Transferido com sucesso!');
+      toast.success('Transferido com sucesso!');
       setShowTransferDropdown(false);
 
       // Atualizar a interface em vez de recarregar a página
@@ -2001,7 +2040,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       }
 
     } catch (_) {
-      alert('Erro ao transferir atendimento.');
+      toast.error('Erro ao transferir atendimento.');
     }
   };
 
@@ -2046,17 +2085,17 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
       if (response.data.success) {
         if (!silent) {
-          alert('Foto do perfil atualizada com sucesso! Recarregue a página para ver a mudança.');
+          toast.success('Foto do perfil atualizada com sucesso!');
         }
       } else {
         if (!silent) {
-          alert('Não foi possível obter a foto do perfil: ' + response.data.error);
+          toast.error('Não foi possível obter a foto do perfil: ' + response.data.error);
         }
       }
     } catch (error) {
       console.error('Erro ao buscar foto do perfil:', error);
       if (!silent) {
-        alert('Erro ao buscar foto do perfil. Verifique o console para mais detalhes.');
+        toast.error('Erro ao buscar foto do perfil.');
       }
     } finally {
       setLoadingProfilePic(false);
@@ -2126,7 +2165,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           );
         }
       } else {
-        alert('Erro ao enviar reação: ' + (response.data.error || 'Erro desconhecido'));
+        toast.error('Erro ao enviar reação: ' + (response.data.error || 'Erro desconhecido'));
       }
     } catch (error) {
       console.error('Erro ao enviar reação:', error);
@@ -2142,7 +2181,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         errorMessage = error.response?.data?.error || error.message;
       }
 
-      alert(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
@@ -2184,7 +2223,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           )
         );
       } else {
-        alert('Erro ao apagar mensagem: ' + (response.data.error || 'Erro desconhecido'));
+        toast.error('Erro ao apagar mensagem: ' + (response.data.error || 'Erro desconhecido'));
       }
     } catch (error) {
       let errorMessage = 'Erro ao apagar mensagem';
@@ -2331,6 +2370,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   const sendTemplate = async (template) => {
     if (!conversation?.contact?.phone) {
       setError('Número de telefone do contato não encontrado');
+      toast.error('Número de telefone do contato não encontrado');
       return;
     }
 
@@ -2374,7 +2414,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       }
     } catch (error) {
       console.error('Erro ao enviar template:', error);
-      setError('Erro ao enviar template: ' + (error.response?.data?.error || error.message));
+      const errorMessage = 'Erro ao enviar template: ' + (error.response?.data?.error || error.message);
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setSendingTemplate(false);
     }
@@ -2581,29 +2623,23 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       <div className="border-b border-border p-4 bg-card">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="relative">
-              {conversation.contact?.avatar ? (
-                <img
-                  src={(() => {
-                    const avatar = conversation.contact.avatar;
-                    // Se avatar for apenas um número ou não for uma URL válida, usar fallback
-                    if (!avatar || /^\d+$/.test(avatar) || (!avatar.startsWith('http://') && !avatar.startsWith('https://') && !avatar.startsWith('data:') && !avatar.startsWith('/'))) {
-                      return `https://ui-avatars.com/api/?name=${encodeURIComponent(conversation.contact.name || conversation.contact.phone || 'U')}&background=random`;
-                    }
-                    return avatar;
-                  })()}
-                  alt={conversation.contact.name || 'Avatar'}
-                  className="w-10 h-10 rounded-full object-cover"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'flex';
-                  }}
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-primary/10">
+                {conversation.contact?.avatar ? (
+                  <img
+                    src={conversation.contact.avatar}
+                    alt={conversation.contact.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <User 
+                  size={20} 
+                  className={`text-primary ${conversation.contact?.avatar ? 'hidden' : 'block'}`} 
                 />
-              ) : null}
-              <div
-                className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-sm ${conversation.contact?.avatar ? 'hidden' : 'flex'}`}
-              >
-                {(conversation.contact?.name || conversation.contact?.phone || 'U').charAt(0).toUpperCase()}
               </div>
             </div>
 
@@ -2653,7 +2689,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               <button
                 onClick={() => fetchProfilePicture(false)}
                 disabled={loadingProfilePic}
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
+                className="p-2 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
                 title="Atualizar foto do perfil"
               >
                 {loadingProfilePic ? (
@@ -2668,7 +2704,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             <div className="flex items-center space-x-1 border-l border-border pl-2 ml-2">
               <button
                 onClick={handleAssignToMe}
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors flex items-center space-x-2"
+                className="p-2 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors flex items-center space-x-2"
                 title="Atribuir para mim"
               >
                 <UserCheck className="w-4 h-4" />
@@ -2678,7 +2714,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               <button
                 onClick={handleTransferConversation}
                 disabled={loadingAgents}
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-50"
+                className="p-2 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-50"
                 title="Transferir conversa"
               >
                 <ArrowRightLeft className="w-4 h-4" />
@@ -2991,10 +3027,10 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                                     btn.className = 'w-full px-4 py-2 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium';
                                     setTimeout(() => {
                                       btn.textContent = originalText;
-                                      btn.className = 'w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-400 hover:from-blue-600 hover:to-blue-500 text-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium';
+                                      btn.className = 'w-full px-4 py-2 bg-foreground text-background hover:opacity-90 rounded-lg shadow-md transition-all duration-200 text-sm font-bold';
                                     }, 2000);
                                   }}
-                                  className="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-400 hover:from-blue-600 hover:to-blue-500 text-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium"
+                                  className="w-full px-4 py-2 bg-foreground text-background hover:opacity-90 rounded-lg shadow-md transition-all duration-200 text-sm font-bold"
                                 >
                                   {nome}
                                 </button>
@@ -3016,7 +3052,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                               key={row.id || index}
                               className="px-3 py-2 bg-white/10 dark:bg-slate-700/50 border border-slate-200/20 dark:border-slate-600/30 rounded-lg"
                             >
-                              <div className="text-xs font-semibold text-blue-500 dark:text-blue-400">
+                              <div className="text-xs font-bold text-foreground">
                                 {row.title}
                               </div>
                               {row.description && (
@@ -3092,7 +3128,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                           <div className="mt-2 flex items-center">
                             <div
                               className={`rounded-full px-2 py-1 text-xs flex items-center space-x-1 ${isCustomer
-                                ? 'bg-blue-500/20'
+                                ? 'bg-black/10'
                                 : 'bg-white/20'
                                 }`}
                             >
@@ -3204,7 +3240,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
       {/* Área de resposta */}
       {replyingToMessage && (
-        <div className="border-t border-border bg-muted/50 p-3">
+        <div className="border-t border-border bg-accent/50 p-3">
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <div className="text-xs text-muted-foreground mb-1">Respondendo a:</div>
@@ -3214,7 +3250,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             </div>
             <button
               onClick={cancelReply}
-              className="p-1 hover:bg-accent rounded"
+              className="p-1 hover:bg-accent rounded text-muted-foreground transition-colors"
             >
               ✕
             </button>
@@ -3224,7 +3260,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
       {/* Preview de áudio gravado */}
       {audioUrl && (
-        <div className="border-t border-border bg-muted/50 p-3">
+        <div className="border-t border-border bg-accent/50 p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="text-sm font-medium">Áudio gravado</div>
@@ -3234,7 +3270,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               <button
                 onClick={sendAudioMessage}
                 disabled={sendingMedia}
-                className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 text-sm"
+                className="px-4 py-2 bg-foreground text-background hover:opacity-90 rounded-lg shadow-md transition-all duration-200 disabled:opacity-50 text-sm font-bold"
               >
                 {sendingMedia ? 'Enviando...' : 'Enviar'}
               </button>
@@ -3259,15 +3295,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           <div className="flex flex-col space-y-4 max-w-lg mx-auto bg-muted/30 p-4 rounded-xl border border-border/50">
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                   {pendingFileType === 'image' ? (
                     <img src={pendingFilePreview} alt="Preview" className="w-full h-full object-cover" />
                   ) : pendingFileType === 'video' ? (
-                    <Film className="w-6 h-6 text-primary" />
+                    <Film className="w-6 h-6 text-foreground" />
                   ) : pendingFileType === 'audio' ? (
-                    <Music className="w-6 h-6 text-primary" />
+                    <Music className="w-6 h-6 text-foreground" />
                   ) : (
-                    <FileText className="w-6 h-6 text-primary" />
+                    <FileText className="w-6 h-6 text-foreground" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -3279,7 +3315,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               </div>
               <button
                 onClick={cancelPendingFile}
-                className="p-1 hover:bg-muted rounded-full transition-colors"
+                className="p-1 hover:bg-accent rounded-full transition-colors"
               >
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
@@ -3294,7 +3330,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                   value={pendingFileCaption}
                   onChange={(e) => setPendingFileCaption(e.target.value)}
                   placeholder="Escreva uma legenda..."
-                  className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-border transition-all"
                   rows={2}
                 />
               </div>
@@ -3303,7 +3339,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             <div className="flex justify-end space-x-2">
               <button
                 onClick={cancelPendingFile}
-                className="px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-muted transition-colors"
+                className="px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-accent transition-colors"
                 disabled={sendingMedia}
               >
                 Cancelar
@@ -3314,7 +3350,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                   cancelPendingFile();
                 }}
                 disabled={sendingMedia}
-                className="px-6 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center space-x-2 shadow-lg hover:shadow-xl"
+                className="px-6 py-2 text-sm font-bold bg-foreground text-background rounded-lg hover:opacity-90 transition-all flex items-center space-x-2 shadow-md"
               >
                 {sendingMedia ? (
                   <>
@@ -3340,7 +3376,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           <div className="mb-3">
             <button
               onClick={openTemplatesModal}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50 font-bold"
               title="Ver templates disponíveis"
             >
               <FileText className="w-5 h-5" />
@@ -3361,11 +3397,45 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           <button
             onClick={() => document.getElementById('file-upload').click()}
             disabled={sendingMedia || (is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp')}
-            className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
             title={(is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp') ? "Janela de 24 horas fechada" : "Enviar arquivo"}
           >
             <Paperclip className="w-5 h-5" />
           </button>
+
+          {/* Botão de Emojis */}
+          <div className="relative" ref={emojiPickerRef}>
+            <button
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              disabled={is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp'}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${showEmojiPicker ? 'text-primary bg-accent' : 'text-muted-foreground hover:text-primary hover:bg-accent'}`}
+              title="Inserir emoji"
+            >
+              <Smile className="w-5 h-5" />
+            </button>
+
+            {showEmojiPicker && (
+              <div className="absolute bottom-full left-0 mb-2 w-72 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                <div className="p-2 border-b border-border bg-accent/50 flex justify-between items-center">
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Emojis</span>
+                  <button onClick={() => setShowEmojiPicker(false)} className="text-muted-foreground hover:text-foreground">
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="h-48 overflow-y-auto p-2 grid grid-cols-8 gap-1 custom-scrollbar">
+                  {emojiList.map((emoji, index) => (
+                    <button
+                      key={index}
+                      onClick={() => addEmoji(emoji)}
+                      className="text-xl p-1 hover:bg-accent rounded transition-colors"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Input de texto */}
           <div className="flex-1 relative">
@@ -3377,7 +3447,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               <div className="relative w-full">
                 {showQuickReplies && filteredQuickReplies.length > 0 && (
                   <div className="absolute bottom-full left-0 mb-2 w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="p-2 border-b border-border bg-muted/50">
+                    <div className="p-2 border-b border-border bg-accent/50">
                       <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
                         <Zap className="w-3 h-3" /> Respostas Rápidas
                       </p>
@@ -3387,7 +3457,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                         <button
                           key={qr.id}
                           onClick={() => selectQuickReply(qr)}
-                          className={`w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3 ${idx === quickReplyIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted text-foreground'}`}
+                          className={`w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3 ${idx === quickReplyIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent text-foreground'}`}
                           onMouseEnter={() => setQuickReplyIndex(idx)}
                         >
                           <div className={`mt-0.5 flex items-center justify-center flex-shrink-0 ${idx === quickReplyIndex ? 'text-accent-foreground' : 'text-muted-foreground'}`}>
@@ -3444,7 +3514,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           {is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp' ? (
             <button
               disabled
-              className="p-2 bg-muted text-muted-foreground rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              className="p-2 bg-accent text-accent-foreground rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               title="Janela de 24 horas fechada"
             >
               <Send className="w-5 h-5" />
@@ -3622,7 +3692,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               <div className="flex justify-end space-x-2 pt-4 border-t">
                 <button
                   onClick={() => setShowReactionPicker(false)}
-                  className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-accent transition-colors"
+                   className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-accent transition-colors"
                 >
                   Cancelar
                 </button>
@@ -3665,7 +3735,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-foreground">{template.name}</h3>
+                            <h3 className="font-semibold text-primary">{template.name}</h3>
                             {template.status && (
                               <span className={`text-xs px-2 py-1 rounded ${template.status === 'APPROVED'
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
@@ -3695,7 +3765,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                                   return (
                                     <div key={compIndex} className="text-sm">
                                       <span className="font-medium text-muted-foreground">Cabeçalho:</span>{' '}
-                                      <span className="text-foreground">{comp.text || comp.example?.header_text?.[0]?.[0] || 'N/A'}</span>
+                                      <span className="text-primary">{comp.text || comp.example?.header_text?.[0]?.[0] || 'N/A'}</span>
                                     </div>
                                   );
                                 }
@@ -3703,7 +3773,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                                   return (
                                     <div key={compIndex} className="text-sm">
                                       <span className="font-medium text-muted-foreground">Corpo:</span>{' '}
-                                      <span className="text-foreground">{comp.text || 'N/A'}</span>
+                                      <span className="text-primary">{comp.text || 'N/A'}</span>
                                     </div>
                                   );
                                 }
@@ -3711,7 +3781,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                                   return (
                                     <div key={compIndex} className="text-sm">
                                       <span className="font-medium text-muted-foreground">Rodapé:</span>{' '}
-                                      <span className="text-foreground">{comp.text || 'N/A'}</span>
+                                      <span className="text-primary">{comp.text || 'N/A'}</span>
                                     </div>
                                   );
                                 }
@@ -3742,7 +3812,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               )}
             </div>
             {error && (
-              <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
                 <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
               </div>
             )}

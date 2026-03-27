@@ -34,7 +34,7 @@ const SidebarContext = createContext({
 
 export const useSidebarContext = () => useContext(SidebarContext);
 
-const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose, provedorId, onCollapseChange }) => {
+const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose, provedorId, onCollapseChange, onRemindersClick }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
@@ -61,6 +61,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
   const allMenuItems = [
     { id: 'dashboard', icon: LayoutGrid, label: t('dashboard'), path: `/app/accounts/${provedorId}/dashboard` },
     { id: 'conversations', icon: Headphones, label: t('conversations'), path: `/app/accounts/${provedorId}/conversations` },
+    { id: 'reminders', icon: Clock, label: 'Lembretes', path: '#', onClick: onRemindersClick },
     { id: 'conversas', icon: MessagesSquare, label: t('conversas'), path: `/app/accounts/${provedorId}/conversas` },
     { id: 'contacts', icon: Notebook, label: t('contacts'), path: `/app/accounts/${provedorId}/contacts`, permission: 'manage_contacts' },
     { id: 'users', icon: Users, label: t('users'), path: `/app/accounts/${provedorId}/users` },
@@ -87,7 +88,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
     menuItems = allMenuItems.filter(item => {
       // Itens sem a chave 'permission' são visíveis se estiverem na lista de permissões do agente
       if (!item.permission) {
-        return ['conversations'].includes(item.id);
+        return ['conversations', 'reminders'].includes(item.id);
       }
       // Itens com a chave 'permission' são visíveis se o usuário tiver a permissão
       return userPermissions.includes(item.permission);
@@ -133,7 +134,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
     return (
       <li>
         <button
-          onClick={onClick}
+          onClick={item.onClick || onClick}
           className={`niochat-sidebar-item ${isActive ? 'niochat-sidebar-item-active' : ''}`}
         >
           <Icon className="w-5 h-5" />
@@ -172,7 +173,14 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
                 <MenuItem
                   key={item.id}
                   item={item}
-                  onClick={() => { navigate(item.path); onClose && onClose(); }}
+                  onClick={() => { 
+                    if(item.id === 'reminders') {
+                      item.onClick();
+                    } else {
+                      navigate(item.path);
+                    }
+                    onClose && onClose(); 
+                  }}
                 />
               ))}
             </ul>
@@ -181,7 +189,14 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
                 <MenuItem
                   key={item.id}
                   item={item}
-                  onClick={() => { navigate(item.path); onClose && onClose(); }}
+                  onClick={() => { 
+                    if(item.id === 'reminders' && item.onClick) {
+                      item.onClick();
+                    } else {
+                      navigate(item.path);
+                    }
+                    onClose && onClose(); 
+                  }}
                 />
               ))}
             </ul>
@@ -214,7 +229,17 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
               <div className={isCollapsed ? 'space-y-3' : 'space-y-1'}>
                 {menuItems.map((item) => {
                   const Icon = item.icon;
-                  return (
+                  return item.id === 'reminders' ? (
+                    <button
+                      key={item.id}
+                      onClick={item.onClick}
+                      className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground`}
+                      title={isCollapsed ? item.label : ''}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <span className={`transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'inline'}`}>{item.label}</span>
+                    </button>
+                  ) : (
                     <Link
                       key={item.path}
                       to={item.path}
@@ -238,25 +263,25 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
             <div className={isCollapsed ? 'space-y-3' : 'space-y-1'}>
               {fixedItems.map((item) => {
                 const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item.path)
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                      }`}
-                    title={isCollapsed ? item.label : ''}
-                  >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    <span className={`transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'inline'}`}>{item.label}</span>
-                    {item.session && (
-                      <span className={`px-2 py-1 text-xs font-medium bg-green-500 text-white rounded-full ml-auto transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'inline'}`}>
-                        {t('session')}
-                      </span>
-                    )}
-                  </Link>
-                );
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item.path)
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                        : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                        }`}
+                      title={isCollapsed ? item.label : ''}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <span className={`transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'inline'}`}>{item.label}</span>
+                      {item.session && (
+                        <span className={`px-2 py-1 text-xs font-medium bg-green-500 text-white rounded-full ml-auto transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'inline'}`}>
+                          {t('session')}
+                        </span>
+                      )}
+                    </Link>
+                  );
               })}
             </div>
           </div>

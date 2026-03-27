@@ -2,7 +2,7 @@ import requests
 import logging
 from django.conf import settings
 from rest_framework import serializers
-from .models import Canal, Provedor, Label, User, AuditLog, SystemConfig, Company, CompanyUser, MensagemSistema, ChatbotFlow, RespostaRapida
+from .models import Canal, Provedor, Label, User, AuditLog, SystemConfig, Company, CompanyUser, MensagemSistema, ChatbotFlow, RespostaRapida, UserReminder
 
 logger = logging.getLogger(__name__)
 
@@ -1296,3 +1296,15 @@ class RespostaRapidaSerializer(serializers.ModelSerializer):
         if obj.criado_por:
             return f"{obj.criado_por.first_name} {obj.criado_por.last_name}".strip() or obj.criado_por.username
         return None
+
+
+class UserReminderSerializer(serializers.ModelSerializer):
+    contact_name = serializers.ReadOnlyField(source='contact.name')
+    
+    class Meta:
+        model = UserReminder
+        fields = [
+            'id', 'user', 'contact', 'contact_name', 'message', 
+            'scheduled_time', 'is_notified', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']

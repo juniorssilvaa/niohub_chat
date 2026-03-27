@@ -6,6 +6,7 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from core.models import Canal
 from integrations.meta_oauth import GRAPH_API_VERSION, PHONE_NUMBERS_API_VERSION
+from integrations.whatsapp_cloud_send import translate_whatsapp_error
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +49,15 @@ def list_message_templates(canal: Canal, limit: int = 50) -> Tuple[bool, Optiona
             return True, templates, None
         else:
             error_data = response.json() if response.content else {}
-            error_message = error_data.get('error', {}).get('message', f'Erro {response.status_code}')
-            logger.error(f"Erro ao listar modelos: {error_message}")
-            return False, None, error_message
+            error_info = error_data.get('error', {})
+            error_code = error_info.get('code')
+            error_subcode = error_info.get('error_subcode')
+            error_message = error_info.get('message', f'Erro {response.status_code}')
+            error_details = error_info.get('error_data', {}).get('details', '')
+            
+            translated_error = translate_whatsapp_error(error_code, error_subcode, error_message, error_details)
+            logger.error(f"Erro ao listar modelos: {translated_error}")
+            return False, None, translated_error
             
     except Exception as e:
         logger.exception("Exceção ao listar modelos")
@@ -89,9 +96,15 @@ def get_template(canal: Canal, template_id: str) -> Tuple[bool, Optional[Dict], 
             return True, template, None
         else:
             error_data = response.json() if response.content else {}
-            error_message = error_data.get('error', {}).get('message', f'Erro {response.status_code}')
-            logger.error(f"Erro ao obter modelo: {error_message}")
-            return False, None, error_message
+            error_info = error_data.get('error', {})
+            error_code = error_info.get('code')
+            error_subcode = error_info.get('error_subcode')
+            error_message = error_info.get('message', f'Erro {response.status_code}')
+            error_details = error_info.get('error_data', {}).get('details', '')
+            
+            translated_error = translate_whatsapp_error(error_code, error_subcode, error_message, error_details)
+            logger.error(f"Erro ao obter modelo: {translated_error}")
+            return False, None, translated_error
             
     except Exception as e:
         logger.exception("Exceção ao obter modelo")
@@ -201,12 +214,16 @@ def create_message_template(
             return True, template, None
         else:
             error_data = response.json() if response.content else {}
-            error_message = error_data.get('error', {}).get('message', f'Erro {response.status_code}')
-            error_code = error_data.get('error', {}).get('code', '')
-            error_subcode = error_data.get('error', {}).get('error_subcode', '')
-            logger.error(f"Erro ao criar modelo: {error_message} (code: {error_code}, subcode: {error_subcode})")
+            error_info = error_data.get('error', {})
+            error_code = error_info.get('code', response.status_code)
+            error_subcode = error_info.get('error_subcode')
+            error_message = error_info.get('message', f'Erro {response.status_code}')
+            error_details = error_info.get('error_data', {}).get('details', '')
+            
+            translated_error = translate_whatsapp_error(error_code, error_subcode, error_message, error_details)
+            logger.error(f"Erro ao criar modelo: {translated_error}")
             logger.error(f"Payload enviado: {payload}")
-            return False, None, error_message
+            return False, None, translated_error
             
     except Exception as e:
         logger.exception("Exceção ao criar modelo")
@@ -240,9 +257,15 @@ def delete_message_template(canal: Canal, template_id: str) -> Tuple[bool, Optio
             return True, None
         else:
             error_data = response.json() if response.content else {}
-            error_message = error_data.get('error', {}).get('message', f'Erro {response.status_code}')
-            logger.error(f"Erro ao deletar modelo: {error_message}")
-            return False, error_message
+            error_info = error_data.get('error', {})
+            error_code = error_info.get('code')
+            error_subcode = error_info.get('error_subcode')
+            error_message = error_info.get('message', f'Erro {response.status_code}')
+            error_details = error_info.get('error_data', {}).get('details', '')
+            
+            translated_error = translate_whatsapp_error(error_code, error_subcode, error_message, error_details)
+            logger.error(f"Erro ao deletar modelo: {translated_error}")
+            return False, translated_error
             
     except Exception as e:
         logger.exception("Exceção ao deletar modelo")

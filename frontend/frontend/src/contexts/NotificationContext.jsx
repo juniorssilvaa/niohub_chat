@@ -28,6 +28,7 @@ export const NotificationProvider = ({ children }) => {
   const internalChatWsRef = useRef(null);
   const [internalChatUnreadCount, setInternalChatUnreadCount] = useState(0);
   const [internalChatUnreadByUser, setInternalChatUnreadByUser] = useState({});
+  const [activeReminders, setActiveReminders] = useState([]);
   const initializingRef = useRef(false);
   const painelWsRef = useRef(null);
   const painelReconnectRef = useRef(null);
@@ -117,6 +118,8 @@ export const NotificationProvider = ({ children }) => {
     };
   }, [currentUser?.id]);
 
+
+
   // ✅ REMOVIDO: loadCurrentUser não é mais necessário
   // O usuário vem do AuthContext, evitando chamadas duplicadas de /me
 
@@ -159,6 +162,65 @@ export const NotificationProvider = ({ children }) => {
       console.error('Erro ao carregar contadores por usuário do chat interno:', error);
     }
   };
+
+  const checkReminders = useCallback(async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      const response = await axios.get('/api/reminders/check/', {
+        headers: { Authorization: `Token ${token}` }
+      });
+
+      if (response.status === 200 && response.data.length > 0) {
+        setActiveReminders(prev => {
+          const existingIds = new Set(prev.map(r => r.id));
+          const newReminders = response.data.filter(r => !existingIds.has(r.id));
+
+          if (newReminders.length > 0) {
+            playSound(newMsgSoundRef.current, newMsgVolumeRef.current);
+
+            if ('Notification' in window && Notification.permission === 'granted') {
+              newReminders.forEach(reminder => {
+                new Notification('Lembrete Agendado', {
+                  body: reminder.message,
+                  icon: '/favicon.ico',
+                  tag: `reminder-${reminder.id}`
+                });
+              });
+            }
+          }
+
+          return [...prev, ...newReminders];
+        });
+      }
+    } catch (error) {
+      // Erro silencioso no polling
+    }
+  }, [currentUser?.id]);
+
+  const dismissReminder = async (reminderId) => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      await axios.patch(`/api/reminders/${reminderId}/mark_notified/`, {}, {
+        headers: { Authorization: `Token ${token}` }
+      });
+
+      setActiveReminders(prev => prev.filter(r => r.id !== reminderId));
+    } catch (error) {
+      console.error('Erro ao marcar lembrete como notificado:', error);
+      setActiveReminders(prev => prev.filter(r => r.id !== reminderId));
+    }
+  };
+
+  // Polling para lembretes a cada 45 segundos
+  useEffect(() => {
+    if (currentUser?.id) {
+      checkReminders();
+      const interval = setInterval(checkReminders, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [currentUser?.id, checkReminders]);
 
   const connectInternalChatWebSocket = () => {
     if (internalChatWsRef.current?.readyState === WebSocket.OPEN) {
@@ -389,16 +451,23 @@ export const NotificationProvider = ({ children }) => {
             const messageData = data.message || data.data?.message || data.data;
             const assigneeId = data.conversation?.assignee_id || data.data?.conversation?.assignee_id || data.assignee_id;
 
-            // Se a conversa tem um atendente e não é o usuário atual, ignorar som
-            if (assigneeId && currentUser?.id && parseInt(assigneeId) !== currentUser.id) {
+            // SÓ TOCAR SOM SE A MENSAGEM FOR DO CLIENTE (OU SE NÃO TIVERMOS CERTEZA)
+            // Isso evita duplicidade com mensagens enviadas pelo próprio atendente ou bot
+            if (messageData && messageData.is_from_customer === false) {
+              return;
+            }
 
+            // ISOLAMENTO: Só tocar som se for conversa MINHA ou DESATRIBUÍDA
+            const isUnassigned = !assigneeId || assigneeId === "" || assigneeId === 0;
+            const isMine = assigneeId && currentUser?.id && parseInt(assigneeId) === currentUser.id;
+            
+            if (!isUnassigned && !isMine) {
               return;
             }
 
             // Verificar se esta mensagem pertence a uma conversa que ACABOU de tocar som de "Nova Conversa"
             const convId = data.conversation_id || data.conversation?.id || data.data?.conversation_id;
             if (convId && processedEventsRef.current.has(`silence_msg_${convId}`)) {
-
               return;
             }
 
@@ -475,7 +544,9 @@ export const NotificationProvider = ({ children }) => {
     // Fallback: se soundEnabledRef.current for falso, verificar localStorage por garantia
     const isEnabled = soundEnabledRef.current || localStorage.getItem('sound_notifications_enabled') === 'true';
 
-
+    if (!isEnabled) {
+      return;
+    }
     // DEBOUNCE: Reduzido para 1.0s para ser mais responsivo em conversas rápidas
     const now = Date.now();
     if (now - lastSoundTimeRef.current < 1000) {
@@ -607,6 +678,8 @@ export const NotificationProvider = ({ children }) => {
     loadInternalChatUnreadByUser,
     clearNotifications,
     markAsRead,
+    activeReminders,
+    dismissReminder,
     websocket: websocketRef.current
   };
 

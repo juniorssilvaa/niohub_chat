@@ -8,6 +8,7 @@ const ConversationsPage = ({ selectedConversation, setSelectedConversation, prov
   const refreshConversationsRef = useRef(null);
   const [localUser, setLocalUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(!propUser);
+  const isInitialLoadRef = useRef(true); // Ref para controlar a restauração inicial do localStorage
   
   // Usar o usuário da prop se disponível, senão usar o local
   const user = propUser || localUser;
@@ -55,10 +56,9 @@ const ConversationsPage = ({ selectedConversation, setSelectedConversation, prov
     };
   }, []);
 
-  // Recuperar conversa selecionada do localStorage se não houver uma selecionada
-  // CORREÇÃO: Verificar se a conversa não está fechada antes de restaurar
+  // Recuperar conversa selecionada do localStorage APENAS NA PRIMEIRA MONTAGEM
   useEffect(() => {
-    if (!selectedConversation) {
+    if (isInitialLoadRef.current && !selectedConversation) {
       const savedConversation = localStorage.getItem('selectedConversation');
       if (savedConversation) {
         try {
@@ -66,18 +66,19 @@ const ConversationsPage = ({ selectedConversation, setSelectedConversation, prov
           const status = parsed.status || parsed.additional_attributes?.status;
           const closedStatuses = ['closed', 'encerrada', 'resolved', 'finalizada'];
           
-          // Só restaurar se a conversa não estiver fechada
           if (!closedStatuses.includes(status)) {
+            console.log(`[DEBUG-LOAD] Restaurando conversa inicial do localStorage: ${parsed.id}`);
             setSelectedConversation(parsed);
           } else {
-            // Limpar localStorage se a conversa estiver fechada
+            // Limpar localStorage se a conversa estiver fechada, mesmo na carga inicial
             localStorage.removeItem('selectedConversation');
           }
-        } catch (e) {
-          console.error('Erro ao recuperar conversa do localStorage:', e);
-          localStorage.removeItem('selectedConversation');
+        } catch (error) {
+          console.error('Erro ao restaurar conversa:', error);
+          localStorage.removeItem('selectedConversation'); // Limpar em caso de erro de parsing
         }
       }
+      isInitialLoadRef.current = false; // Marcar que a carga inicial foi processada
     }
   }, [selectedConversation, setSelectedConversation]);
 
@@ -102,33 +103,42 @@ const ConversationsPage = ({ selectedConversation, setSelectedConversation, prov
       return;
     }
     
-    // Se recebeu uma função de refresh, armazena a referência
+    // Se recebeu uma função, armazenar para uso posterior
     if (typeof refreshFunction === 'function') {
       refreshConversationsRef.current = refreshFunction;
-      return;
-    }
-    
-    // Se recebeu dados de conversa atualizada, verificar se não está fechada
+    } 
+    // LOG DE DEBUG PARA RASTREAR TROCAS AUTOMÁTICAS (REFRESH)
     if (refreshFunction && typeof refreshFunction === 'object') {
-      const status = refreshFunction.status || refreshFunction.additional_attributes?.status;
-      const closedStatuses = ['closed', 'encerrada', 'resolved', 'finalizada'];
-      
-      // Se a conversa foi fechada, limpar seleção
-      if (closedStatuses.includes(status)) {
-        setSelectedConversation(null);
-        localStorage.removeItem('selectedConversation');
-      } else {
-        // Caso contrário, atualizar normalmente
-        setSelectedConversation(refreshFunction);
-        localStorage.setItem('selectedConversation', JSON.stringify(refreshFunction));
-      }
+       const incomingId = String(refreshFunction.id);
+       const currentId = selectedConversation ? String(selectedConversation.id) : null;
+       
+       const status = refreshFunction.status || refreshFunction.additional_attributes?.status;
+       const closedStatuses = ['closed', 'encerrada', 'resolved', 'finalizada'];
+
+       if (closedStatuses.includes(status)) {
+         if (currentId === incomingId) {
+           console.log(`[DEBUG-MATCH] LIMPANDO conversa ativa ${incomingId} (status: ${status})`);
+           setSelectedConversation(null);
+           localStorage.removeItem('selectedConversation');
+         }
+       } else {
+         // SÓ ATUALIZAR SE OS IDs FORAREM IDÊNTICOS
+         // Isso impede que mensagens de outros contatos troquem a sua tela atual
+         if (currentId === incomingId) {
+           setSelectedConversation(refreshFunction);
+           localStorage.setItem('selectedConversation', JSON.stringify(refreshFunction));
+         } else {
+           // NÃO FAZER NADA com a seleção se os IDs não batem
+           // apenas o refresh da lista abaixo cuidará de subir o contato no menu lateral
+         }
+       }
     }
     
-    // Forçar atualização da lista de conversas
+    // Forçar atualização da lista de conversas para refletir nova mensagem e nova ordem
     if (refreshConversationsRef.current) {
       refreshConversationsRef.current();
     }
-  }, [setSelectedConversation]);
+  }, [selectedConversation, setSelectedConversation]);
 
   if (loadingUser) {
     return (
@@ -174,7 +184,7 @@ const ConversationsPage = ({ selectedConversation, setSelectedConversation, prov
             </div>
             
             {/* Texto principal */}
-            <p className="text-base text-foreground mb-2">
+            <p className="text-base text-primary mb-2">
               Selecione uma conversa para iniciar o atendimento
             </p>
             

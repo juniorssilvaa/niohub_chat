@@ -59,15 +59,15 @@
   /* Light Theme Colors */
   --background: #f3f4f6;
   /* Changed to light grey */
-  --foreground: #1a1a1a;
+  --foreground: #3b82f6;
   --card: #f8f9fa;
-  --card-foreground: #1a1a1a;
+  --card-foreground: #3b82f6;
   --popover: #ffffff;
-  --popover-foreground: #1a1a1a;
+  --popover-foreground: #3b82f6;
   --primary: #3b82f6;
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
-  --secondary-foreground: #1a1a1a;
+  --secondary-foreground: #3b82f6;
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
   --accent: #3b82f6;
@@ -82,11 +82,11 @@
   --chart-4: #ef4444;
   --chart-5: #8b5cf6;
   --sidebar: #f8f9fa;
-  --sidebar-foreground: #1a1a1a;
+  --sidebar-foreground: #3b82f6;
   --sidebar-primary: #3b82f6;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #e2e8f0;
-  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-accent-foreground: #3b82f6;
   --sidebar-border: #334155;
   --sidebar-ring: #3b82f6;
 
@@ -115,16 +115,16 @@
 .dark {
   --background: #2d2e32;
   /* Cinza navegador onipresente */
-  --foreground: #f3f4f6;
+  --foreground: #0088cc;
   --card: #2d2e32;
-  --card-foreground: #f3f4f6;
+  --card-foreground: #0088cc;
   --popover: #2d2e32;
-  --popover-foreground: #f3f4f6;
+  --popover-foreground: #0088cc;
   --primary: #0088cc;
   --primary-foreground: #ffffff;
   --secondary: #35363b;
   /* Levemente diferente para hover */
-  --secondary-foreground: #f3f4f6;
+  --secondary-foreground: #0088cc;
   --muted: #35363b;
   --muted-foreground: #9ca3af;
   --accent: #0088cc;
@@ -140,7 +140,7 @@
   --chart-4: #ef4444;
   --chart-5: #8b5cf6;
   --sidebar: #2d2e32;
-  --sidebar-foreground: #f3f4f6;
+  --sidebar-foreground: #0088cc;
   --sidebar-primary: #0088cc;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #0088cc;

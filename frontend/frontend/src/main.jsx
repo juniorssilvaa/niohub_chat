@@ -7,6 +7,8 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import ReminderAlert from './components/ReminderAlert';
+import { Toaster } from 'sonner';
 
 createRoot(document.getElementById("root")).render(
   <ErrorBoundary>
@@ -15,6 +17,8 @@ createRoot(document.getElementById("root")).render(
         <LanguageProvider>
           <NotificationProvider>
             <App />
+            <ReminderAlert />
+            <Toaster position="top-right" richColors closeButton />
           </NotificationProvider>
         </LanguageProvider>
       </AuthProvider>

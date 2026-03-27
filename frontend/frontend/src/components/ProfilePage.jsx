@@ -203,6 +203,17 @@ export default function ProfilePage() {
     localStorage.setItem('sound_notifications_enabled', String(checked));
     // Disparar evento para o NotificationContext
     window.dispatchEvent(new CustomEvent('notification-settings-updated'));
+
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      await axios.patch('/api/auth/me/', {
+        sound_notifications_enabled: checked
+      }, {
+        headers: { Authorization: `Token ${token}` }
+      });
+    } catch (e) {
+      console.error('Erro ao salvar preferência de som no servidor:', e);
+    }
   };
 
   const handleSelectSound = async (type, value) => {
@@ -219,7 +230,7 @@ export default function ProfilePage() {
     // Disparar evento para o NotificationContext
     window.dispatchEvent(new CustomEvent('notification-settings-updated'));
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       await axios.patch('/api/auth/me/', {
         [type === 'newMessageSound' ? 'new_message_sound' : 'new_conversation_sound']: value
       }, {
@@ -244,7 +255,7 @@ export default function ProfilePage() {
     window.dispatchEvent(new CustomEvent('notification-settings-updated'));
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       await axios.patch('/api/auth/me/', {
         [type === 'newMessageVolume' ? 'new_message_sound_volume' : 'new_conversation_sound_volume']: volume
       }, {

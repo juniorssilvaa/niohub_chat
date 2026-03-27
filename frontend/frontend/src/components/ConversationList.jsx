@@ -792,6 +792,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                     return new Date(timeB) - new Date(timeA);
                   });
                 });
+                
+                if (onConversationUpdateRef.current) {
+                  onConversationUpdateRef.current(convAtualizada);
+                }
               }
 
               // SEMPRE recarregar para garantir que a lista esteja atualizada
@@ -1044,7 +1048,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
             <button
               onClick={() => fetchConversations(true)}
-              className="text-muted-foreground hover:text-foreground p-1"
+              className="text-muted-foreground hover:text-primary p-1"
               title="Atualizar conversas"
             >
             </button>
@@ -1056,7 +1060,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                   // Log removido(' Clicou nos 3 pontinhos da página Atendimento');
                   setShowMenuAtendimento(!showMenuAtendimento);
                 }}
-                className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+                className="text-muted-foreground hover:text-primary p-1 transition-colors"
                 title="Novo atendimento"
               >
                 <UserPlus size={20} />
@@ -1105,7 +1109,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           />
           {searchTerm && (
             <button
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-primary"
               onClick={() => setSearchTerm('')}
             >
               Limpar
@@ -1114,10 +1118,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-muted rounded-lg p-1">
+        <div className="flex space-x-1 bg-secondary/80 border border-white/40 rounded-lg p-1">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
-            let activeClass = 'bg-background text-foreground shadow-sm';
+            let activeClass = 'bg-background text-primary shadow-sm';
 
             if (isActive) {
               if (tab.id === 'mine') {
@@ -1135,7 +1139,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${isActive
                   ? activeClass
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10'
+                  : 'text-muted-foreground hover:text-primary hover:bg-accent-foreground/10'
                   }`}
               >
                 {tab.label}
@@ -1199,7 +1203,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             {conversations.length === 0 ? (
               <div className="py-8 flex flex-col items-center">
                 {/* Texto principal */}
-                <h3 className="text-lg font-semibold text-foreground mb-2">
+                <h3 className="text-lg font-semibold text-primary mb-2">
                   Nenhuma conversa ativa
                 </h3>
 
@@ -1236,7 +1240,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               <div
                 key={conversation.id}
                 onClick={() => onConversationSelect(conversation)}
-                className={`p-3 border-b border-border border-l-4 cursor-pointer transition-all duration-200 hover:bg-muted/50 ${statusBorder} ${selectedConversation?.id === conversation.id ? 'bg-topbar text-topbar-foreground shadow-inner' : ''
+                className={`p-3 border-b border-border border-l-4 cursor-pointer transition-all duration-200 hover:bg-accent/50 ${statusBorder} ${selectedConversation?.id === conversation.id ? 'bg-topbar text-topbar-foreground shadow-inner' : ''
                   }`}
               >
                 <div className="flex items-start space-x-3">
@@ -1256,7 +1260,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <h3 className={`text-sm font-medium truncate ${selectedConversation?.id === conversation.id ? 'text-topbar-foreground' : 'text-foreground'}`}>
+                      <h3 className={`text-sm font-medium truncate ${selectedConversation?.id === conversation.id ? 'text-topbar-foreground' : 'text-primary'}`}>
                         {conversation.contact?.name || 'Contato sem nome'}
                       </h3>
                       <span className={`text-xs ${selectedConversation?.id === conversation.id ? 'text-topbar-foreground/70' : 'text-muted-foreground'}`}>
@@ -1454,7 +1458,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
             <div className="flex items-center justify-end space-x-2 pt-4">
               <button
                 onClick={() => setModalNovoContato(false)}
-                className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                className="px-4 py-2 text-muted-foreground hover:text-primary transition-colors"
                 disabled={enviandoAtendimento}
               >
                 Cancelar
@@ -1515,7 +1519,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
             {/* Contato selecionado */}
             {contatoExistente.contato && (
-              <div className="p-3 bg-muted rounded-lg">
+              <div className="p-3 bg-accent rounded-lg">
                 <div className="font-medium">Contato Selecionado:</div>
                 <div className="text-sm">{contatoExistente.contato.name} - {contatoExistente.contato.phone}</div>
               </div>
@@ -1615,7 +1619,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                   setContatoExistente({ busca: '', contato: null, mensagem: '' });
                   setContatosEncontrados([]);
                 }}
-                className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                className="px-4 py-2 text-muted-foreground hover:text-primary transition-colors"
                 disabled={enviandoAtendimento}
               >
                 Cancelar

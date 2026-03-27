@@ -434,3 +434,21 @@ class RespostaRapida(models.Model):
 
     def __str__(self):
         return f"{self.titulo} ({self.provedor.nome})"
+
+
+class UserReminder(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reminders')
+    contact = models.ForeignKey('conversations.Contact', on_delete=models.SET_NULL, null=True, blank=True, related_name='reminders')
+    message = models.TextField(verbose_name='Mensagem do Lembrete')
+    scheduled_time = models.DateTimeField(verbose_name='Data/Hora Agendada')
+    is_notified = models.BooleanField(default=False, verbose_name='Já Notificado')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Lembrete de Usuário'
+        verbose_name_plural = 'Lembretes de Usuários'
+        ordering = ['scheduled_time']
+
+    def __str__(self):
+        return f"Lembrete para {self.user.username} - {self.scheduled_time}"

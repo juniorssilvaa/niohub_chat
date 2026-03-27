@@ -16,7 +16,7 @@ import Changelog from './components/Changelog';
 import UserStatusManager from './components/UserStatusManager';
 
 import { useAuth } from './contexts/AuthContext';
-import useSessionTimeout from './hooks/useSessionTimeout';
+import useSessionTimeout from './hooks/useSessionTimeout.jsx';
 import { APP_VERSION } from './config/version';
 
 import './App.css';
@@ -197,9 +197,10 @@ export default function App() {
         <Route path="*" element={
           userRole === 'superadmin'
             ? <Navigate to="/superadmin" replace />
-            : user?.provedor_id
-              ? <Navigate to={`/app/accounts/${user.provedor_id}/dashboard`} replace />
-              : <Navigate to="/login" replace />
+            : (userRole === 'agent' 
+                ? <Navigate to={`/app/accounts/${user.provedor_id}/conversations`} replace />
+                : <Navigate to={`/app/accounts/${user.provedor_id}/dashboard`} replace />
+              )
         } />
       </Routes>
 

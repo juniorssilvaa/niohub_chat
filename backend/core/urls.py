@@ -21,6 +21,7 @@ router.register(r'integrations/webchat', views.WebchatIntegrationViewSet, basena
 router.register(r'chatbot-flows', views.ChatbotFlowViewSet, basename='chatbot-flows')
 router.register(r'planos', views.PlanoViewSet, basename='planos')
 router.register(r'respostas-rapidas', views.RespostaRapidaViewSet, basename='respostas-rapidas')
+router.register(r'reminders', views.UserReminderViewSet, basename='reminders')
 
 urlpatterns = [
     # Rotas específicas ANTES do router para evitar conflitos

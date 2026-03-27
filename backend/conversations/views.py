@@ -18,7 +18,7 @@ from .serializers import (
 from .services import ConversationNotificationService
 from rest_framework.permissions import AllowAny
 from integrations.models import WhatsAppIntegration
-from integrations.whatsapp_cloud_send import send_via_whatsapp_cloud_api, send_reaction
+from integrations.whatsapp_cloud_send import send_via_whatsapp_cloud_api, send_reaction, translate_whatsapp_error
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import requests
@@ -2750,11 +2750,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 if canal_oficial and canal_oficial.token and canal_oficial.phone_number_id:
                     # Verificar se a janela de 24 horas está aberta para WhatsApp Official
                     if not conversation.is_24h_window_open():
-                        error_message = (
-                            "Mais de 24 horas se passaram desde que o cliente respondeu pela última vez. "
-                            "Para enviar mensagens após este período, é necessário usar um modelo de mensagem (template). "
-                            "O cliente precisa entrar em contato primeiro para reabrir a janela de atendimento."
-                        )
+                        error_message = translate_whatsapp_error(131047)
                         logger.warning(f"[SEND_TEXT] Janela de 24 horas fechada para conversa {conversation.id}")
                         
                         # Salvar mensagem com erro
@@ -2780,7 +2776,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                     
                     # Enviar via WhatsApp Cloud API (Oficial)
                     logger.info(f"[SEND_TEXT] Janela de 24 horas está aberta, enviando via WhatsApp Cloud API (Oficial)...")
-                    from integrations.whatsapp_cloud_send import send_via_whatsapp_cloud_api, send_reaction
+                    from integrations.whatsapp_cloud_send import send_via_whatsapp_cloud_api, send_reaction, translate_whatsapp_error
                     
                     # Para WhatsApp Official, precisamos usar o external_id (wamid) da mensagem original
                     whatsapp_reply_id = None
@@ -3638,11 +3634,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 if canal_oficial:
                     # Verificar se a janela de 24 horas está aberta para WhatsApp Official
                     if not conversation.is_24h_window_open():
-                        error_message = (
-                            "Mais de 24 horas se passaram desde que o cliente respondeu pela última vez. "
-                            "Para enviar mensagens após este período, é necessário usar um modelo de mensagem (template). "
-                            "O cliente precisa entrar em contato primeiro para reabrir a janela de atendimento."
-                        )
+                        error_message = translate_whatsapp_error(131047)
                         logger.warning(f"[SEND_MEDIA] Janela de 24 horas fechada para conversa {conversation.id}")
                         
                         # Salvar mensagem com erro

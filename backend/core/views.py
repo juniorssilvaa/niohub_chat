@@ -10,8 +10,8 @@ from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.db import models
 from django.conf import settings
-from core.models import CompanyUser, User, Provedor, Canal, AuditLog, SystemConfig, Company, MensagemSistema, ChatbotFlow
-from core.serializers import UserSerializer, UserCreateSerializer, CanalSerializer, AuditLogSerializer, SystemConfigSerializer, ProvedorSerializer, CompanySerializer, MensagemSistemaSerializer
+from core.models import CompanyUser, User, Provedor, Canal, AuditLog, SystemConfig, Company, MensagemSistema, ChatbotFlow, UserReminder
+from core.serializers import UserSerializer, UserCreateSerializer, CanalSerializer, AuditLogSerializer, SystemConfigSerializer, ProvedorSerializer, CompanySerializer, MensagemSistemaSerializer, UserReminderSerializer
 from django.db.models import Q
 from integrations.models import TelegramIntegration, EmailIntegration, WhatsAppIntegration, WebchatIntegration
 from integrations.serializers import (
@@ -6208,6 +6208,45 @@ class RespostaRapidaViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save()
+
+
+class UserReminderViewSet(viewsets.ModelViewSet):
+    serializer_class = UserReminderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        # Apenas os lembretes do próprio usuário
+        return UserReminder.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def check(self, request):
+        """
+        Endpoint usado pelo polling do frontend para buscar lembretes que
+        atingiram o horário agendado e ainda não foram notificados.
+        """
+        now = timezone.now()
+        # Lembretes do usuário cuja hora já passou e não foram notificados
+        reminders = UserReminder.objects.filter(
+            user=request.user,
+            scheduled_time__lte=now,
+            is_notified=False
+        )
+        
+        serializer = self.get_serializer(reminders, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['patch'])
+    def mark_notified(self, request, pk=None):
+        """
+        Marca um lembrete específico como notificado.
+        """
+        reminder = self.get_object()
+        reminder.is_notified = True
+        reminder.save(update_fields=['is_notified'])
+        return Response({'status': 'notified'})
 
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required

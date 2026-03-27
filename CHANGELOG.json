@@ -1,6 +1,50 @@
 {
-  "current_version": "2.28.0",
+  "current_version": "2.29.0",
   "versions": [
+    {
+      "version": "2.29.0",
+      "version_type": "minor",
+      "date": "2026-03-27",
+      "title": "Experiência Elevada e Precisão no Atendimento",
+      "changes": [
+        {
+          "type": "feature",
+          "module": "Notificações",
+          "title": "Agenda de Compromissos",
+          "description": "Agora você pode agendar lembretes para entrar em contato com clientes ou realizar tarefas importantes. Nunca perca um retorno ou acompanhamento!"
+        },
+        {
+          "type": "improvement",
+          "module": "Atendimento",
+          "title": "Comunicação mais Clara e Transparente",
+          "description": "Agora o sistema fala a sua língua! Traduzimos todas as mensagens de erro do WhatsApp para um português amigável e direto, ajudando você a entender exatamente o que está acontecendo em cada conversa."
+        },
+        {
+          "type": "feature",
+          "module": "Interface",
+          "title": "Expressividade sem Limites",
+          "description": "Lançamos um seletor de emojis completo e organizado. Encontre a reação perfeita para cada momento e torne seus atendimentos muito mais humanos e vibrantes."
+        },
+        {
+          "type": "improvement",
+          "module": "Notificações",
+          "title": "Notificações Elegantes e Eficazes",
+          "description": "Diga adeus aos avisos genéricos. Implementamos um novo sistema de notificações visuais suaves que informam erros e alertas importantes de forma discreta e profissional."
+        },
+        {
+          "type": "fix",
+          "module": "Atendimento",
+          "title": "Concentração Total no seu Cliente",
+          "description": "Corrigimos o comportamento que movia a tela sozinho ao chegar novas mensagens. Agora, sua conversa ativa permanece estável, permitindo que você foque 100% no atendimento atual."
+        },
+        {
+          "type": "improvement",
+          "module": "Interface",
+          "title": "Harmonia Visual e Detalhes que Encantam",
+          "description": "Refinamos as cores, bordas e os avatares dos contatos para proporcionar uma interface mais limpa, moderna e agradável de usar durante todo o dia."
+        }
+      ]
+    },
     {
       "version": "2.28.0",
       "version_type": "minor",
