@@ -96,7 +96,7 @@ services:
     restart: always
 
   # ===============================
-  # ⚙️ DRAMATIQ WORKER
+  # ⚙️ DRAMATIQ WORKER (WhatsApp + CSAT + Finalização)
   # ===============================
   niochat-dramatiq:
     image: ghcr.io/juniorssilvaa/niochat-backend:latest
@@ -106,9 +106,28 @@ services:
     networks:
       - nioNet
     environment:
+      # Variáveis Críticas de Sistema
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG}
+      ENVIRONMENT: production
       DATABASE_URL: ${DATABASE_URL}
       DRAMATIQ_BROKER_URL: ${DRAMATIQ_BROKER_URL}
-    command: ["python", "manage.py", "rundramatiq"]
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      
+      # Habilitar agendador de encerramento automático interno (Substitui o Cron)
+      RUN_HEARTBEAT: "true"
+      
+      # Integrações
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      EVOLUTION_URL: ${EVOLUTION_URL}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      BACKEND_URL: ${BACKEND_URL}
+      
+    command: ["python", "-m", "dramatiq", "conversations.dramatiq_tasks", "integrations.dramatiq_tasks"]
     restart: always
 
   # ===============================
@@ -122,26 +141,23 @@ services:
     networks:
       - nioNet
     environment:
+      # Variáveis Críticas de Sistema
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      
+      # Credenciais Telegram
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      
+      # IA e Backend
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BACKEND_URL: ${BACKEND_URL}
+      
     command: ["python", "manage.py", "telegram_worker", "start"]
-    restart: always
-
-  # ===============================
-  # ⏰ CRON
-  # ===============================
-  niochat-cron:
-    image: ghcr.io/juniorssilvaa/niochat-backend:latest
-    container_name: niochat_cron
-    depends_on:
-      - postgres
-    networks:
-      - nioNet
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-    entrypoint: ["/app/cron-entrypoint.sh"]
     restart: always
 
   # ===============================

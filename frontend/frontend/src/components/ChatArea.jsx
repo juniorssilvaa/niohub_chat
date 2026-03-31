@@ -146,7 +146,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   // Estados para reprodução de áudio
   const [playingAudio, setPlayingAudio] = useState(null);
   const [audioProgress, setAudioProgress] = useState({});
-  const [audioRefs] = useState({});
+  const audioRefs = useRef({});
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef(null);
 
@@ -1716,13 +1716,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       if (audioUrl) {
         URL.revokeObjectURL(audioUrl);
       }
-      Object.values(audioRefs.current).forEach(audio => {
-        if (audio) {
-          audio.pause();
-          audio.src = '';
-        }
-      });
-      audioRefs.current = {};
+      if (audioRefs.current) {
+        Object.values(audioRefs.current).forEach(audio => {
+          if (audio) {
+            audio.pause();
+            audio.src = '';
+          }
+        });
+        audioRefs.current = {};
+      }
     };
   }, [audioUrl]);
 

@@ -7,6 +7,7 @@ from conversations.models import Conversation, Message, Team, TeamMember
 from core.models import Provedor
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from .horario_utils import verificar_horario_atendimento
 
 logger = logging.getLogger(__name__)
 
@@ -31,155 +32,9 @@ class DatabaseTools:
     
     def _verificar_horario_atendimento(self) -> Dict[str, Any]:
         """
-        Verifica se está dentro do horário de atendimento e calcula próximo horário disponível
-        Retorna: {'dentro_horario': bool, 'proximo_horario': str ou None, 'mensagem': str}
+        Verifica se está dentro do horário de atendimento usando a utilidade centralizada.
         """
-        from datetime import timedelta
-        from django.utils import timezone
-        import json
-        
-        try:
-            if not self.provedor.horarios_atendimento:
-                return {
-                    'dentro_horario': True,
-                    'proximo_horario': None,
-                    'mensagem': None
-                }
-            
-            # Parsear horários
-            horarios = json.loads(self.provedor.horarios_atendimento) if isinstance(self.provedor.horarios_atendimento, str) else self.provedor.horarios_atendimento
-            
-            if not horarios or not isinstance(horarios, list):
-                return {
-                    'dentro_horario': True,
-                    'proximo_horario': None,
-                    'mensagem': None
-                }
-            
-            # Obter dia atual usando timezone do Django (configurado no settings)
-            now = timezone.now()
-            dia_atual_num = now.weekday()  # 0=Segunda, 6=Domingo
-            dias_semana = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo']
-            dia_atual_nome = dias_semana[dia_atual_num]
-            
-            # Buscar horários do dia atual
-            horario_hoje = None
-            for dia_info in horarios:
-                if dia_info.get('dia') == dia_atual_nome:
-                    horario_hoje = dia_info
-                    break
-            
-            # Se não tem horário hoje, buscar próximo dia com horário
-            if not horario_hoje or not horario_hoje.get('periodos'):
-                # Buscar próximo dia com horário
-                for i in range(1, 8):  # Próximos 7 dias
-                    proximo_dia_num = (dia_atual_num + i) % 7
-                    proximo_dia_nome = dias_semana[proximo_dia_num]
-                    
-                    for dia_info in horarios:
-                        if dia_info.get('dia') == proximo_dia_nome and dia_info.get('periodos'):
-                            primeiro_periodo = dia_info['periodos'][0]
-                            inicio = primeiro_periodo.get('inicio', '')
-                            
-                            if inicio:
-                                return {
-                                    'dentro_horario': False,
-                                    'proximo_horario': f"{proximo_dia_nome} às {inicio}",
-                                    'mensagem': f"Você será atendido na {proximo_dia_nome} às {inicio}"
-                                }
-                return {
-                    'dentro_horario': True,
-                    'proximo_horario': None,
-                    'mensagem': None
-                }
-            
-            # Verificar se está dentro do horário de hoje
-            periodos = horario_hoje.get('periodos', [])
-            hora_atual = now.hour
-            minuto_atual = now.minute
-            hora_atual_minutos = hora_atual * 60 + minuto_atual
-            
-            for periodo in periodos:
-                inicio_str = periodo.get('inicio', '')
-                fim_str = periodo.get('fim', '')
-                
-                if inicio_str and fim_str:
-                    try:
-                        # Parsear horário (formato esperado: "HH:MM")
-                        inicio_parts = inicio_str.split(':')
-                        fim_parts = fim_str.split(':')
-                        
-                        if len(inicio_parts) == 2 and len(fim_parts) == 2:
-                            inicio_hora = int(inicio_parts[0])
-                            inicio_minuto = int(inicio_parts[1])
-                            fim_hora = int(fim_parts[0])
-                            fim_minuto = int(fim_parts[1])
-                            
-                            inicio_minutos = inicio_hora * 60 + inicio_minuto
-                            fim_minutos = fim_hora * 60 + fim_minuto
-                            
-                            # Verificar se está dentro do período
-                            if inicio_minutos <= hora_atual_minutos <= fim_minutos:
-                                return {
-                                    'dentro_horario': True,
-                                    'proximo_horario': None,
-                                    'mensagem': None
-                                }
-                    except (ValueError, IndexError):
-                        continue
-            
-            # Se não está dentro do horário de hoje, buscar próximo período disponível
-            # Primeiro verificar se ainda há períodos hoje
-            for periodo in periodos:
-                inicio_str = periodo.get('inicio', '')
-                if inicio_str:
-                    try:
-                        inicio_parts = inicio_str.split(':')
-                        if len(inicio_parts) == 2:
-                            inicio_hora = int(inicio_parts[0])
-                            inicio_minuto = int(inicio_parts[1])
-                            inicio_minutos = inicio_hora * 60 + inicio_minuto
-                            
-                            # Se ainda há um período hoje que começa depois
-                            if hora_atual_minutos < inicio_minutos:
-                                return {
-                                    'dentro_horario': False,
-                                    'proximo_horario': f"Hoje às {inicio_str}",
-                                    'mensagem': f"Você será atendido hoje às {inicio_str}"
-                                }
-                    except (ValueError, IndexError):
-                        continue
-            
-            # Se não há mais períodos hoje, buscar próximo dia
-            for i in range(1, 8):  # Próximos 7 dias
-                proximo_dia_num = (dia_atual_num + i) % 7
-                proximo_dia_nome = dias_semana[proximo_dia_num]
-                
-                for dia_info in horarios:
-                    if dia_info.get('dia') == proximo_dia_nome and dia_info.get('periodos'):
-                        primeiro_periodo = dia_info['periodos'][0]
-                        inicio = primeiro_periodo.get('inicio', '')
-                        
-                        if inicio:
-                            return {
-                                'dentro_horario': False,
-                                'proximo_horario': f"{proximo_dia_nome} às {inicio}",
-                                'mensagem': f"Você será atendido na {proximo_dia_nome} às {inicio}"
-                            }
-            
-            # Se não encontrou horário, assumir que está disponível
-            return {
-                'dentro_horario': True,
-                'proximo_horario': None,
-                'mensagem': None
-            }
-            
-        except Exception as e:
-            return {
-                'dentro_horario': True,
-                'proximo_horario': None,
-                'mensagem': None
-            }
+        return verificar_horario_atendimento(self.provedor)
     
     def _formatar_mensagem_transferencia_comercial(self, horario_info: Dict[str, Any]) -> str:
         """

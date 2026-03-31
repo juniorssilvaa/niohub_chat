@@ -1,6 +1,26 @@
 {
-  "current_version": "2.29.0",
+  "current_version": "2.30.0",
   "versions": [
+    {
+      "version": "2.30.0",
+      "version_type": "minor",
+      "date": "2026-03-31",
+      "title": "Horários Inteligentes & Precisão Regional",
+      "changes": [
+        {
+          "type": "feature",
+          "module": "Chatbot & IA",
+          "title": "Gestão de Horários Proativa",
+          "description": "O sistema agora detecta automaticamente se sua empresa está aberta antes de transferir um cliente. Caso esteja fechado, o chatbot e a IA informam proativamente o horário de retorno da equipe."
+        },
+        {
+          "type": "improvement",
+          "module": "Core",
+          "title": "Sincronização Regional (Belém)",
+          "description": "Corrigimos o fuso horário de todo o sistema para o horário de Belém. Agora as saudações (Bom dia/Boa tarde) e as regras de atendimento são 100% precisas com o relógio local."
+        }
+      ]
+    },
     {
       "version": "2.29.0",
       "version_type": "minor",

@@ -10,6 +10,7 @@ from .models import ChatbotFlow, Provedor
 from .redis_memory_service import redis_memory_service
 from integrations.whatsapp_cloud_send import send_via_whatsapp_cloud_api
 from conversations.closing_service import closing_service
+from .horario_utils import verificar_horario_atendimento
 
 logger = logging.getLogger(__name__)
 
@@ -207,8 +208,21 @@ class ChatbotEngine:
                     conv.assignee = None # Limpa atribuição individual se houver
                     await sync_to_async(conv.save)() # Salva tudo para garantir que equipe e status persistam
                     
-                    # Enviar confirmação (opcional)
-                    await ChatbotEngine.send_message_agnostic(conv=conv, text=f"Entendido! Você será atendido pelo setor *{team.name}*. Um atendente falará com você em breve.")
+                    # Verificar horário de atendimento
+                    horario_info = verificar_horario_atendimento(conv.inbox.provedor)
+                    msg_transfer = f"Entendido! Você será atendido pelo setor *{team.name}*."
+                    
+                    if not horario_info.get('dentro_horario'):
+                        proximo = horario_info.get('proximo_horario')
+                        if proximo:
+                            msg_transfer += f"\n\nComo estamos fora do nosso horário de atendimento agora, nossa equipe falará com você a partir de *{proximo}*."
+                        else:
+                            msg_transfer += f"\n\nComo estamos fora do nosso horário de atendimento agora, nossa equipe falará com você assim que possível."
+                    else:
+                        msg_transfer += " Um atendente falará com você em breve."
+
+                    # Enviar confirmação
+                    await ChatbotEngine.send_message_agnostic(conv=conv, text=msg_transfer)
                     
                     # Resetar estado do chatbot para esta conversa
                     await redis_memory_service.clear_memory(provedor_id, conversation_id, "whatsapp", "unknown")
@@ -957,6 +971,15 @@ class ChatbotEngine:
                     # Transferência Direta
                     logger.info(f"[ChatbotEngine][Transfer] Iniciando transferência direta para equipe {team_id}")
                     team = await sync_to_async(Team.objects.get)(id=team_id)
+                    
+                    # Verificar horário
+                    horario_info = verificar_horario_atendimento(conversation.inbox.provedor)
+                    if not horario_info.get('dentro_horario'):
+                        proximo = horario_info.get('proximo_horario')
+                        aviso = f"\n\n🚨 *Ateção:* No momento estamos fora do nosso horário de atendimento. Nossa equipe de *{team.name}* falará com você a partir de *{proximo}*." if proximo else f"\n\n🚨 *Atenção:* No momento estamos fora do nosso horário de atendimento. Nossa equipe de *{team.name}* falará com você assim que possível."
+                        # Se já enviamos o 'content' acima, enviamos o aviso separado para destaque
+                        await ChatbotEngine.send_message_agnostic(conv=conversation, text=aviso)
+
                     conversation.status = 'pending'
                     conversation.team = team
                     conversation.assignee = None

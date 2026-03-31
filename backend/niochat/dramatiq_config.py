@@ -184,17 +184,26 @@ if not USE_STUB_BROKER:
                 blocked_connection_timeout=60
             )
         else:
-            # Sem SSL: usar URL diretamente
-            # Garantir parâmetros na URL para evitar EOF
-            url_with_params = DRAMATIQ_BROKER_URL
-            if "?" not in url_with_params:
-                url_with_params += "?heartbeat=60&connection_attempts=10&retry_delay=10&socket_timeout=30"
-            
-            # ... (verificações de host existentes)
+            # Sem SSL: usar parâmetros explícitos para garantir que caracteres especiais na senha
+            # sejam tratados corretamente via 'unquote', evitando erros de parsing de URL.
+            host = parsed_url.hostname
+            port = parsed_url.port or 5672
+            username = parsed_url.username or "guest"
+            password = unquote(parsed_url.password or "guest")
+            virtual_host = unquote(parsed_url.path[1:]) if parsed_url.path and len(parsed_url.path) > 1 else "/"
             
             broker = RabbitmqBroker(
-                url=url_with_params,
+                host=host,
+                port=port,
+                credentials=pika.PlainCredentials(username, password),
+                virtual_host=virtual_host,
                 confirm_delivery=True,
+                # Configurações de estabilidade
+                heartbeat=60,
+                connection_attempts=10,
+                retry_delay=10,
+                socket_timeout=30,
+                blocked_connection_timeout=60
             )
     except Exception as e:
         raise RuntimeError(f"Erro ao criar RabbitMQ Broker: {e}") from e
@@ -299,11 +308,36 @@ if not USE_STUB_BROKER:
 dramatiq.set_broker(broker)
 
 # =============================================================================
-# 7️⃣ IMPORTAÇÃO DAS TAREFAS (REMOVIDA - FEITA NO AppConfig.ready())
+# 7️⃣ AGENDADOR INTERNO (CRON HEARTBEAT)
 # =============================================================================
-# ❌ ANTES: Importava aqui (antes do Django estar configurado) → erro "Apps aren't loaded yet"
-# ✅ AGORA: Importação feita em AppConfig.ready() de cada app quando Django está pronto
-# 
-# NOTA: Os imports de conversations.dramatiq_tasks e integrations.dramatiq_tasks
-# são feitos automaticamente pelo Django quando os AppConfig.ready() são chamados,
-# garantindo que o Django esteja completamente configurado antes de importar os actors.
+# ❌ ANTES: Dependia de um container 'niochat-cron' separado
+# ✅ AGORA: O próprio worker pode disparar tarefas periódicas
+# Ativado apenas se a variável de ambiente RUN_HEARTBEAT=true estiver presente
+
+RUN_HEARTBEAT = os.getenv("RUN_HEARTBEAT", "false").lower() == "true"
+
+if RUN_HEARTBEAT:
+    import threading
+    import time
+    from django.utils import timezone
+
+    def heartbeat_worker():
+        """Thread que dispara tarefas periódicas a cada 120 segundos"""
+        print("💓 [HEARTBEAT] Iniciando agendador interno de tarefas periódicas...")
+        
+        # Esperar um pouco para o Django terminar de carregar ( AppConfig.ready() )
+        time.sleep(15) 
+        
+        while True:
+            try:
+                from conversations.dramatiq_tasks import finalize_closing_conversations
+                print(f"💓 [HEARTBEAT] {timezone.now()} - Disparando tarefa de encerramento automático...")
+                finalize_closing_conversations.send()
+            except Exception as e:
+                print(f"💓 [HEARTBEAT] Erro ao disparar tarefa periódica: {e}")
+            
+            time.sleep(120)
+
+    # Iniciar em uma thread separada para não travar o processo principal
+    heartbeat_thread = threading.Thread(target=heartbeat_worker, daemon=True)
+    heartbeat_thread.start()

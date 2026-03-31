@@ -514,12 +514,12 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         // Criar tanto 'icon' quanto 'shortcut icon' para compatibilidade
         const link1 = document.createElement('link');
         link1.rel = 'icon';
-        link1.type = 'image/x-icon';
+        link1.type = 'image/png';
         link1.href = href;
         document.head.appendChild(link1);
         const link2 = document.createElement('link');
         link2.rel = 'shortcut icon';
-        link2.type = 'image/x-icon';
+        link2.type = 'image/png';
         link2.href = href;
         document.head.appendChild(link2);
       }
@@ -529,8 +529,8 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   const startBlinkingFavicon = () => {
     if (isFaviconBlinkingRef.current) return;
     isFaviconBlinkingRef.current = true;
-    const defaultIcon = '/favicon.ico';
-    const notifyIcon = '/faviconnotifica.ico';
+    const defaultIcon = '/favicon.png';
+    const notifyIcon = '/favicon_red.png';
     let toggle = false;
     faviconTimerRef.current = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -549,7 +549,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       faviconTimerRef.current = null;
     }
     isFaviconBlinkingRef.current = false;
-    setFavicon('/favicon.ico');
+    setFavicon('/favicon.png');
   };
 
   const fetchTimeoutRef = useRef(null);

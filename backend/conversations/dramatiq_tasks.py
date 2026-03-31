@@ -265,8 +265,8 @@ def send_csat_message(csat_request_id: int):
         error_detail = None
         
         try:
-            if csat_request.channel_type == 'whatsapp':
-                logger.info(f"Enviando CSAT {csat_request_id} via WhatsApp para contato {contact.id}")
+            if csat_request.channel_type in ['whatsapp', 'whatsapp_oficial', 'whatsapp_session']:
+                logger.info(f"Enviando CSAT {csat_request_id} via WhatsApp ({csat_request.channel_type}) para contato {contact.id}")
                 success = _send_whatsapp_csat(csat_request, csat_message)
             elif csat_request.channel_type == 'telegram':
                 logger.info(f"Enviando CSAT {csat_request_id} via Telegram para contato {contact.id}")
@@ -378,7 +378,7 @@ def _send_whatsapp_csat(csat_request: CSATRequest, message: str) -> bool:
             # Buscar canal WhatsApp relacionado ao inbox
             canal = Canal.objects.filter(
                 provedor=provedor,
-                tipo__in=['whatsapp', 'whatsapp_session'],
+                tipo__in=['whatsapp', 'whatsapp_session', 'whatsapp_oficial'],
                 ativo=True
             ).first()
             
@@ -414,7 +414,7 @@ def _send_whatsapp_csat(csat_request: CSATRequest, message: str) -> bool:
         else:
             logger.warning(
                 f"Falha ao enviar CSAT via WhatsApp: provedor={csat_request.provedor.id}, "
-                f"contato={csat_request.contact.id}"
+                f"contato={csat_request.contact.id}, instance={instance_name}, telefone={phone_number}"
             )
         
         return result
@@ -606,16 +606,21 @@ def encerrar_conversa_timeout(conversation_id: int, ultima_mensagem_ia_id: int =
             except Exception as sup_err:
                 logger.warning(f"[TIMEOUT 3MIN] Erro ao enviar auditoria para Supabase: {sup_err}")
             
-            # Limpar memória Redis com normalização estrita
-            try:
-                from core.redis_memory_service import redis_memory_service
-                provedor_id = conversation.inbox.provedor_id if conversation.inbox else None
-                channel = redis_memory_service.normalize_channel(conversation.inbox.channel_type if conversation.inbox else "whatsapp")
-                phone = conversation.contact.phone if conversation.contact else "unknown"
-                redis_memory_service.clear_memory_sync(provedor_id, conversation_id, channel, phone)
-                logger.info(f"[TIMEOUT 3MIN] Memória Redis limpa para conversa {conversation_id} ({channel}:{phone})")
-            except Exception as redis_err:
-                logger.warning(f"[TIMEOUT 3MIN] Erro ao limpar memória Redis: {redis_err}")
+                # Limpar memória Redis/DB com normalização estrita
+                try:
+                    from core.redis_memory_service import redis_memory_service
+                    provedor_id = conversation.inbox.provedor_id if conversation.inbox else None
+                    original_channel = conversation.inbox.channel_type if conversation.inbox else "whatsapp"
+                    channel = redis_memory_service.normalize_channel(original_channel)
+                    phone = conversation.contact.phone if conversation.contact else "unknown"
+                    
+                    # Nome amigável para o log
+                    friendly_channel = "WhatsApp Oficial" if original_channel == "whatsapp_oficial" else original_channel.capitalize()
+                    
+                    redis_memory_service.clear_memory_sync(provedor_id, conversation_id, channel, phone)
+                    logger.info(f"[TIMEOUT 3MIN] Memória limpa para conversa {conversation_id} ({friendly_channel}:{phone})")
+                except Exception as redis_err:
+                    logger.warning(f"[TIMEOUT 3MIN] Erro ao limpar memória: {redis_err}")
             
             logger.info(
                 f"[TIMEOUT 3MIN] Conversa {conversation_id} encerrada automaticamente "

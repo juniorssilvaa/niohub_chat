@@ -290,7 +290,7 @@ const API_BASE = '/api';
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification('Nova Mensagem no Chat Interno', {
               body: `${data.message.sender?.username || 'Usuario'}: ${data.message.content}`,
-              icon: '/favicon.ico',
+              icon: '/favicon.png',
               tag: 'chat-interno'
             });
           }

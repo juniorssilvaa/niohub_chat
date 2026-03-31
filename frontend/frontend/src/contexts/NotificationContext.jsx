@@ -184,7 +184,7 @@ export const NotificationProvider = ({ children }) => {
               newReminders.forEach(reminder => {
                 new Notification('Lembrete Agendado', {
                   body: reminder.message,
-                  icon: '/favicon.ico',
+                  icon: '/favicon.png',
                   tag: `reminder-${reminder.id}`
                 });
               });
@@ -347,7 +347,7 @@ export const NotificationProvider = ({ children }) => {
               if ('Notification' in window && Notification.permission === 'granted') {
                 new Notification('Nova Mensagem no Chat Interno', {
                   body: `${data.message?.sender?.name || 'Usuario'}: ${data.message?.content}`,
-                  icon: '/favicon.ico',
+                  icon: '/favicon.png',
                   tag: 'chat-interno'
                 });
               }
@@ -576,9 +576,9 @@ export const NotificationProvider = ({ children }) => {
         links.forEach(l => { l.href = href; });
       } else {
         const l1 = document.createElement('link');
-        l1.rel = 'icon'; l1.type = 'image/x-icon'; l1.href = href; document.head.appendChild(l1);
+        l1.rel = 'icon'; l1.type = 'image/png'; l1.href = href; document.head.appendChild(l1);
         const l2 = document.createElement('link');
-        l2.rel = 'shortcut icon'; l2.type = 'image/x-icon'; l2.href = href; document.head.appendChild(l2);
+        l2.rel = 'shortcut icon'; l2.type = 'image/png'; l2.href = href; document.head.appendChild(l2);
       }
     } catch (_) { }
   };
@@ -586,8 +586,8 @@ export const NotificationProvider = ({ children }) => {
   const startBlinkingFavicon = () => {
     if (isFaviconBlinkingRef.current) return;
     isFaviconBlinkingRef.current = true;
-    const defaultIcon = '/favicon.ico';
-    const notifyIcon = '/faviconnotifica.ico';
+    const defaultIcon = '/favicon.png';
+    const notifyIcon = '/favicon_red.png';
     let toggle = false;
     faviconTimerRef.current = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -605,7 +605,7 @@ export const NotificationProvider = ({ children }) => {
       faviconTimerRef.current = null;
     }
     isFaviconBlinkingRef.current = false;
-    setFavicon('/favicon.ico');
+    setFavicon('/favicon.png');
   };
 
   const clearNotifications = () => {

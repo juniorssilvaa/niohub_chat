@@ -38,47 +38,56 @@ class Command(BaseCommand):
             self.show_status()
     
     def start_worker(self, integration_id=None):
-        """Iniciar worker"""
-        self.stdout.write("Iniciando worker Telegram...")
+        """Iniciar worker de forma resiliente"""
+        self.stdout.write(self.style.SUCCESS("🤖 Iniciando Worker Telegram Resiliente..."))
         
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            # Configurar handlers para sinais
-            def signal_handler(signum, frame):
-                self.stdout.write("Recebido sinal de parada...")
-                loop.create_task(self.shutdown(loop))
-            
-            signal.signal(signal.SIGINT, signal_handler)
-            signal.signal(signal.SIGTERM, signal_handler)
-            
-            if integration_id:
-                # Iniciar integração específica
-                loop.run_until_complete(
-                    telegram_manager.start_integration(integration_id)
-                )
-            else:
-                # Iniciar todas as integrações
-                loop.run_until_complete(
-                    telegram_manager.start_all_integrations()
-                )
-            
-            self.stdout.write(
-                self.style.SUCCESS("Worker Telegram iniciado com sucesso!")
-            )
-            
-            # Manter loop rodando
-            loop.run_forever()
-            
-        except KeyboardInterrupt:
-            self.stdout.write("Worker interrompido pelo usuário")
-        except Exception as e:
-            self.stdout.write(
-                self.style.ERROR(f"Erro ao iniciar worker: {e}")
-            )
-        finally:
-            loop.close()
+        while True:
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                # Configurar handlers para sinais
+                def signal_handler(signum, frame):
+                    self.stdout.write(self.style.WARNING("⚠️ Recebido sinal de parada..."))
+                    loop.stop()
+                    sys.exit(0)
+                
+                signal.signal(signal.SIGINT, signal_handler)
+                signal.signal(signal.SIGTERM, signal_handler)
+                
+                self.stdout.write("🔍 Buscando integrações Telegram ativas...")
+                
+                if integration_id:
+                    # Iniciar integração específica
+                    loop.run_until_complete(
+                        telegram_manager.start_integration(integration_id)
+                    )
+                else:
+                    # Iniciar todas as integrações
+                    loop.run_until_complete(
+                        telegram_manager.start_all_integrations()
+                    )
+                
+                # Verificar se alguma começou
+                if not telegram_manager.services:
+                    self.stdout.write(self.style.WARNING("😴 Nenhuma integração ativa encontrada. Verificando novamente em 60s..."))
+                else:
+                    self.stdout.write(self.style.SUCCESS(f"🚀 {len(telegram_manager.services)} integração(ões) iniciada(s)."))
+                
+                # Manter o worker vivo infinitamente (Importante para o Docker)
+                # Mesmo que não haja nada agora, ele deve ficar vivo aguardando novas
+                loop.run_forever()
+                
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"❌ Erro fatal no Worker: {e}"))
+                self.stdout.write("🔄 Reiniciando Worker em 15 segundos...")
+                import time
+                time.sleep(15)
+            finally:
+                if 'loop' in locals() and loop.is_running():
+                    loop.stop()
+                if 'loop' in locals():
+                    loop.close()
     
     def stop_worker(self, integration_id=None):
         """Parar worker"""

@@ -49,7 +49,16 @@ class OpenAIService:
         return self.formatter._determinar_genero_nome(nome)
 
     def _get_greeting_time(self) -> str:
-        return self.formatter._get_greeting_time()
+        """Retorna saudação baseada no horário atual de Belém"""
+        from django.utils import timezone
+        now = timezone.localtime(timezone.now())
+        hour = now.hour
+        if 5 <= hour < 12:
+            return "bom dia"
+        elif 12 <= hour < 18:
+            return "boa tarde"
+        else:
+            return "boa noite"
 
     def _formatar_horarios_atendimento(self, horarios: list) -> str:
         return self.actions._formatar_horarios_atendimento(horarios)
@@ -101,6 +110,8 @@ class OpenAIService:
                 filtered['dentro_horario'] = dentro_horario
                 if not dentro_horario and horario_info.get('proximo_horario'):
                     filtered['proximo_horario'] = horario_info.get('proximo_horario')
+                if res.get('mensagem_formatada'):
+                    filtered['mensagem_formatada'] = res.get('mensagem_formatada')
             # Remover horario_info completo para não expor estrutura interna
             if 'horario_info' in filtered:
                 del filtered['horario_info']
