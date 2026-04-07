@@ -585,8 +585,8 @@ def send_via_whatsapp_cloud_api(
                     interactive_payload["footer"] = {
                         "text": str(footer_text)[:1024]
                     }
-                
-                payload["interactive"] = interactive_payload
+            
+            payload["interactive"] = interactive_payload
         else:
             # Fallback para texto
             payload["type"] = "text"
