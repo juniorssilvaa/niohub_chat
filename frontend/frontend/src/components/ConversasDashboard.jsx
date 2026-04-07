@@ -1279,7 +1279,10 @@ export default function ConversasDashboard() {
                 : ''}
             </span>
             {(isAtendente || isBot) &&
-              (modalConversa?.inbox?.channel_type === 'whatsapp' || modalConversa?.channel === 'whatsapp') &&
+              (modalConversa?.inbox?.channel_type === 'whatsapp' || 
+               modalConversa?.inbox?.channel_type === 'whatsapp_oficial' || 
+               modalConversa?.inbox?.channel_type === 'whatsapp_session' || 
+               modalConversa?.channel === 'whatsapp') &&
               !msg.isTemporary && (
                 <ModalMessageStatusIcon message={msg} />
               )}

@@ -2690,6 +2690,7 @@ class MessageViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def send_text(self, request):
         """Enviar mensagem de texto"""
+        logger.info("[DEBUG] Daphne auto-reload test - send_text called")
         import logging
         # logger = logging.getLogger(__name__)
         
@@ -2985,6 +2986,96 @@ class MessageViewSet(viewsets.ModelViewSet):
             return Response(response_data, status=status.HTTP_201_CREATED)
         except Conversation.DoesNotExist:
             return Response({'error': 'Conversa não encontrada'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['post'])
+    def send_interactive(self, request):
+        """
+        Enviar mensagem interativa com botões (WhatsApp Oficial)
+        Payload esperado: { "conversation_id": 123, "content": "Texto", "buttons": [{"id": "btn1", "title": "Botão 1"}] }
+        """
+        conversation_id = request.data.get('conversation_id')
+        content = request.data.get('content')
+        buttons = request.data.get('buttons', [])
+        header = request.data.get('header')
+        footer = request.data.get('footer')
+        message_type = request.data.get('message_type', 'interactive')
+        order_details = request.data.get('order_details')
+        
+        logger.info(f"[SEND_INTERACTIVE] Iniciando: conversation_id={conversation_id}, type={message_type}")
+        
+        if not conversation_id or not content:
+            return Response({'error': 'conversation_id e content são obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            conversation = Conversation.objects.get(id=conversation_id)
+            channel_type = conversation.inbox.channel_type if conversation.inbox else 'whatsapp'
+            user = request.user
+            
+            # Formatar conteúdo com nome do agente (exceto para pagamentos profissionais)
+            if message_type != 'order_details':
+                formatted_content = self._format_message_with_agent_name(content, user, channel_type)
+            else:
+                formatted_content = content
+            
+            # Salvar mensagem no banco
+            message = Message.objects.create(
+                conversation=conversation,
+                content=content,
+                message_type=message_type,
+                is_from_customer=False,
+                additional_attributes={
+                    'buttons': buttons, 
+                    'header': header, 
+                    'footer': footer, 
+                    'order_details': order_details,
+                    'sent_success': False
+                }
+            )
+            
+            if channel_type in ['whatsapp', 'whatsapp_oficial']:
+                canal_oficial = conversation.inbox.get_canal_instance()
+                
+                if canal_oficial and canal_oficial.token and canal_oficial.phone_number_id:
+                    # Verificar janela de 24h
+                    if not conversation.is_24h_window_open():
+                        return Response({'error': 'Janela de 24 horas fechada. Use um template.'}, status=status.HTTP_400_BAD_REQUEST)
+                        
+                    from integrations.whatsapp_cloud_send import send_via_whatsapp_cloud_api
+                    success, whatsapp_response = send_via_whatsapp_cloud_api(
+                        conversation,
+                        formatted_content,
+                        message_type, # Pode ser 'interactive' ou 'order_details'
+                        buttons=buttons,
+                        header=header,
+                        footer=footer,
+                        order_details=order_details
+                    )
+                    
+                    if success:
+                        import json
+                        attrs = message.additional_attributes or {}
+                        attrs.update({'sent_success': True, 'whatsapp_sent': True, 'last_status': 'sent'})
+                        
+                        try:
+                            resp_data = json.loads(whatsapp_response)
+                            msg_id = resp_data.get('messages', [{}])[0].get('id')
+                            if msg_id:
+                                message.external_id = msg_id
+                        except: pass
+                        
+                        message.additional_attributes = attrs
+                        message.save()
+                        return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
+                    else:
+                        return Response({'error': f'Falha no envio: {whatsapp_response}'}, status=status.HTTP_400_BAD_REQUEST)
+                        
+            return Response({'error': 'Canal não suporta mensagens interativas.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Conversation.DoesNotExist:
+            return Response({'error': 'Conversa não encontrada'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"[SEND_INTERACTIVE] Erro: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _send_telegram_message(self, conversation, content, reply_to_message_id=None):
         """

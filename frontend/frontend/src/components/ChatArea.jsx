@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Send,
@@ -16,10 +16,15 @@ import {
   FileText,
   Zap,
   X,
-  Image as ImageIcon,
-  Film,
-  Music
+  Music,
+  Wallet,
+  CreditCard,
+  Calendar,
+  Copy,
+  Barcode,
+  Database
 } from 'lucide-react';
+import SgpSidebar from './SgpSidebar';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogPortal, DialogOverlay } from './ui/dialog';
@@ -41,57 +46,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   const navigate = useNavigate();
   const isDarkTheme = useTheme();
 
-  // Verificação de segurança para evitar erros
-  if (!conversation) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <div className="text-center max-w-md mx-auto px-4">
-          {/* Logo do NioChat */}
-          <div className="mb-6">
-            <img
-              src={logoImage}
-              alt="NioChat Logo"
-              className="w-32 h-32 mx-auto object-contain"
-            />
-          </div>
-
-          {/* Texto principal */}
-          <p className="text-base text-muted-foreground mb-2">
-            Selecione uma conversa para iniciar o atendimento
-          </p>
-
-          {/* Texto explicativo */}
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Os atendimentos em andamento aparecerão aqui.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!conversation.contact) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <div className="text-center text-muted-foreground">
-          <h3 className="text-lg font-medium mb-2">Conversa inválida</h3>
-          <p>Esta conversa não possui informações de contato válidas</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Proteção: Carregando dados do usuário logado
-  if (!user) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Carregando dados do usuário...</p>
-        </div>
-      </div>
-    );
-  }
-
+  // HOOKS DEVEM VIR ANTES DE QUALQUER RETURN CONDICIONAL (Regra dos Hooks)
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -99,9 +54,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   // Estado para verificar se a janela de 24 horas está aberta
   // Inicializar com o valor da prop se disponível, senão null
   const channelType = conversation?.inbox?.channel_type;
-  const initialIs24hWindowOpen = (channelType === 'whatsapp' || channelType === 'whatsapp_oficial')
+  const isWhatsAppChannel = ['whatsapp', 'whatsapp_oficial', 'whatsapp_session'].includes(channelType);
+  const initialIs24hWindowOpen = isWhatsAppChannel
     ? (conversation?.is_24h_window_open ?? null)
     : true; // Para outros canais, sempre aberta
+
   const [is24hWindowOpen, setIs24hWindowOpen] = useState(initialIs24hWindowOpen);
   // Estado local para o nome do contato (pode ser atualizado via WebSocket)
   const [contactName, setContactName] = useState(conversation.contact?.name);
@@ -148,6 +105,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   const [audioProgress, setAudioProgress] = useState({});
   const audioRefs = useRef({});
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showSgpSidebar, setShowSgpSidebar] = useState(() => {
+    const saved = localStorage.getItem('niochat_showSgpSidebar');
+    // Se não houver nada salvo, o padrão agora é FALSE (fechado)
+    return saved === 'true';
+  });
   const emojiPickerRef = useRef(null);
 
   // Lista abrangente de emojis categorizada
@@ -182,6 +144,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     setMessage(prev => prev + emoji);
     // Não fechamos o picker para permitir adicionar vários emojis seguidos
   };
+
+  // Persistir estado do Sidebar SGP
+  useEffect(() => {
+    localStorage.setItem('niochat_showSgpSidebar', showSgpSidebar);
+  }, [showSgpSidebar]);
 
   // Estados para mídias pendentes (prévia antes de enviar)
   const [pendingFile, setPendingFile] = useState(null);
@@ -586,8 +553,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           // Atualizar status da janela de 24 horas
           // IMPORTANTE: Sempre usar o valor calculado pelo backend (is_24h_window_open)
           // que busca a mensagem mais recente do cliente e usa o created_at real
-          const channelType = updatedConversation.inbox?.channel_type;
-          if (channelType === 'whatsapp' || channelType === 'whatsapp_oficial') {
+          const currentIsWhatsApp = ['whatsapp', 'whatsapp_oficial', 'whatsapp_session'].includes(channelType);
+          if (currentIsWhatsApp) {
+
             // O backend sempre retorna is_24h_window_open calculado corretamente
             // usando o created_at da mensagem mais recente do cliente
             if (updatedConversation.is_24h_window_open !== undefined) {
@@ -607,8 +575,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         // Em caso de erro, usar dados da conversa que já temos como último recurso
         // Mas sempre priorizar o valor calculado pelo backend
         if (conversation) {
-          const channelType = conversation.inbox?.channel_type;
-          if (channelType === 'whatsapp' || channelType === 'whatsapp_oficial') {
+          const currentIsWhatsApp = ['whatsapp', 'whatsapp_oficial', 'whatsapp_session'].includes(channelType);
+          if (currentIsWhatsApp) {
+
             // Usar o valor do backend se disponível, senão assumir fechada
             if (conversation.is_24h_window_open !== undefined) {
               console.log(`[ChatArea] Usando valor da prop conversation como fallback: ${conversation.is_24h_window_open}`);
@@ -1341,7 +1310,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
-    if (is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp') {
+    if (is24hWindowOpen === false && isWhatsAppChannel) {
+
       const msg24h = '⚠️ Janela de 24 horas fechada. Use um template para reabrir o contato.';
       setError(msg24h);
       toast.error(msg24h);
@@ -1597,7 +1567,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
-    if (is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp') {
+    if (is24hWindowOpen === false && isWhatsAppChannel) {
+
       const msg24h = '⚠️ Janela de 24 horas fechada. Use um template para reabrir o contato.';
       setError(msg24h);
       toast.error(msg24h);
@@ -1734,7 +1705,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
-    if (is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp') {
+    if (is24hWindowOpen === false && isWhatsAppChannel) {
+
       const msg24h = '⚠️ Janela de 24 horas fechada. Use um template para reabrir o contato.';
       setError(msg24h);
       toast.error(msg24h);
@@ -2471,17 +2443,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     return 'order-1';
   };
 
-  //  USAR LIMPEZA DE DUPLICATAS NO RENDER
-  const uniqueMessages = cleanDuplicateMessages(messages);
-
-  // Filtrar mensagens apenas para atendentes se o usuário atual for cliente
-  // Se user não existe ou não é admin/agent, considerar como cliente
-  const isViewingAsAgent = user && (user.user_type === 'superadmin' || user.user_type === 'admin' || user.user_type === 'agent');
-  const filteredMessages = isViewingAsAgent
-    ? uniqueMessages
-    : uniqueMessages.filter(msg => !msg.additional_attributes?.apenas_atendentes);
-
-  // Limpeza de duplicatas funcionando corretamente
+  // Lógica de filtragem e limpeza movida para antes do return para evitar duplicidade
 
   // Função para lidar com upload de arquivo
   const handleFileUpload = (event) => {
@@ -2490,7 +2452,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
-    if (is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp') {
+    if (is24hWindowOpen === false && isWhatsAppChannel) {
+
       setError('⚠️ Mais de 24 horas se passaram desde que o cliente respondeu pela última vez. Para enviar mensagens após este período, é necessário usar um modelo de mensagem (template). O cliente precisa entrar em contato primeiro para reabrir a janela de atendimento.');
       event.target.value = ''; // Limpar input
       return;
@@ -2619,11 +2582,59 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     });
   };
 
+  //  USAR LIMPEZA DE DUPLICATAS NO RENDER
+  const uniqueMessages = cleanDuplicateMessages(messages);
+
+  // Filtrar mensagens apenas para atendentes se o usuário atual for cliente
+  const isViewingAsAgent = user && (user.user_type === 'superadmin' || user.user_type === 'admin' || user.user_type === 'agent');
+  const filteredMessages = isViewingAsAgent
+    ? uniqueMessages
+    : uniqueMessages.filter(msg => !msg.additional_attributes?.apenas_atendentes);
+
+  // Guards de segurança APÓS todos os hooks (Regra dos Hooks do React)
+  if (!conversation) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="mb-6">
+            <img src={logoImage} alt="NioChat Logo" className="w-32 h-32 mx-auto object-contain" />
+          </div>
+          <p className="text-base text-muted-foreground mb-2">Selecione uma conversa para iniciar o atendimento</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">Os atendimentos em andamento aparecerão aqui.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!conversation.contact) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <div className="text-center text-muted-foreground">
+          <h3 className="text-lg font-medium mb-2">Conversa inválida</h3>
+          <p>Esta conversa não possui informações de contato válidas</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Carregando dados do usuário...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-1 flex flex-col bg-background min-w-0 min-h-0 overflow-hidden">
-      {/* Header da conversa */}
-      <div className="border-b border-border p-4 bg-card">
-        <div className="flex items-center justify-between">
+    <div className="flex-1 flex flex-row overflow-hidden bg-background">
+      {/* Área Principal do Chat (Lado Esquerdo) */}
+      <div className="flex-1 flex flex-col relative overflow-hidden bg-background border-r">
+        {/* Header da conversa */}
+        <div className="border-b border-border p-4 bg-card">
+          <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="flex-shrink-0">
               <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-primary/10">
@@ -2686,50 +2697,44 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           </div>
 
           <div className="flex items-center space-x-2">
-            {/* Botão para buscar foto do perfil */}
-            {conversation.inbox?.channel_type === 'whatsapp' && (
-              <button
-                onClick={() => fetchProfilePicture(false)}
-                disabled={loadingProfilePic}
-                className="p-2 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
-                title="Atualizar foto do perfil"
-              >
-                {loadingProfilePic ? (
-                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <User className="w-4 h-4" />
-                )}
-              </button>
-            )}
+
+            {/* Toggle SGP Sidebar */}
+            <button
+                onClick={() => setShowSgpSidebar(!showSgpSidebar)}
+                className={`p-2 ml-1 rounded-lg transition-all duration-300 ${showSgpSidebar ? 'bg-white/10 text-white' : 'text-muted-foreground hover:bg-white/5 hover:text-white'}`}
+                title={showSgpSidebar ? "Fechar painel SGP" : "Abrir painel SGP"}
+            >
+                <Database size={19} />
+            </button>
 
             {/* Botões de Ação Diretos */}
-            <div className="flex items-center space-x-1 border-l border-border pl-2 ml-2">
+            <div className="flex items-center space-x-1 border-l border-white/5 pl-2 ml-2">
               <button
                 onClick={handleAssignToMe}
-                className="p-2 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors flex items-center space-x-2"
+                className="p-2 text-muted-foreground hover:bg-white/5 hover:text-white rounded-lg transition-all flex items-center space-x-2 group"
                 title="Atribuir para mim"
               >
-                <UserCheck className="w-4 h-4" />
-                <span className="text-xs font-medium">Atribuir</span>
+                <UserCheck className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-medium text-nowrap">Atribuir</span>
               </button>
               
               <button
                 onClick={handleTransferConversation}
                 disabled={loadingAgents}
-                className="p-2 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-50"
+                className="p-2 text-muted-foreground hover:bg-white/5 hover:text-white rounded-lg transition-all flex items-center space-x-2 disabled:opacity-50 group"
                 title="Transferir conversa"
               >
-                <ArrowRightLeft className="w-4 h-4" />
-                <span className="text-xs font-medium">Transferir</span>
+                <ArrowRightLeft className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+                <span className="text-xs font-medium text-nowrap">Transferir</span>
               </button>
-              
+
               <button
                 onClick={handleCloseConversation}
-                className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors flex items-center space-x-2"
+                className="p-2 text-red-400 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-all flex items-center space-x-2 group"
                 title="Encerrar conversa"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span className="text-xs font-medium">Encerrar</span>
+                <CheckCircle2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-medium text-nowrap">Encerrar</span>
               </button>
             </div>
           </div>
@@ -3067,7 +3072,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                         </div>
                       )}
 
-                      {/* Botões interativos do chatbot */}
+                      {/* Botões interativos do chatbot (Menu) */}
                       {msg.additional_attributes?.interactive_buttons && msg.additional_attributes.interactive_buttons.length > 0 && (
                         <div className="mt-3 space-y-1.5">
                           {msg.additional_attributes.interactive_buttons.map((btn, index) => (
@@ -3082,30 +3087,153 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                           ))}
                         </div>
                       )}
-                      {/* Mensagens especiais de fatura */}
-                      {content && content.includes('💳') && content.includes('Fatura ID:') && (
-                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                          <div className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                            📋 Detalhes da Fatura
+
+                      {/* Renderizador de Card de Pagamento Estilo WhatsApp Nativo (DINÂMICO) */}
+                      {(msg.additional_attributes?.is_invoice || 
+                        (content && content.includes('dados para pagamento de sua fatura'))) && (
+                        <div className="mt-4 mb-2 overflow-hidden rounded-xl bg-[#1f2c34] text-[#d1d7db] shadow-lg max-w-[320px] border border-[#2a3942]">
+                          {/* Header Simples */}
+                          <div className="px-4 py-3 border-b border-[#2a3942]">
+                            <p className="text-[11px] text-[#8696a0] font-medium">Nº da cobrança: {msg.additional_attributes?.invoice_number || (content.match(/Nº DA COBRANÇA:\s?(\d+)/i)?.[1] || 'SGP-' + msg.id.toString().slice(-4))}</p>
                           </div>
-                          <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-                            {content.split('\n').map((line, index) => {
-                              if (line.includes('Fatura ID:') || line.includes('Vencimento:') || line.includes('Valor:')) {
-                                return (
-                                  <div key={index} className="flex justify-between">
-                                    <span className="font-medium">{line.split(':')[0]}</span>
-                                    <span>{line.split(':')[1]}</span>
+
+                          {/* Conteúdo Principal Estilo Zap */}
+                          <div className="p-4 space-y-4">
+                            <div>
+                              <p className="text-lg font-bold text-white">{msg.additional_attributes?.invoice_number || (content.match(/Nº DA COBRANÇA:\s?(\d+)/i)?.[1] || 'Fatura')}</p>
+                              <p className="text-xs text-[#8696a0]">Quantidade: 1</p>
+                            </div>
+
+                            <div className="flex items-center justify-between py-2 border-t border-b border-[#2a3942] border-dashed">
+                              <p className="text-sm">Pagar com</p>
+                              <div className="flex items-center justify-center">
+                                {msg.additional_attributes?.payment_type === 'pix' ? (
+                                  <div className="bg-[#00a884]/10 p-1 rounded">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-[#00a884]">
+                                      <path d="M12 2L4 12L12 22L20 12L12 2Z" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                      <path d="M12 7L7 12L12 17L17 12L12 7Z" fill="white" />
+                                    </svg>
                                   </div>
-                                );
-                              }
-                              return null;
-                            })}
+                                ) : (
+                                  <div className="bg-[#00a884]/10 p-1 rounded">
+                                    <Barcode className="w-5 h-5 text-[#00a884]" />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-sm">
+                              <p>Total</p>
+                              <div className="text-right">
+                                <p className="font-bold text-white">
+                                  R$ {msg.additional_attributes?.amount || (content.match(/VALOR:\s?R\$\s?([\d,.]+)/i)?.[1] || content.match(/R\$\s?[\d,.]+/)?.[0]?.replace('R$', '') || '0,00')}
+                                </p>
+                                {msg.additional_attributes?.vencimento && (
+                                  <p className="text-[10px] text-[#8696a0]">
+                                    Vence em: {(() => {
+                                      const d = msg.additional_attributes.vencimento;
+                                      if (d.includes('/')) return d;
+                                      const parts = d.split('-');
+                                      return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : d;
+                                    })()}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <p className="text-xs font-bold text-[#d1d7db]">
+                                Pagar com {msg.additional_attributes?.payment_type === 'pix' ? 'PIX' : 'Boleto'}: 👇
+                              </p>
+                              <ol className="text-[11px] text-[#8696a0] space-y-1 ml-0.5">
+                                {msg.additional_attributes?.payment_type === 'pix' ? (
+                                  <>
+                                    <li>1. Copie o código PIX abaixo;</li>
+                                    <li>2. Abra o aplicativo do seu banco;</li>
+                                    <li>3. Cole o código e finalize o pagamento.</li>
+                                  </>
+                                ) : (
+                                  <>
+                                    <li>1. Copie o código do boleto abaixo;</li>
+                                    <li>2. Use o aplicativo do seu banco para pagar.</li>
+                                  </>
+                                )}
+                              </ol>
+                            </div>
+                            
+                            <p className="text-[10px] text-[#8696a0] font-bold uppercase tracking-wider">
+                              {conversation?.inbox?.provedor?.nome || conversation?.inbox?.provedor?.razao_social || 'NIO NET'}
+                            </p>
+                          </div>
+
+                          {/* Botões de Cópia Estilo Nativo (Verde) */}
+                          <div className="border-t border-[#2a3942]">
+                            {/* Botão Copiar para PIX */}
+                            {(msg.additional_attributes?.payment_type === 'pix' || (content && content.includes('PIX'))) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const pixCode = msg.additional_attributes?.pix_code || 
+                                                 msg.additional_attributes?.button_choices?.[0]?.split('copy:')[1] || 
+                                                 content.split('copy:')[1]?.split('\n')[0] ||
+                                                 '';
+                                  if (pixCode) {
+                                    navigator.clipboard.writeText(pixCode.trim());
+                                    const btn = e.currentTarget;
+                                    const span = btn.querySelector('span:last-child');
+                                    const originalText = span.textContent;
+                                    span.textContent = 'Código Pix copiado!';
+                                    setTimeout(() => span.textContent = originalText, 2000);
+                                  }
+                                }}
+                                className="w-full py-4 hover:bg-[#2a3942] flex items-center justify-center space-x-2 transition-colors group"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#06cf9c]">
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span className="text-sm font-bold text-[#06cf9c]">Copiar código Pix</span>
+                              </button>
+                            )}
+
+                            {/* Botão Copiar para Boleto */}
+                            {(msg.additional_attributes?.payment_type === 'boleto' || (content && content.includes('Boleto'))) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const lineCode = msg.additional_attributes?.line_code || 
+                                                  msg.additional_attributes?.button_choices?.[1]?.split('copy:')[1] || 
+                                                  '';
+                                  if (lineCode) {
+                                    navigator.clipboard.writeText(lineCode.trim());
+                                    const btn = e.currentTarget;
+                                    const span = btn.querySelector('span:last-child');
+                                    const originalText = span.textContent;
+                                    span.textContent = 'Código do boleto copiado!';
+                                    setTimeout(() => span.textContent = originalText, 2000);
+                                  }
+                                  
+                                  // Se houver PDF, abrir ao clicar
+                                  const pdfUrl = msg.additional_attributes?.document_url || msg.file_url;
+                                  if (pdfUrl) window.open(pdfUrl, '_blank');
+                                }}
+                                className="w-full py-4 hover:bg-[#2a3942] flex items-center justify-center space-x-2 transition-colors border-t border-[#2a3942]"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#06cf9c]">
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span className="text-sm font-bold text-[#06cf9c]">Copiar código do boleto</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
 
-                      {/* Conteúdo da mensagem */}
-                      {content && (
+                      {/* Conteúdo da mensagem (Texto) */}
+                      {content && 
+                       !(msg.additional_attributes?.is_invoice || 
+                        (content && content.includes('dados para pagamento de sua fatura'))) && (
                         <div className="whitespace-pre-wrap break-words break-all" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                           {(() => {
                             const displayContent = !isCustomer && content.includes('*') && content.includes('disse:*')
@@ -3200,7 +3328,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                             <span className="opacity-60">Enviando...</span>
                           )}
                           {/* Status de leitura para mensagens enviadas pelo agente (apenas WhatsApp) */}
-                          {!isCustomer && conversation.inbox?.channel_type === 'whatsapp' &&
+                          {!isCustomer && isWhatsAppChannel &&
+
                             !msg.isTemporary && (
                               <MessageStatusIcon
                                 key={`status-${msg.id}-${msg.additional_attributes?.last_status || 'pending'}`}
@@ -3374,7 +3503,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       {/* Input de mensagem */}
       <div className="border-t border-border p-4 bg-card">
         {/* Botão de templates quando janela fechada */}
-        {is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp' && (
+        {is24hWindowOpen === false && isWhatsAppChannel && (
+
           <div className="mb-3">
             <button
               onClick={openTemplatesModal}
@@ -3398,9 +3528,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           />
           <button
             onClick={() => document.getElementById('file-upload').click()}
-            disabled={sendingMedia || (is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp')}
+            disabled={sendingMedia || (is24hWindowOpen === false && isWhatsAppChannel)}
             className="p-2 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
-            title={(is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp') ? "Janela de 24 horas fechada" : "Enviar arquivo"}
+            title={(is24hWindowOpen === false && isWhatsAppChannel) ? "Janela de 24 horas fechada" : "Enviar arquivo"}
           >
             <Paperclip className="w-5 h-5" />
           </button>
@@ -3409,7 +3539,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           <div className="relative" ref={emojiPickerRef}>
             <button
               onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              disabled={is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp'}
+              disabled={is24hWindowOpen === false && isWhatsAppChannel}
+
               className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${showEmojiPicker ? 'text-primary bg-accent' : 'text-muted-foreground hover:text-primary hover:bg-accent'}`}
               title="Inserir emoji"
             >
@@ -3441,7 +3572,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
           {/* Input de texto */}
           <div className="flex-1 relative">
-            {is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp' ? (
+            {is24hWindowOpen === false && isWhatsAppChannel ? (
+
               <div className="w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
                 ⚠️ Mais de 24 horas se passaram desde que o cliente respondeu pela última vez. Para enviar mensagens após este período, é necessário usar um modelo de mensagem (template). O cliente precisa entrar em contato primeiro para reabrir a janela de atendimento.
               </div>
@@ -3513,7 +3645,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           </div>
 
           {/* Botão de gravação/envio */}
-          {is24hWindowOpen === false && conversation?.inbox?.channel_type === 'whatsapp' ? (
+          {is24hWindowOpen === false && isWhatsAppChannel ? (
+
             <button
               disabled
               className="p-2 bg-accent text-accent-foreground rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
@@ -3831,6 +3964,19 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             </div>
           </DialogContent>
         </Dialog>
+      )}
+      </div>
+
+      {/* Sidebar SGP (Lado Direito) - Render Condicional */}
+      {showSgpSidebar && (
+        <div className="animate-in slide-in-from-right duration-300">
+          <SgpSidebar 
+            conversation={conversation} 
+            user={user} 
+            messages={filteredMessages} 
+            onClose={() => setShowSgpSidebar(false)}
+          />
+        </div>
       )}
     </div>
   );

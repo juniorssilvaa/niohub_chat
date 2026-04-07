@@ -18,58 +18,22 @@ CACHE_TTL = 60
 def notify_new_message(sender, instance, created, **kwargs):
     """
     Notifica o painel sobre novas mensagens para garantir ordenação em tempo real.
-    Executado em background para não bloquear a requisição.
+    Executado via Dramatiq para não bloquear a requisição e gerenciar conexões com o banco.
     """
     if created:
-        # Executar em background para não bloquear a resposta HTTP
         try:
-            from threading import Thread
+            from .dramatiq_tasks import notify_message_event
+            from django.db import transaction
             
-            def _notify_in_background():
-                try:
-                    conversation = instance.conversation
-                    # Recarregar com select_related para garantir dados completos na serialização
-                    conversation = Conversation.objects.select_related('contact', 'assignee', 'inbox', 'inbox__provedor').get(id=conversation.id)
-                    
-                    provedor_id = conversation.inbox.provedor.id if conversation.inbox and conversation.inbox.provedor else None
-                    
-                    if not provedor_id:
-                        return
-                    
-                    # Serializar mensagem e conversa para o front ter dados completos
-                    message_data = MessageSerializer(instance).data
-                    conversation_data = ConversationSerializer(conversation).data
-                    
-                    # Log para debug
-                    logger.debug(
-                        f"[MessageSignal] Notificando mensagem {instance.pk} "
-                        f"para conversa {conversation.id}, provedor {provedor_id}, "
-                        f"is_from_customer: {instance.is_from_customer}"
-                    )
-                    
-                    if instance.is_from_customer:
-                        ConversationNotificationService.notify_message_received(
-                            provedor_id, 
-                            conversation.id, 
-                            message_data,
-                            conversation_data
-                        )
-                    else:
-                        ConversationNotificationService.notify_message_sent(
-                            provedor_id, 
-                            conversation.id, 
-                            message_data,
-                            conversation_data
-                        )
-                except Exception as e:
-                    logger.error(f"[MessageSignal] Erro ao notificar nova mensagem {instance.pk}: {e}", exc_info=True)
+            # Usar transaction.on_commit para garantir que a tarefa só dispare
+            # após a mensagem estar definitivamente salva no banco de dados.
+            # Isso evita que o worker tente ler a mensagem antes do commit.
+            transaction.on_commit(lambda: notify_message_event.send(instance.pk))
             
-            # Executar em thread separada para não bloquear
-            thread = Thread(target=_notify_in_background, daemon=True)
-            thread.start()
+            logger.debug(f"[MessageSignal] Tarefa de notificação agendada para mensagem {instance.pk}")
             
         except Exception as e:
-            logger.error(f"[MessageSignal] Erro ao criar thread para notificação de mensagem {instance.pk}: {e}", exc_info=True)
+            logger.error(f"[MessageSignal] Erro ao agendar notificação para mensagem {instance.pk}: {e}", exc_info=True)
 
 @receiver(pre_save, sender=Conversation)
 def store_previous_status(sender, instance, **kwargs):

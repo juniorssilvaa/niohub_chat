@@ -66,10 +66,11 @@ class FaturaService:
         # Se não for CPF nem CNPJ válido, retornar como está
         return cpf_cnpj
 
-    def buscar_fatura_sgp(self, provedor, cpf_cnpj: str, contrato_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def buscar_fatura_sgp(self, provedor, cpf_cnpj: str, contrato_id: Optional[str] = None, fatura_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Busca fatura no SGP usando o novo endpoint v2 (priorizando por contrato se disponível).
         Regra de Priorização:
+        0. Se houver um fatura_id específico, procura por ela prioritariamente.
         1. Se houver mais de uma vencida -> Setor Financeiro (status: 2)
         2. Se houver exatamente uma vencida -> Retorna essa (status: 1)
         3. Se não houver vencidas, mas houver abertas -> Retorna a mais recente (status: 1)
@@ -122,8 +123,20 @@ class FaturaService:
             
             logger.info(f"[FATURA] Resumo: Vencidas: {len(faturas_vencidas)} | Abertas: {len(faturas_abertas)}")
 
-            # 1. MÚLTIPLAS VENCIDAS -> TRANSFERIR FINANCEIRO
-            if len(faturas_vencidas) > 1:
+            # 1.5 PRIORIDADE: Se foi passado um fatura_id específico
+            f_selecionada = None
+            tipo_display = ""
+            
+            if fatura_id:
+                for f in faturas:
+                    current_f_id = str(f.get('fatura') or f.get('id'))
+                    if current_f_id == str(fatura_id):
+                        f_selecionada = f
+                        tipo_display = "selecionada"
+                        break
+            
+            # 1. MÚLTIPLAS VENCIDAS -> TRANSFERIR FINANCEIRO (Somente se não for uma fatura específica)
+            if not f_selecionada and len(faturas_vencidas) > 1:
                 return {
                     'status': 2,
                     'solicitar_transferencia': True,
@@ -131,15 +144,14 @@ class FaturaService:
                     'mensagem': 'Detectamos que você possui múltiplas faturas vencidas. Para garantir um melhor atendimento, estamos transferindo você para o setor financeiro.'
                 }
             
-            # 2. SELEÇÃO DA FATURA (1 vencida ou 1+ abertas)
-            f_selecionada = None
-            tipo_display = ""
-            if faturas_vencidas:
-                f_selecionada = faturas_vencidas[0]
-                tipo_display = "vencida"
-            elif faturas_abertas:
-                f_selecionada = faturas_abertas[0]
-                tipo_display = "em aberto"
+            # 2. SELEÇÃO DA FATURA (Se não foi selecionada por ID acima)
+            if not f_selecionada:
+                if faturas_vencidas:
+                    f_selecionada = faturas_vencidas[0]
+                    tipo_display = "vencida"
+                elif faturas_abertas:
+                    f_selecionada = faturas_abertas[0]
+                    tipo_display = "em aberto"
             
             if f_selecionada:
                 # Normalizar chaves para compatibilidade com enviar_fatura
@@ -1046,10 +1058,23 @@ class FaturaService:
                             additional_attributes={
                                 'has_buttons': True,
                                 'button_choices': choices,
-                                'is_interactive': True
+                                'is_interactive': True,
+                                'is_invoice': True,
+                                'invoice_number': str(fatura.get('fatura')),
+                                'amount': fatura.get('valor'),
+                                'vencimento': fatura.get('vencimento'),
+                                'payment_type': 'pix',
+                                'pix_code': fatura.get('codigopix')
                             },
                             created_at=timezone.now()
                         )
+                        
+                        # BROADCAST PARA O FRONTEND (REAL-TIME)
+                        try:
+                            from chat.utils import broadcast_message
+                            broadcast_message(msg)
+                        except Exception as e:
+                            logger.error(f"[FATURA] Erro ao transmitir broadcast PIX: {e}")
                         pass
                     except Exception as e:
                         pass
@@ -1119,10 +1144,24 @@ class FaturaService:
                                 additional_attributes={
                                     'has_buttons': True,
                                     'button_choices': choices,
-                                    'is_interactive': True
+                                    'is_interactive': True,
+                                    'is_invoice': True,
+                                    'invoice_number': str(fatura.get('fatura')),
+                                    'amount': fatura.get('valor'),
+                                    'vencimento': fatura.get('vencimento'),
+                                    'payment_type': 'boleto',
+                                    'line_code': fatura.get('linhadigitavel'),
+                                    'document_url': fatura.get('link')
                                 },
                                 created_at=timezone.now()
                             )
+                            
+                            # BROADCAST PARA O FRONTEND (REAL-TIME)
+                            try:
+                                from chat.utils import broadcast_message
+                                broadcast_message(msg)
+                            except Exception as e:
+                                logger.error(f"[FATURA] Erro ao transmitir broadcast Boleto: {e}")
                             pass
                         except Exception as e:
                             pass

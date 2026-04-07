@@ -725,4 +725,65 @@ def finalize_closing_conversations():
             exc_info=True
         )
         return {'error': str(e)}
-        raise
+
+
+@dramatiq.actor(
+    actor_name="notify_message_event",
+    queue_name="niochat_conversation_queue",
+    time_limit=30000,  # 30 segundos
+    max_retries=3
+)
+def notify_message_event(message_id: int):
+    """
+    Tarefa Dramatiq para notificar o painel sobre novas mensagens via WebSocket.
+    Substitui o uso inseguro de threads no Signal de Message.
+    """
+    from conversations.models import Message
+    from conversations.serializers import MessageSerializer, ConversationSerializer
+    from conversations.services import ConversationNotificationService
+    
+    try:
+        # Buscar mensagem e carregar relações necessárias para garantir dados completos
+        message = Message.objects.select_related(
+            'conversation', 
+            'conversation__contact', 
+            'conversation__assignee', 
+            'conversation__inbox', 
+            'conversation__inbox__provedor'
+        ).get(id=message_id)
+        
+        conversation = message.conversation
+        provedor_id = conversation.inbox.provedor.id if conversation.inbox and conversation.inbox.provedor else None
+        
+        if not provedor_id:
+            logger.debug(f"[MessageTask] Conversa {conversation.id} sem provedor, pulando")
+            return
+
+        # Serializar dados completos para o front
+        message_data = MessageSerializer(message).data
+        conversation_data = ConversationSerializer(conversation).data
+        
+        logger.info(
+            f"[MessageTask] Notificando mensagem {message_id} "
+            f"para conversa {conversation.id}, provedor {provedor_id}"
+        )
+        
+        if message.is_from_customer:
+            ConversationNotificationService.notify_message_received(
+                provedor_id, 
+                conversation.id, 
+                message_data,
+                conversation_data
+            )
+        else:
+            ConversationNotificationService.notify_message_sent(
+                provedor_id, 
+                conversation.id, 
+                message_data,
+                conversation_data
+            )
+            
+    except Message.DoesNotExist:
+        logger.warning(f"[MessageTask] Mensagem {message_id} não encontrada")
+    except Exception as e:
+        logger.error(f"[MessageTask] Erro ao notificar mensagem {message_id}: {e}", exc_info=True)

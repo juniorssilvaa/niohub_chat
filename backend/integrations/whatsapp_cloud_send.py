@@ -5,6 +5,8 @@ import requests
 import logging
 import json
 import os
+import uuid
+import re
 from typing import Tuple, Optional, List, Dict, Any
 from core.models import Canal
 from integrations.meta_oauth import PHONE_NUMBERS_API_VERSION
@@ -419,6 +421,57 @@ def send_via_whatsapp_cloud_api(
             payload["document"] = document_data
         elif message_type == 'order_details' or (message_type == 'interactive' and order_details):
             payload["type"] = "interactive"
+            
+            # Garantir que payment_settings de PIX contenha os campos obrigatórios 'key' e 'key_type'
+            # Se order_details vier incompleto, tentar montar a partir dos campos básicos (Simplificação solicitada pelo usuário)
+            if order_details and "payment_settings" not in order_details:
+                # Caso o frontend mande apenas campos básicos
+                fatura_id = order_details.get("invoice_id")
+                valor = order_details.get("amount") or 0
+                pix_code = order_details.get("pix_code")
+                
+                if fatura_id and pix_code:
+                    valor_centavos = int(float(valor) * 100)
+                    key, key_type = _extract_pix_info_from_code(pix_code)
+                    
+                    order_details = {
+                        "reference_id": f"fat_{fatura_id}",
+                        "type": "digital-goods",
+                        "payment_type": "br",
+                        "payment_settings": [{
+                            "type": "pix_dynamic_code",
+                            "pix_dynamic_code": {
+                                "code": pix_code,
+                                "merchant_name": "NIO NET",
+                                "key": key,
+                                "key_type": key_type
+                            }
+                        }],
+                        "currency": "BRL",
+                        "total_amount": {"value": valor_centavos, "offset": 100},
+                        "order": {
+                            "status": "pending",
+                            "items": [{
+                                "name": f"Fatura {fatura_id}",
+                                "amount": {"value": valor_centavos, "offset": 100},
+                                "quantity": 1
+                            }],
+                            "subtotal": {"value": valor_centavos, "offset": 100}
+                        }
+                    }
+
+            # Caso ainda venha o objeto completo do frontend, apenas validamos a chave PIX
+            elif order_details and "payment_settings" in order_details:
+                for setting in order_details.get("payment_settings", []):
+                    if setting.get("type") == "pix_dynamic_code":
+                        pix_info = setting.get("pix_dynamic_code", {})
+                        pix_code = pix_info.get("code")
+                        if pix_code and (not pix_info.get("key") or not pix_info.get("key_type")):
+                            key, key_type = _extract_pix_info_from_code(pix_code)
+                            pix_info["key"] = key
+                            pix_info["key_type"] = key_type
+                            setting["pix_dynamic_code"] = pix_info
+
             payload["interactive"] = {
                 "type": "order_details",
                 "body": {
@@ -430,6 +483,7 @@ def send_via_whatsapp_cloud_api(
                 }
             }
             
+            # Adicionar rodapé se disponível
             footer_text = kwargs.get('footer')
             if footer_text:
                 payload["interactive"]["footer"] = {"text": footer_text}
@@ -489,14 +543,26 @@ def send_via_whatsapp_cloud_api(
                 # WhatsApp Reply Buttons
                 buttons_payload: List[Dict[str, Any]] = []
                 safe_buttons = buttons or []
-                for btn in safe_buttons[:3]:  # WhatsApp permite no máximo 3 botões
-                    buttons_payload.append({
-                        "type": "reply",
-                        "reply": {
-                            "id": str(btn.get('id', str(hash(btn.get('title', ''))))),
-                            "title": str(btn.get('title', 'Botão'))[:20]  # Limite de 20 caracteres
-                        }
-                    })
+                
+                # Botões Interativos (Reply Buttons ou Copy Code) - Máximo 3
+                for btn in safe_buttons[:3]:
+                    btn_type = btn.get('type', 'reply')
+                    
+                    if btn_type == 'copy_code':
+                        buttons_payload.append({
+                            "type": "copy_code",
+                            "copy_code": {
+                                "text": str(btn.get('copy_code', btn.get('id', '')))
+                            }
+                        })
+                    else:
+                        buttons_payload.append({
+                            "type": "reply",
+                            "reply": {
+                                "id": str(btn.get('id', str(hash(btn.get('title', ''))))),
+                                "title": str(btn.get('title', 'Botão'))[:20]
+                            }
+                        })
                 
                 interactive_payload = {
                     "type": "button",
@@ -508,18 +574,19 @@ def send_via_whatsapp_cloud_api(
                     }
                 }
                 
+                # Adicionar Header e Footer se fornecidos
                 if header_text:
                     interactive_payload["header"] = {
                         "type": "text",
-                        "text": header_val
+                        "text": str(header_text)[:60]
                     }
                 
                 if footer_text:
                     interactive_payload["footer"] = {
-                        "text": footer_val
+                        "text": str(footer_text)[:1024]
                     }
-            
-            payload["interactive"] = interactive_payload
+                
+                payload["interactive"] = interactive_payload
         else:
             # Fallback para texto
             payload["type"] = "text"
@@ -926,3 +993,51 @@ def send_template_message(
     except Exception as e:
         logger.exception(f"[WhatsAppCloud] Exceção ao enviar template: {str(e)}")
         return False, str(e), None
+
+def _extract_pix_info_from_code(pix_code: str) -> Tuple[str, str]:
+    """
+    Extrai chave e tipo de chave de um código PIX (EMV ou chave direta).
+    Lógica robusta para garantir parâmetros obrigatórios da Meta API.
+    """
+    if not pix_code:
+        return "", "EVP"
+
+    # 1. Se for QR Code EMV
+    if pix_code.startswith('000201'):
+        try:
+            # CPF (11 dígitos seguidos)
+            for match in re.finditer(r'\b\d{11}\b', pix_code):
+                if match.start() > 10 and len(set(match.group())) > 1:
+                    return match.group(), "CPF"
+            # CNPJ (14 dígitos seguidos)
+            for match in re.finditer(r'\b\d{14}\b', pix_code):
+                if match.start() > 10 and len(set(match.group())) > 1:
+                    return match.group(), "CNPJ"
+            # Email
+            email = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', pix_code)
+            if email:
+                return email.group(), "EMAIL"
+            # Telefone
+            for pattern in [r'\+55\d{10,11}', r'\b55\d{10,11}\b']:
+                for m in re.finditer(pattern, pix_code):
+                    if m.start() > 10 and not m.group().startswith('0002'):
+                        return m.group().lstrip('+'), "PHONE"
+            
+            # Fallback EVP determinístico baseado em hash
+            return str(uuid.uuid5(uuid.NAMESPACE_DNS, pix_code[:50])), "EVP"
+        except:
+            return str(uuid.uuid5(uuid.NAMESPACE_DNS, pix_code[:50])), "EVP"
+
+    # 2. Se for chave direta
+    if len(pix_code) == 11 and pix_code.isdigit():
+        return pix_code, "CPF"
+    elif len(pix_code) == 14 and pix_code.isdigit():
+        return pix_code, "CNPJ"
+    elif '@' in pix_code:
+        return pix_code, "EMAIL"
+    elif pix_code.startswith('+55') or (pix_code.startswith('55') and len(pix_code) >= 12):
+        return pix_code.lstrip('+'), "PHONE"
+    elif '-' in pix_code and len(pix_code) == 36:
+        return pix_code, "EVP"
+    
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, pix_code[:50])), "EVP"

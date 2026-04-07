@@ -115,38 +115,36 @@
 .dark {
   --background: #2d2e32;
   /* Cinza navegador onipresente */
-  --foreground: #0088cc;
+  --foreground: #ffffff;
   --card: #2d2e32;
-  --card-foreground: #0088cc;
+  --card-foreground: #ffffff;
   --popover: #2d2e32;
-  --popover-foreground: #0088cc;
-  --primary: #0088cc;
-  --primary-foreground: #ffffff;
+  --popover-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #2d2e32;
   --secondary: #35363b;
-  /* Levemente diferente para hover */
-  --secondary-foreground: #0088cc;
+  --secondary-foreground: #ffffff;
   --muted: #35363b;
   --muted-foreground: #9ca3af;
-  --accent: #0088cc;
+  --accent: #ffffff1a;
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
-  --border: #1e293b;
-  /* Borda visível mas sutil */
-  --input: #1e293b;
-  --ring: #0088cc;
-  --chart-1: #0088cc;
+  --border: #404146;
+  --input: #404146;
+  --ring: #ffffff33;
+  --chart-1: #ffffff;
   --chart-2: #10b981;
   --chart-3: #f59e0b;
   --chart-4: #ef4444;
   --chart-5: #8b5cf6;
   --sidebar: #2d2e32;
-  --sidebar-foreground: #0088cc;
-  --sidebar-primary: #0088cc;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #0088cc;
+  --sidebar-foreground: #9ca3af;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #2d2e32;
+  --sidebar-accent: #ffffff1a;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #1e293b;
-  --sidebar-ring: #0088cc;
+  --sidebar-border: #404146;
+  --sidebar-ring: #ffffff33;
   --nc-bg: #2d2e32;
   --nc-panel: #2d2e32;
   --nc-success: #10b981;

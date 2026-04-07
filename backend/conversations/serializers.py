@@ -415,14 +415,17 @@ class ConversationListSerializer(serializers.ModelSerializer):
     labels = LabelSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
+    is_24h_window_open = serializers.SerializerMethodField()
+
     
     class Meta:
         model = Conversation
         fields = [
             'id', 'contact', 'inbox', 'assignee', 'team', 'status',
             'labels', 'additional_attributes', 'last_message_at', 'created_at',
-            'last_message', 'unread_count'
+            'last_message', 'unread_count', 'is_24h_window_open'
         ]
+
         read_only_fields = ['id', 'last_message_at', 'created_at']
     
     def get_last_message(self, obj):
@@ -448,6 +451,11 @@ class ConversationListSerializer(serializers.ModelSerializer):
                 'description': obj.team.description
             }
         return None
+
+    def get_is_24h_window_open(self, obj):
+        """Retorna se a janela de 24 horas está aberta"""
+        return obj.is_24h_window_open()
+
 
 
 class TeamMemberSerializer(serializers.ModelSerializer):

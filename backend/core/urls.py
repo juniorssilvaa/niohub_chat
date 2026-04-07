@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.decorators import permission_classes
 from . import views
 from .views_provider_config import ProviderConfigView
+from .sgp_views import SGPIntegrationViewSet
 
 # Router apenas com viewsets existentes em core.views
 router = DefaultRouter()
@@ -22,6 +23,7 @@ router.register(r'chatbot-flows', views.ChatbotFlowViewSet, basename='chatbot-fl
 router.register(r'planos', views.PlanoViewSet, basename='planos')
 router.register(r'respostas-rapidas', views.RespostaRapidaViewSet, basename='respostas-rapidas')
 router.register(r'reminders', views.UserReminderViewSet, basename='reminders')
+router.register(r'sgp', SGPIntegrationViewSet, basename='sgp')
 
 urlpatterns = [
     # Rotas específicas ANTES do router para evitar conflitos
