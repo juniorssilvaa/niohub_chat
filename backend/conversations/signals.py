@@ -17,23 +17,61 @@ CACHE_TTL = 60
 @receiver(post_save, sender=Message)
 def notify_new_message(sender, instance, created, **kwargs):
     """
-    Notifica o painel sobre novas mensagens para garantir ordenação em tempo real.
-    Executado via Dramatiq para não bloquear a requisição e gerenciar conexões com o banco.
+    Notifica o painel e o ChatArea sobre novas mensagens via WebSocket.
+    Envia DIRETO do banco de dados, sem depender de Dramatiq/Redis/fila.
+    Usa transaction.on_commit para garantir que a mensagem já esteja salva.
     """
     if created:
-        try:
-            from .dramatiq_tasks import notify_message_event
-            from django.db import transaction
-            
-            # Usar transaction.on_commit para garantir que a tarefa só dispare
-            # após a mensagem estar definitivamente salva no banco de dados.
-            # Isso evita que o worker tente ler a mensagem antes do commit.
-            transaction.on_commit(lambda: notify_message_event.send(instance.pk))
-            
-            logger.debug(f"[MessageSignal] Tarefa de notificação agendada para mensagem {instance.pk}")
-            
-        except Exception as e:
-            logger.error(f"[MessageSignal] Erro ao agendar notificação para mensagem {instance.pk}: {e}", exc_info=True)
+        def _do_notify():
+            try:
+                from .serializers import MessageSerializer, ConversationSerializer
+                
+                # Carregar mensagem com relações necessárias
+                msg = Message.objects.select_related(
+                    'conversation',
+                    'conversation__contact',
+                    'conversation__assignee',
+                    'conversation__inbox',
+                    'conversation__inbox__provedor'
+                ).get(id=instance.pk)
+                
+                conversation = msg.conversation
+                provedor_id = conversation.inbox.provedor.id if conversation.inbox and conversation.inbox.provedor else None
+                
+                if not provedor_id:
+                    return
+                
+                # Serializar dados completos para o front
+                message_data = MessageSerializer(msg).data
+                conversation_data = ConversationSerializer(conversation).data
+                
+                logger.info(
+                    f"[MessageSignal] Notificando mensagem {instance.pk} "
+                    f"para conversa {conversation.id}, provedor {provedor_id} (DIRETO)"
+                )
+                
+                if msg.is_from_customer:
+                    ConversationNotificationService.notify_message_received(
+                        provedor_id,
+                        conversation.id,
+                        message_data,
+                        conversation_data
+                    )
+                else:
+                    ConversationNotificationService.notify_message_sent(
+                        provedor_id,
+                        conversation.id,
+                        message_data,
+                        conversation_data
+                    )
+                    
+            except Message.DoesNotExist:
+                logger.warning(f"[MessageSignal] Mensagem {instance.pk} não encontrada")
+            except Exception as e:
+                logger.error(f"[MessageSignal] Erro ao notificar mensagem {instance.pk}: {e}", exc_info=True)
+        
+        transaction.on_commit(_do_notify)
+
 
 @receiver(pre_save, sender=Conversation)
 def store_previous_status(sender, instance, **kwargs):

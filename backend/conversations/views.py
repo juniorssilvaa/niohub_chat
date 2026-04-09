@@ -2947,6 +2947,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             # A notificação agora é feita via signal (post_save no modelo Message)
             # para garantir que a ordenação mude em tempo real no dashboard
             # e a mensagem apareça no chat area.
+            logger.info(f"[SEND_TEXT] Mensagem {message.id} processada com sucesso. Notificação via signal disparada.")
             
             response_data = MessageSerializer(message).data
             response_data['sent_success'] = success

@@ -319,6 +319,7 @@ class MensagemSistema(models.Model):
     provedores_count = models.IntegerField(default=0, verbose_name='Quantidade de Provedores')
     visualizacoes = models.JSONField(default=dict, verbose_name='Visualizações')
     visualizacoes_count = models.IntegerField(default=0, verbose_name='Quantidade de Visualizações')
+    visivel_para_agentes = models.BooleanField(default=True, verbose_name='Visível para Atendentes')
     
     # Campos novos (mantidos para compatibilidade)
     titulo = models.CharField(max_length=200, verbose_name='Título', default='', blank=True)

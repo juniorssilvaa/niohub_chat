@@ -136,7 +136,7 @@ export default function ConversationAnalysis() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Conversas por Canal */}
             <div>
-              <h3 className="text-lg font-medium text-white mb-4">Conversas por Canal</h3>
+              <h3 className="text-lg font-medium text-foreground mb-4">Conversas por Canal</h3>
               
               {data.channels.length === 0 ? (
                 <div className="flex items-center justify-center h-32">
@@ -204,7 +204,7 @@ export default function ConversationAnalysis() {
 
             {/* Volume Diário */}
             <div>
-              <h3 className="text-lg font-medium text-white mb-4">Volume Diário</h3>
+              <h3 className="text-lg font-medium text-foreground mb-4">Volume Diário</h3>
               {data.dailyVolume.length === 0 ? (
                 <div className="flex items-center justify-center h-48">
                   <div className="text-center">

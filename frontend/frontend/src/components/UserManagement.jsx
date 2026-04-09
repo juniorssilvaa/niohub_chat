@@ -539,7 +539,7 @@ const UserManagement = ({ provedorId }) => {
             <Users className="w-8 h-8 mr-3" />
             Gerenciamento de Usuários
           </h1>
-          <p className="text-white">Gerencie usuários, permissões e acessos do sistema</p>
+          <p className="text-muted-foreground">Gerencie usuários, permissões e acessos do sistema</p>
         </div>
 
         {/* Statistics - agora em cima */}

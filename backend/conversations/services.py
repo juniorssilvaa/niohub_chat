@@ -133,6 +133,7 @@ class ConversationNotificationService:
             # Sempre incluir conversa se disponível (para atualização instantânea)
             event_data = {
                 'type': 'message_received' if conversation_data else 'chat_message',
+                'conversation_id': conversation_id, # Campo explícito na raiz
                 'message': message_data,
                 'conversation': conversation_data,  # Sempre incluir conversa se disponível
                 'sender': None,
@@ -142,9 +143,9 @@ class ConversationNotificationService:
             # Log para debug (apenas em produção para identificar problemas)
             import logging
             logger = logging.getLogger(__name__)
-            logger.debug(
-                f"[ConversationNotification] Enviando mensagem para grupo {conversation_group}, "
-                f"tipo: {event_data['type']}, message_id: {message_data.get('id')}"
+            logger.info(
+                f"[ConversationNotification] Notificando RECEBIMENTO: grupo={conversation_group}, "
+                f"tipo={event_data['type']}, message_id={message_data.get('id')}"
             )
             
             async_to_sync(channel_layer.group_send)(
@@ -190,6 +191,7 @@ class ConversationNotificationService:
             # Sempre incluir conversa se disponível (para atualização instantânea)
             event_data = {
                 'type': 'chat_message',
+                'conversation_id': conversation_id, # Campo explícito na raiz
                 'message': message_data,
                 'conversation': conversation_data,  # Sempre incluir conversa se disponível
                 'sender': None,
@@ -199,9 +201,9 @@ class ConversationNotificationService:
             # Log para debug (apenas em produção para identificar problemas)
             import logging
             logger = logging.getLogger(__name__)
-            logger.debug(
-                f"[ConversationNotification] Enviando mensagem enviada para grupo {conversation_group}, "
-                f"tipo: {event_data['type']}, message_id: {message_data.get('id')}"
+            logger.info(
+                f"[ConversationNotification] Notificando ENVIO: grupo={conversation_group}, "
+                f"tipo={event_data['type']}, message_id={message_data.get('id')}"
             )
             
             async_to_sync(channel_layer.group_send)(

@@ -56,25 +56,24 @@
 
 :root {
   --radius: 0.5rem;
-  /* Light Theme Colors */
-  --background: #f3f4f6;
-  /* Changed to light grey */
-  --foreground: #3b82f6;
-  --card: #f8f9fa;
-  --card-foreground: #3b82f6;
+  /* Light Theme Colors - NIO HUB Rebranding */
+  --background: #f8f9fa;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
   --popover: #ffffff;
-  --popover-foreground: #3b82f6;
+  --popover-foreground: #0f172a;
   --primary: #3b82f6;
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
-  --secondary-foreground: #3b82f6;
+  --secondary-foreground: #1e293b;
   --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #3b82f6;
-  --accent-foreground: #ffffff;
+  --muted-foreground: #334155; /* Darker Slate for visibility */
+  --accent: rgba(59, 130, 246, 0.1);
+  --accent-foreground: #3b82f6;
   --destructive: #ef4444;
-  --border: #334155;
-  --input: #334155;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
   --ring: #3b82f6;
   --chart-1: #3b82f6;
   --chart-2: #10b981;
@@ -82,16 +81,16 @@
   --chart-4: #ef4444;
   --chart-5: #8b5cf6;
   --sidebar: #f8f9fa;
-  --sidebar-foreground: #3b82f6;
+  --sidebar-foreground: #1e293b;
   --sidebar-primary: #3b82f6;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e2e8f0;
+  --sidebar-accent: #f1f5f9;
   --sidebar-accent-foreground: #3b82f6;
-  --sidebar-border: #334155;
+  --sidebar-border: #e2e8f0;
   --sidebar-ring: #3b82f6;
 
   /* Topbar Colors */
-  --topbar-background: #334155;
+  --topbar-background: #0f172a;
   --topbar-foreground: #ffffff;
 
   /* Custom NioChat Colors */
@@ -113,45 +112,48 @@
 }
 
 .dark {
-  --background: #2d2e32;
-  /* Cinza navegador onipresente */
-  --foreground: #ffffff;
-  --card: #2d2e32;
-  --card-foreground: #ffffff;
-  --popover: #2d2e32;
-  --popover-foreground: #ffffff;
-  --primary: #ffffff;
-  --primary-foreground: #2d2e32;
-  --secondary: #35363b;
-  --secondary-foreground: #ffffff;
-  --muted: #35363b;
-  --muted-foreground: #9ca3af;
-  --accent: #ffffff1a;
-  --accent-foreground: #ffffff;
-  --destructive: #ef4444;
-  --border: #404146;
-  --input: #404146;
-  --ring: #ffffff33;
-  --chart-1: #ffffff;
-  --chart-2: #10b981;
-  --chart-3: #f59e0b;
-  --chart-4: #ef4444;
-  --chart-5: #8b5cf6;
-  --sidebar: #2d2e32;
-  --sidebar-foreground: #9ca3af;
-  --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #2d2e32;
-  --sidebar-accent: #ffffff1a;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #404146;
-  --sidebar-ring: #ffffff33;
-  --nc-bg: #2d2e32;
-  --nc-panel: #2d2e32;
-  --nc-success: #10b981;
-  --nc-danger: #ef4444;
+  --background: #222831;
+  /* Deep Blue/Grey NIO HUB */
+  --foreground: #F8FAFC;
+  --card: #27303D;
+  --card-foreground: #F8FAFC;
+  --popover: #27303D;
+  --popover-foreground: #F8FAFC;
+  --primary: #3B82F6;
+  --primary-foreground: #ffffff;
+  --secondary: #1f2630;
+  --secondary-foreground: #F8FAFC;
+  --muted: #313B4A;
+  --muted-foreground: #94A3B8;
+  --accent: rgba(59, 130, 246, 0.15);
+  --accent-foreground: #F8FAFC;
+  --destructive: #EF4444;
+  --border: #3A4352;
+  --input: #3A4352;
+  --ring: rgba(59, 130, 246, 0.5);
+  --chart-1: #3B82F6;
+  --chart-2: #22C55E;
+  --chart-3: #F59E0B;
+  --chart-4: #EF4444;
+  --chart-5: #8B5CF6;
+  --sidebar: #192533;
+  --sidebar-foreground: #94A3B8;
+  --sidebar-primary: #3B82F6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(59, 130, 246, 0.15);
+  --sidebar-accent-foreground: #F8FAFC;
+  --sidebar-border: #3A4352;
+  --sidebar-ring: rgba(59, 130, 246, 0.5);
+  --nc-bg: #222831;
+  --nc-panel: #27303D;
+  --nc-success: #22C55E;
+  --nc-danger: #EF4444;
 
-  --topbar-background: #1e293b;
+  --topbar-background: #192533;
   --topbar-foreground: #ffffff;
+  
+  /* Yellow Accent from Logo */
+  --niohub-yellow: #F59E0B;
 }
 
 @layer base {
@@ -257,7 +259,8 @@
   }
 
   .niochat-input {
-    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    color: var(--foreground) !important;
   }
 
   .label-badge {
@@ -495,7 +498,7 @@
   }
 }
 
-/* FORÇA BRUTA - Unificação Final Cinza Navegador */
+/* FORÇA BRUTA - Unificação Final Paleta NIO HUB */
 .dark .bg-card,
 .dark .bg-sidebar,
 .dark .bg-secondary,
@@ -505,7 +508,15 @@
 .dark aside,
 .dark .card,
 .dark .bg-popover {
-  background-color: #2d2e32 !important;
+  background-color: #27303D !important;
+}
+
+/* Background Principal Escuro */
+.dark body, 
+.dark #root,
+.dark .bg-background,
+.dark .niochat-main {
+  background-color: #222831 !important;
 }
 
 .dark .border-border,
@@ -514,13 +525,30 @@
 .dark .border-r,
 .dark .border-b,
 .dark .border-t {
-  border-color: #404146 !important;
+  border-color: #3A4352 !important;
 }
 
 .dark .text-foreground,
 .dark .text-card-foreground,
 .dark .text-sidebar-foreground {
-  color: #f3f4f6 !important;
+  color: #F8FAFC !important;
+}
+
+/* ACENTOS AMARELOS (LOGO HARMONY) */
+.dark .status-yellow-accent,
+.dark .warning-highlight {
+  border-color: #F59E0B !important;
+  color: #F59E0B !important;
+}
+
+.dark .bg-yellow-accent {
+  background-color: #F59E0B !important;
+  color: #222831 !important;
+}
+
+.dark .hover-yellow-accent:hover {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: #F59E0B !important;
 }
 
 /* CLASSES DE DESTAQUE PREMIUM (SOBREPÕEM A UNIFICAÇÃO) */
@@ -555,3 +583,107 @@
 .status-border-atendimento {
   border-left: 4px solid #059669 !important;
 }
+
+/* ==========================================================
+   FORÇA BRUTA - LEGIBILIDADE GLOBAL MODO CLARO (NIO HUB)
+   ========================================================== */
+
+/* 1. Forçar textos brancos/claros/pastéis a serem pretos no Modo Claro */
+:root:not(.dark) .text-white:not(.dark *),
+:root:not(.dark) .text-slate-100:not(.dark *),
+:root:not(.dark) .text-slate-200:not(.dark *),
+:root:not(.dark) .text-slate-300:not(.dark *),
+:root:not(.dark) .text-slate-400:not(.dark *),
+:root:not(.dark) .text-gray-100:not(.dark *),
+:root:not(.dark) .text-gray-200:not(.dark *),
+:root:not(.dark) .text-gray-300:not(.dark *),
+:root:not(.dark) .text-gray-400:not(.dark *),
+:root:not(.dark) .text-blue-50:not(.dark *),
+:root:not(.dark) .text-blue-100:not(.dark *),
+:root:not(.dark) .text-blue-200:not(.dark *),
+:root:not(.dark) .text-blue-300:not(.dark *),
+:root:not(.dark) .text-green-50:not(.dark *),
+:root:not(.dark) .text-green-100:not(.dark *),
+:root:not(.dark) .text-green-200:not(.dark *),
+:root:not(.dark) .text-yellow-50:not(.dark *),
+:root:not(.dark) .text-yellow-100:not(.dark *),
+:root:not(.dark) .text-yellow-200:not(.dark *),
+:root:not(.dark) .text-indigo-50:not(.dark *),
+:root:not(.dark) .text-muted-foreground:not(.dark *),
+:root:not(.dark) .text-white\/70:not(.dark *),
+:root:not(.dark) .text-white\/50:not(.dark *) {
+  color: #0f172a !important; /* Black Slate */
+}
+
+/* 2. Exceção: Manter texto branco em fundos que permanecem coloridos ou em containers escuros (Alta Especificidade) */
+:root:not(.dark) .bg-primary .text-white,
+:root:not(.dark) .bg-blue-600 .text-white,
+:root:not(.dark) .bg-blue-500 .text-white,
+:root:not(.dark) .bg-emerald-600 .text-white,
+:root:not(.dark) .bg-red-600 .text-white,
+:root:not(.dark) .bg-orange-500 .text-white,
+:root:not(.dark) .bg-destructive .text-white,
+:root:not(.dark) [class*="bg-gradient-"] .text-white,
+:root:not(.dark) .niochat-button-primary .text-white,
+:root:not(.dark) .badge-primary .text-white,
+:root:not(.dark) button.bg-primary .text-white,
+:root:not(.dark) .dark .text-white,
+:root:not(.dark) .dark .text-slate-50,
+:root:not(.dark) .dark .text-slate-100,
+:root:not(.dark) .dark .text-slate-200,
+:root:not(.dark) .dark .text-slate-300,
+:root:not(.dark) .dark .text-slate-400 {
+  color: #ffffff !important;
+}
+
+/* 3. Corrigir Placeholders e Inputs no Modo Claro */
+:root:not(.dark) input::placeholder,
+:root:not(.dark) textarea::placeholder {
+  color: #475569 !important; /* Slate 600 */
+  opacity: 1 !important;
+}
+
+:root:not(.dark) .niochat-input:not(.dark *),
+:root:not(.dark) input:not(.dark *),
+:root:not(.dark) select:not(.dark *),
+:root:not(.dark) textarea:not(.dark *) {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+}
+
+/* 4. Corrigir fundos escuros hardcoded no Modo Claro */
+:root:not(.dark) .bg-\[\#181b20\],
+:root:not(.dark) .bg-\[\#111317\],
+:root:not(.dark) .bg-slate-900,
+:root:not(.dark) .bg-slate-800 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* 5. Dashboard, Tabelas e Cards - Garantir visibilidade total */
+:root:not(.dark) .nc-card, 
+:root:not(.dark) .niochat-card,
+:root:not(.dark) .card,
+:root:not(.dark) th,
+:root:not(.dark) thead {
+  color: #0f172a !important;
+}
+
+:root:not(.dark) .nc-card .text-xs,
+:root:not(.dark) .nc-card .text-sm,
+:root:not(.dark) .nc-card .text-muted-foreground,
+:root:not(.dark) .dashboard-label,
+:root:not(.dark) .text-blue-200,
+:root:not(.dark) .text-green-200,
+:root:not(.dark) .text-yellow-200 {
+  color: #334155 !important; /* Slate 700 */
+  font-weight: 500 !important;
+}
+
+/* 6. Gráficos e Legend (Charts) */
+:root:not(.dark) .recharts-text,
+:root:not(.dark) .recharts-legend-item-text,
+:root:not(.dark) .recharts-cartesian-axis-tick-value {
+  fill: #0f172a !important;
+}

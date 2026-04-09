@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, Suspense, lazy } from 'react';
 import axios from 'axios';
 import ConversationList from './ConversationList';
-import ChatArea from './ChatArea';
 import logoImage from '../assets/logo.png';
+
+const ChatArea = lazy(() => import('./ChatArea'));
 
 const ConversationsPage = ({ selectedConversation, setSelectedConversation, provedorId, user: propUser }) => {
   const refreshConversationsRef = useRef(null);
@@ -165,12 +166,14 @@ const ConversationsPage = ({ selectedConversation, setSelectedConversation, prov
         user={user}
       />
       {selectedConversation ? (
-        <ChatArea
-          conversation={selectedConversation}
-          onConversationClose={handleConversationClose}
-          onConversationUpdate={handleConversationUpdate}
-          user={user}
-        />
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-background h-screen"><div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+          <ChatArea
+            conversation={selectedConversation}
+            onConversationClose={handleConversationClose}
+            onConversationUpdate={handleConversationUpdate}
+            user={user}
+          />
+        </Suspense>
       ) : (
         <div className="flex-1 flex items-center justify-center bg-background">
           <div className="text-center max-w-md mx-auto px-4">

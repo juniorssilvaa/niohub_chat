@@ -1,25 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { AlertTriangle } from 'lucide-react';
 
-import Sidebar from './components/Sidebar';
-import Topbar from './components/Topbar';
+import LoadingBar from './components/ui/LoadingBar';
 import Login from './components/Login';
-import SuperadminSidebar from './components/SuperadminSidebar';
-import SuperadminDashboard from './components/SuperadminDashboard';
-import ProvedorAppWrapper from './components/ProvedorAppWrapper';
-import MetaFinalizing from './components/MetaFinalizing';
-import OAuthCallback from './components/OAuthCallback';
-import Changelog from './components/Changelog';
-import UserStatusManager from './components/UserStatusManager';
-
+import Topbar from './components/Topbar';
 import { useAuth } from './contexts/AuthContext';
 import useSessionTimeout from './hooks/useSessionTimeout.jsx';
 import { APP_VERSION } from './config/version';
 
 import './App.css';
+
+// Lazy loading components
+const SuperadminSidebar = lazy(() => import('./components/SuperadminSidebar'));
+const SuperadminDashboard = lazy(() => import('./components/SuperadminDashboard'));
+const ProvedorAppWrapper = lazy(() => import('./components/ProvedorAppWrapper'));
+const MetaFinalizing = lazy(() => import('./components/MetaFinalizing'));
+const OAuthCallback = lazy(() => import('./components/OAuthCallback'));
+const Changelog = lazy(() => import('./components/Changelog'));
+const UserStatusManager = lazy(() => import('./components/UserStatusManager'));
 
 /* =====================================================
    HELPERS
@@ -169,49 +170,51 @@ export default function App() {
         </div>
       )}
 
-      <Routes>
-        <Route path="/app/meta/finalizando" element={<MetaFinalizing />} />
-        <Route path="/oauth/callback" element={<OAuthCallback />} />
+      <Suspense fallback={<LoadingBar />}>
+        <Routes>
+          <Route path="/app/meta/finalizando" element={<MetaFinalizing />} />
+          <Route path="/oauth/callback" element={<OAuthCallback />} />
 
-        {userRole === 'superadmin' && (
-          <Route path="/superadmin/*" element={
-            <div className="flex h-screen">
-              <SuperadminSidebar onLogout={handleLogout} />
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <Topbar onLogout={handleLogout} onChangelog={() => setShowChangelog(true)} />
-                <SuperadminDashboard />
+          {userRole === 'superadmin' && (
+            <Route path="/superadmin/*" element={
+              <div className="flex h-screen">
+                <SuperadminSidebar onLogout={handleLogout} />
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <Topbar onLogout={handleLogout} onChangelog={() => setShowChangelog(true)} />
+                  <SuperadminDashboard />
+                </div>
               </div>
-            </div>
+            } />
+          )}
+
+          <Route path="/app/accounts/:provedorId/*" element={
+            <ProvedorAppWrapper
+              user={user}
+              userRole={userRole}
+              handleLogout={handleLogout}
+              setWhatsappDisconnected={setWhatsappDisconnected}
+            />
           } />
-        )}
 
-        <Route path="/app/accounts/:provedorId/*" element={
-          <ProvedorAppWrapper
-            user={user}
-            userRole={userRole}
-            handleLogout={handleLogout}
-            setWhatsappDisconnected={setWhatsappDisconnected}
-          />
-        } />
+          <Route path="*" element={
+            userRole === 'superadmin'
+              ? <Navigate to="/superadmin" replace />
+              : (userRole === 'agent' 
+                  ? <Navigate to={`/app/accounts/${user.provedor_id}/conversations`} replace />
+                  : <Navigate to={`/app/accounts/${user.provedor_id}/dashboard`} replace />
+                )
+          } />
+        </Routes>
 
-        <Route path="*" element={
-          userRole === 'superadmin'
-            ? <Navigate to="/superadmin" replace />
-            : (userRole === 'agent' 
-                ? <Navigate to={`/app/accounts/${user.provedor_id}/conversations`} replace />
-                : <Navigate to={`/app/accounts/${user.provedor_id}/dashboard`} replace />
-              )
-        } />
-      </Routes>
-
-      <Changelog
-        isOpen={showChangelog}
-        onClose={() => {
-          setShowChangelog(false);
-          localStorage.setItem('last_seen_changelog_version', APP_VERSION);
-        }}
-      />
-      <UserStatusManager user={user} />
+        <Changelog
+          isOpen={showChangelog}
+          onClose={() => {
+            setShowChangelog(false);
+            localStorage.setItem('last_seen_changelog_version', APP_VERSION);
+          }}
+        />
+        <UserStatusManager user={user} />
+      </Suspense>
     </>
   );
 }

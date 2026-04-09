@@ -141,7 +141,7 @@ class ConversationConsumer(TokenAuthMixin, SafeConsumerMixin, AsyncWebsocketCons
     def check_conversation_access(self, conversation_id, user):
         """
         Verifica se o usuário tem acesso à conversa
-        Retorna True se o usuário é superadmin OU é admin do provedor OU está atribuído à conversa
+        Retorna True se o usuário é superadmin OU pertence ao provedor da conversa
         """
         try:
             # Superadmin pode acessar qualquer conversa
@@ -167,12 +167,21 @@ class ConversationConsumer(TokenAuthMixin, SafeConsumerMixin, AsyncWebsocketCons
             if conversation.assignee and conversation.assignee.id == user.id:
                 return True
 
+            # Verificar se é membro do provedor (agente que pode visualizar conversas)
+            if hasattr(user, "provedor_id") and user.provedor_id == provedor.id:
+                return True
+            
+            # Verificar se o usuário pertence ao provedor por relação M2M
+            if hasattr(user, "provedores") and user.provedores.filter(id=provedor.id).exists():
+                return True
+
             return False
 
         except Conversation.DoesNotExist:
             return False
         except Exception as e:
             return False
+
 
     async def disconnect(self, close_code):
         # Marcar como desconectando para evitar envios

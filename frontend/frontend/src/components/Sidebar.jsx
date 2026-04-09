@@ -34,7 +34,7 @@ const SidebarContext = createContext({
 
 export const useSidebarContext = () => useContext(SidebarContext);
 
-const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose, provedorId, onCollapseChange, onRemindersClick }) => {
+const Sidebar = React.memo(({ userRole = 'agent', userPermissions = [], mobileOpen, onClose, provedorId, onCollapseChange, onRemindersClick }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
@@ -57,66 +57,59 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
     return currentPath.includes(path);
   };
 
-  // Menu base com todos os itens
-  const allMenuItems = [
-    { id: 'dashboard', icon: LayoutGrid, label: t('dashboard'), path: `/app/accounts/${provedorId}/dashboard` },
-    { id: 'conversations', icon: Headphones, label: t('conversations'), path: `/app/accounts/${provedorId}/conversations` },
-    { id: 'reminders', icon: Clock, label: 'Lembretes', path: '#', onClick: onRemindersClick },
-    { id: 'conversas', icon: MessagesSquare, label: t('conversas'), path: `/app/accounts/${provedorId}/conversas` },
-    { id: 'contacts', icon: Notebook, label: t('contacts'), path: `/app/accounts/${provedorId}/contacts`, permission: 'manage_contacts' },
-    { id: 'users', icon: Users, label: t('users'), path: `/app/accounts/${provedorId}/users` },
-    { id: 'teams', icon: UserCog, label: t('equipes'), path: `/app/accounts/${provedorId}/equipes` },
-    { id: 'audit', icon: ScrollText, label: t('audit'), path: `/app/accounts/${provedorId}/audit` },
-    { id: 'chatbot-builder', icon: Bot, label: t('chatbot_builder'), path: `/app/accounts/${provedorId}/chatbot-manager` },
-    { id: 'planos', icon: Wifi, label: t('planos'), path: `/app/accounts/${provedorId}/planos` },
-    { id: 'csat', icon: Smile, label: t('csat'), path: `/app/accounts/${provedorId}/csat` },
-    { id: 'respostas-rapidas', icon: Zap, label: 'Respostas Rápidas', path: `/app/accounts/${provedorId}/respostas-rapidas` },
-  ];
-
-  // Filtrar itens baseado no papel do usuário
-  let menuItems = [];
-  if (userRole === 'superadmin') {
-    menuItems = [
-      { id: 'superadmin-dashboard', icon: Crown, label: t('dashboard_superadmin'), path: '/superadmin' },
-      ...allMenuItems
+  // Menu base com todos os itens - Memoizado para evitar recalculação
+  const menuItems = React.useMemo(() => {
+    const allMenuItems = [
+      { id: 'dashboard', icon: LayoutGrid, label: t('dashboard'), path: `/app/accounts/${provedorId}/dashboard` },
+      { id: 'conversations', icon: Headphones, label: t('conversations'), path: `/app/accounts/${provedorId}/conversations` },
+      { id: 'conversas', icon: MessagesSquare, label: t('conversas'), path: `/app/accounts/${provedorId}/conversas` },
+      { id: 'reminders', icon: Clock, label: 'Lembretes', path: '#', onClick: onRemindersClick },
+      { id: 'contacts', icon: Notebook, label: t('contacts'), path: `/app/accounts/${provedorId}/contacts`, permission: 'manage_contacts' },
+      { id: 'users', icon: Users, label: t('users'), path: `/app/accounts/${provedorId}/users` },
+      { id: 'teams', icon: UserCog, label: t('equipes'), path: `/app/accounts/${provedorId}/equipes` },
+      { id: 'audit', icon: ScrollText, label: t('audit'), path: `/app/accounts/${provedorId}/audit` },
+      { id: 'chatbot-builder', icon: Bot, label: t('chatbot_builder'), path: `/app/accounts/${provedorId}/chatbot-manager` },
+      { id: 'planos', icon: Wifi, label: t('planos'), path: `/app/accounts/${provedorId}/planos` },
+      { id: 'csat', icon: Smile, label: t('csat'), path: `/app/accounts/${provedorId}/csat` },
+      { id: 'respostas-rapidas', icon: Zap, label: 'Respostas Rápidas', path: `/app/accounts/${provedorId}/respostas-rapidas` },
     ];
-  } else if (userRole === 'admin') {
-    // Admins veem todos os itens do provedor
-    menuItems = allMenuItems;
-  } else if (userRole === 'agent') {
-    // Atendentes veem apenas itens permitidos
-    menuItems = allMenuItems.filter(item => {
-      // Itens sem a chave 'permission' são visíveis se estiverem na lista de permissões do agente
-      if (!item.permission) {
-        return ['conversations', 'reminders'].includes(item.id);
-      }
-      // Itens com a chave 'permission' são visíveis se o usuário tiver a permissão
-      return userPermissions.includes(item.permission);
-    });
-  } else {
-    // Fallback: mostra apenas o dashboard
-    menuItems = allMenuItems.filter(item => item.id === 'dashboard');
-  }
 
-  // Itens fixos - filtrar baseado no papel
-  const allFixedItems = [
-    { id: 'horario', icon: Clock, label: t('horario'), path: `/app/accounts/${provedorId}/horario-provedor` },
-    { id: 'integracoes', icon: PlugZap, label: t('integracoes'), path: `/app/accounts/${provedorId}/integracoes` },
-    { id: 'dados-provedor', icon: Settings, label: t('dados_provedor'), path: `/app/accounts/${provedorId}/dados-provedor` },
-    { id: 'recovery', icon: RefreshCw, label: t('recovery'), path: `/app/accounts/${provedorId}/recovery` },
-    { id: 'perfil', icon: User, label: t('perfil'), path: `/app/accounts/${provedorId}/perfil` },
-  ];
+    let items = [];
+    if (userRole === 'superadmin') {
+      items = [
+        { id: 'superadmin-dashboard', icon: Crown, label: t('dashboard_superadmin'), path: '/superadmin' },
+        ...allMenuItems
+      ];
+    } else if (userRole === 'admin') {
+      items = allMenuItems;
+    } else if (userRole === 'agent') {
+      items = allMenuItems.filter(item => {
+        if (!item.permission) {
+          return ['conversations', 'reminders'].includes(item.id);
+        }
+        return userPermissions.includes(item.permission);
+      });
+    } else {
+      items = allMenuItems.filter(item => item.id === 'dashboard');
+    }
+    return items;
+  }, [userRole, userPermissions, provedorId, t, onRemindersClick]);
 
-  let fixedItems = [];
-  if (userRole === 'agent') {
-    // Atendentes veem apenas perfil
-    fixedItems = [
+  // Itens fixos - Memoizado
+  const fixedItems = React.useMemo(() => {
+    const allFixedItems = [
+      { id: 'horario', icon: Clock, label: t('horario'), path: `/app/accounts/${provedorId}/horario-provedor` },
+      { id: 'integracoes', icon: PlugZap, label: t('integracoes'), path: `/app/accounts/${provedorId}/integracoes` },
+      { id: 'dados-provedor', icon: Settings, label: t('dados_provedor'), path: `/app/accounts/${provedorId}/dados-provedor` },
+      { id: 'recovery', icon: RefreshCw, label: t('recovery'), path: `/app/accounts/${provedorId}/recovery` },
       { id: 'perfil', icon: User, label: t('perfil'), path: `/app/accounts/${provedorId}/perfil` },
     ];
-  } else {
-    // Admins e superadmins veem todos os itens fixos
-    fixedItems = allFixedItems;
-  }
+
+    if (userRole === 'agent') {
+      return [{ id: 'perfil', icon: User, label: t('perfil'), path: `/app/accounts/${provedorId}/perfil` }];
+    }
+    return allFixedItems;
+  }, [userRole, provedorId, t]);
 
   // Detectar se está em mobile
   const [isMobile, setIsMobile] = useState(false);
@@ -130,12 +123,12 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
   // Componente de item do menu
   const MenuItem = ({ item, onClick }) => {
     const Icon = item.icon;
-    const isActive = currentPath === item.path;
+    const active = currentPath === item.path;
     return (
       <li>
         <button
           onClick={item.onClick || onClick}
-          className={`niochat-sidebar-item ${isActive ? 'niochat-sidebar-item-active' : ''}`}
+          className={`niochat-sidebar-item ${active ? 'niochat-sidebar-item-active' : ''}`}
         >
           <Icon className="w-5 h-5" />
           <span className={`flex-1 text-left ${isCollapsed ? 'hidden' : ''}`}>{item.label}</span>
@@ -162,7 +155,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
         >
           <div className="p-4 flex items-center gap-3">
             <img src={logo} alt="Logo" className="w-8 h-8 rounded-lg" />
-            <div className="text-xl font-bold tracking-tight">Nio Chat</div>
+            <div className="text-xl font-bold tracking-tight">NIO HUB</div>
             <button className="ml-auto p-2" onClick={onClose} aria-label="Fechar menu">
               <span style={{ fontSize: 24, fontWeight: 'bold' }}>&times;</span>
             </button>
@@ -209,11 +202,11 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
   // Desktop: sidebar fixo
   return (
     <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
-      <aside className={`h-full ${isCollapsed ? 'w-16' : 'w-64'} z-30 flex-shrink-0 flex flex-col`}>
+      <aside className={`h-full ${isCollapsed ? 'w-16' : 'w-64'} z-30 flex-shrink-0 flex flex-col transition-all duration-300`}>
         <div className={`bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-full flex flex-col ${mobileOpen ? 'mobile-open' : ''}`}>
           {/* TOPO FIXO - Logo e Botão */}
           <div className={`p-4 border-b border-border flex items-center flex-shrink-0 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-            <img src={logo} alt="NioChat" className={`h-8 transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'block'}`} />
+            <img src={logo} alt="NIO HUB" className={`h-8 transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'block'}`} />
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="p-2 rounded-lg hover:bg-sidebar-accent transition-colors"
@@ -289,7 +282,7 @@ const Sidebar = ({ userRole = 'agent', userPermissions = [], mobileOpen, onClose
       </aside>
     </SidebarContext.Provider>
   );
-};
+});
 
 export default Sidebar;
 

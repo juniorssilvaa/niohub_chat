@@ -12,6 +12,7 @@ export default function SuperadminMensagem() {
   const [loadingMensagens, setLoadingMensagens] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [visivelParaAgentes, setVisivelParaAgentes] = useState(true);
 
   // Buscar provedores disponíveis
   const fetchProvedores = async () => {
@@ -96,7 +97,8 @@ export default function SuperadminMensagem() {
         assunto: assunto.trim(),
         mensagem: mensagem.trim(),
         provedores: selectedProvedores,
-        tipo: 'notificacao'
+        tipo: 'notificacao',
+        visivel_para_agentes: visivelParaAgentes
       }, {
         headers: { Authorization: `Token ${token}` }
       });
@@ -105,6 +107,7 @@ export default function SuperadminMensagem() {
       setAssunto('');
       setMensagem('');
       setSelectedProvedores([]);
+      setVisivelParaAgentes(true);
       
       // Atualizar lista de mensagens
       fetchMensagensEnviadas();
@@ -237,6 +240,29 @@ export default function SuperadminMensagem() {
               />
             </div>
 
+            {/* Opções de Visibilidade */}
+            <div className="bg-muted/10 p-4 rounded-xl border border-border/50 space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={visivelParaAgentes}
+                    onChange={(e) => setVisivelParaAgentes(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 shadow-inner"></div>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                    Exibir para Atendentes
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Se desmarcado, apenas os administradores do provedor receberão este aviso.
+                  </span>
+                </div>
+              </label>
+            </div>
+
             {/* Botão Enviar */}
             <button
               type="submit"
@@ -317,6 +343,13 @@ export default function SuperadminMensagem() {
                         <span className="text-muted-foreground">
                           {mensagem.provedores_count || 0} provedor(es)
                         </span>
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          {mensagem.visivel_para_agentes ? (
+                            <><Users className="w-3 h-3" /> Todos</>
+                          ) : (
+                            <><Building className="w-3 h-3" /> Apenas Admins</>
+                          )}
+                        </span>
                         <span className="text-muted-foreground">
                           {mensagem.visualizacoes_count || 0} visualizada(s)
                         </span>
@@ -355,9 +388,12 @@ export default function SuperadminMensagem() {
                             {mensagem.visualizacoes_detalhadas.map((visualizacao, index) => (
                               <div key={index} className="text-xs text-green-500 flex items-center gap-1">
                                 <CheckCircle className="w-3 h-3" />
-                                {visualizacao.provedor_nome} ({visualizacao.username})
-                                <span className="text-muted-foreground ml-2">
-                                  {new Date(visualizacao.timestamp).toLocaleDateString('pt-BR')}
+                                <span className="font-semibold">{visualizacao.username}</span> 
+                                <span className="text-[#94A3B8]">({visualizacao.provedor_nome || 'Sem Provedor'})</span>
+                                <span className="text-muted-foreground ml-auto">
+                                  {visualizacao.timestamp ? (
+                                    `${new Date(visualizacao.timestamp).toLocaleDateString('pt-BR')} ${new Date(visualizacao.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                                  ) : 'Data não disponível'}
                                 </span>
                               </div>
                             ))}

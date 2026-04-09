@@ -1,29 +1,32 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, Suspense, lazy } from 'react';
 import { useParams, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
-import DashboardPrincipal from './DashboardPrincipal';
-import ConversasDashboard from './ConversasDashboard';
-import Contacts from './Contacts2';
-import ConversationsPage from './ConversationsPage';
-import Settings from './Settings';
-import UserManagement from './UserManagement';
-import TeamsPage from './TeamsPage';
-import ConversationAudit from './ConversationAudit';
-import ConversationRecovery from './ConversationRecovery';
-import CompanyManagement from './CompanyManagement';
-import CSATDashboard from './CSATDashboard';
-import Integrations from './Integrations';
-import ProfilePage from './ProfilePage';
-import AppearancePage from './AppearancePage';
-import ProviderDataForm from './ProviderDataForm';
-import ProviderScheduleForm from './ProviderScheduleForm';
+import LoadingBar from './ui/LoadingBar';
 import Changelog from './Changelog';
-import ChatbotBuilder from './ChatbotBuilder';
-import ChatbotManager from './ChatbotManager';
-import PlanosPage from './PlanosPage';
-import RespostasRapidas from './RespostasRapidas';
 import RemindersModal from './RemindersModal';
+
+// Lazy loading components
+const DashboardPrincipal = lazy(() => import('./DashboardPrincipal'));
+const ConversasDashboard = lazy(() => import('./ConversasDashboard'));
+const Contacts = lazy(() => import('./Contacts2'));
+const ConversationsPage = lazy(() => import('./ConversationsPage'));
+const Settings = lazy(() => import('./Settings'));
+const UserManagement = lazy(() => import('./UserManagement'));
+const TeamsPage = lazy(() => import('./TeamsPage'));
+const ConversationAudit = lazy(() => import('./ConversationAudit'));
+const ConversationRecovery = lazy(() => import('./ConversationRecovery'));
+const CompanyManagement = lazy(() => import('./CompanyManagement'));
+const CSATDashboard = lazy(() => import('./CSATDashboard'));
+const ChatbotManager = lazy(() => import('./ChatbotManager'));
+const ChatbotBuilder = lazy(() => import('./ChatbotBuilder'));
+const PlanosPage = lazy(() => import('./PlanosPage'));
+const RespostasRapidas = lazy(() => import('./RespostasRapidas'));
+const Integrations = lazy(() => import('./Integrations'));
+const ProfilePage = lazy(() => import('./ProfilePage'));
+const AppearancePage = lazy(() => import('./AppearancePage'));
+const ProviderDataForm = lazy(() => import('./ProviderDataForm'));
+const ProviderScheduleForm = lazy(() => import('./ProviderScheduleForm'));
 
 export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWhatsappDisconnected }) {
   const { provedorId } = useParams();
@@ -119,39 +122,41 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
         />
         <div className="flex-1 overflow-y-auto w-full overflow-x-hidden min-h-0 relative">
           <div className="w-full h-full">
-            <Routes>
-              <Route path="dashboard" element={<DashboardPrincipal provedorId={provedorId} />} />
-              <Route path="conversas" element={<ConversasDashboard provedorId={provedorId} />} />
-              <Route path="conversas-dashboard" element={<ConversasDashboard provedorId={provedorId} />} />
-              <Route path="contacts" element={<Contacts provedorId={provedorId} />} />
-              <Route path="conversations" element={
-                <ConversationsPage
-                  selectedConversation={selectedConversation}
-                  setSelectedConversation={setSelectedConversation}
-                  provedorId={provedorId}
-                  user={user}
-                />
-              } />
-              <Route path="reports" element={<DashboardPrincipal provedorId={provedorId} />} />
-              <Route path="settings" element={<Settings provedorId={provedorId} />} />
-              <Route path="users" element={<UserManagement provedorId={provedorId} />} />
-              <Route path="equipes" element={<TeamsPage />} />
-              <Route path="audit" element={<ConversationAudit provedorId={provedorId} />} />
-              <Route path="recovery" element={<ConversationRecovery provedorId={provedorId} />} />
-              <Route path="companies" element={<CompanyManagement provedorId={provedorId} />} />
-              <Route path="csat" element={<CSATDashboard provedorId={provedorId} />} />
-              <Route path="chatbot-manager" element={<ChatbotManager />} />
-              <Route path="chatbot-builder" element={<ChatbotBuilder />} />
-              <Route path="chatbot-builder/:flowId" element={<ChatbotBuilder />} />
-              <Route path="planos" element={<PlanosPage provedorId={provedorId} />} />
-              <Route path="respostas-rapidas" element={<RespostasRapidas provedorId={provedorId} />} />
-              <Route path="integracoes" element={<Integrations provedorId={provedorId} />} />
-              <Route path="perfil" element={<ProfilePage provedorId={provedorId} />} />
-              <Route path="aparencia" element={<AppearancePage provedorId={provedorId} />} />
-              <Route path="dados-provedor" element={<ProviderDataForm provedorId={provedorId} />} />
-              <Route path="horario-provedor" element={<ProviderScheduleForm provedorId={provedorId} />} />
-              <Route path="*" element={<Navigate to={`/app/accounts/${provedorId}/dashboard`} replace />} />
-            </Routes>
+            <Suspense fallback={<LoadingBar />}>
+              <Routes>
+                <Route path="dashboard" element={<DashboardPrincipal provedorId={provedorId} />} />
+                <Route path="conversas" element={<ConversasDashboard provedorId={provedorId} />} />
+                <Route path="conversas-dashboard" element={<ConversasDashboard provedorId={provedorId} />} />
+                <Route path="contacts" element={<Contacts provedorId={provedorId} />} />
+                <Route path="conversations" element={
+                  <ConversationsPage
+                    selectedConversation={selectedConversation}
+                    setSelectedConversation={setSelectedConversation}
+                    provedorId={provedorId}
+                    user={user}
+                  />
+                } />
+                <Route path="reports" element={<DashboardPrincipal provedorId={provedorId} />} />
+                <Route path="settings" element={<Settings provedorId={provedorId} />} />
+                <Route path="users" element={<UserManagement provedorId={provedorId} />} />
+                <Route path="equipes" element={<TeamsPage />} />
+                <Route path="audit" element={<ConversationAudit provedorId={provedorId} />} />
+                <Route path="recovery" element={<ConversationRecovery provedorId={provedorId} />} />
+                <Route path="companies" element={<CompanyManagement provedorId={provedorId} />} />
+                <Route path="csat" element={<CSATDashboard provedorId={provedorId} />} />
+                <Route path="chatbot-manager" element={<ChatbotManager />} />
+                <Route path="chatbot-builder" element={<ChatbotBuilder />} />
+                <Route path="chatbot-builder/:flowId" element={<ChatbotBuilder />} />
+                <Route path="planos" element={<PlanosPage provedorId={provedorId} />} />
+                <Route path="respostas-rapidas" element={<RespostasRapidas provedorId={provedorId} />} />
+                <Route path="integracoes" element={<Integrations provedorId={provedorId} />} />
+                <Route path="perfil" element={<ProfilePage provedorId={provedorId} />} />
+                <Route path="aparencia" element={<AppearancePage provedorId={provedorId} />} />
+                <Route path="dados-provedor" element={<ProviderDataForm provedorId={provedorId} />} />
+                <Route path="horario-provedor" element={<ProviderScheduleForm provedorId={provedorId} />} />
+                <Route path="*" element={<Navigate to={`/app/accounts/${provedorId}/dashboard`} replace />} />
+              </Routes>
+            </Suspense>
           </div>
         </div>
       </div>

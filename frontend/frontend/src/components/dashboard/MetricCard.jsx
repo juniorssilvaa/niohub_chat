@@ -31,10 +31,10 @@ export default function MetricCard({
       <CardContent className="p-5">
         <div className="flex items-center justify-between">
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">{title}</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
             <div className="flex items-end gap-2">
-              <h3 className="text-2xl font-bold text-white">{value}</h3>
-              {subtitle && <span className="text-[11px] text-white/50 mb-[2px]">{subtitle}</span>}
+              <h3 className="text-2xl font-bold text-foreground">{value}</h3>
+              {subtitle && <span className="text-[11px] text-muted-foreground mb-[2px]">{subtitle}</span>}
             </div>
             {change && (
               <div className={`flex items-center gap-1 text-xs font-medium ${trendColor}`}>
@@ -43,7 +43,7 @@ export default function MetricCard({
               </div>
             )}
           </div>
-          <div className={`p-3 rounded-xl bg-background/50 border border-white/10 shadow-inner`}>
+          <div className={`p-3 rounded-xl bg-background/50 border border-border shadow-inner`}>
             <Icon className={`w-6 h-6 ${iconColor}`} />
           </div>
         </div>

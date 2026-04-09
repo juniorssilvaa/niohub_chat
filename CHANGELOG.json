@@ -1,6 +1,20 @@
 {
-  "current_version": "2.31.0",
+  "current_version": "2.32.0",
   "versions": [
+    {
+      "version": "2.32.0",
+      "version_type": "patch",
+      "date": "2026-04-09",
+      "title": "Melhorias de Estabilidade e UX",
+      "changes": [
+        {
+          "type": "improvement",
+          "module": "Interface",
+          "title": "Melhorias no painel",
+          "description": "corrigido o bug que nao deixava as mensagem serem mostrada em tempo real no chat area"
+        }
+      ]
+    },
     {
       "version": "2.31.0",
       "version_type": "minor",

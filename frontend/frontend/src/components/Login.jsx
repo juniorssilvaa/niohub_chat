@@ -87,25 +87,25 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 dark">
+    <div className="min-h-screen bg-[#222831] flex items-center justify-center p-4 dark">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="relative w-full max-w-4xl"
       >
-        <div className="bg-card rounded-2xl shadow-2xl overflow-hidden border border-border">
+        <div className="bg-[#27303D] rounded-2xl shadow-2xl overflow-hidden border border-[#3A4352]">
           <div className="flex flex-col md:flex-row">
-            <div className="md:w-1/2 bg-card p-8 md:p-12 flex flex-col items-center justify-center relative">
+            <div className="md:w-1/2 bg-[#27303D] p-8 md:p-12 flex flex-col items-center justify-center relative">
               <div className="absolute inset-0 opacity-[0.03] bg-white" />
               <div className="relative z-10 flex flex-col items-center">
                 <div className="w-48 h-48 md:w-56 md:h-56 mb-6">
-                  <img src={logoImage} alt="NioChat Logo" className="w-full h-full object-contain" />
+                  <img src={logoImage} alt="NIO HUB Logo" className="w-full h-full object-contain" />
                 </div>
-                <h1 className="text-3xl md:text-4xl font-bold tracking-wide text-foreground">
-                  NioChat
+                <h1 className="text-3xl md:text-4xl font-bold tracking-wide text-white">
+                  NIO HUB
                 </h1>
-                <p className="text-white mt-3 text-sm text-center">
+                <p className="text-slate-300 mt-3 text-sm text-center">
                   Sua plataforma inteligente de atendimento
                 </p>
               </div>
@@ -115,41 +115,43 @@ export default function Login() {
               <h2 className="text-2xl font-semibold text-white mb-2">
                 Bem-vindo de volta
               </h2>
-              <p className="text-white mb-8">
+              <p className="text-slate-300 mb-8">
                 Faça login para continuar
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label className="text-white">Usuário</Label>
+                  <Label className="text-slate-200">Usuário</Label>
                   <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <Input
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="pl-12 h-12 text-white"
+                      className="pl-12 h-12 bg-[#3A4352] border-none text-white focus:ring-2 focus:ring-blue-500 transition-all"
+                      placeholder="Seu usuário"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-white">Senha</Label>
+                  <Label className="text-slate-200">Senha</Label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-12 pr-12 h-12 text-white"
+                      className="pl-12 pr-12 h-12 bg-[#3A4352] border-none text-white focus:ring-2 focus:ring-blue-500 transition-all"
+                      placeholder="Sua senha"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
                     >
-                      {showPassword ? <EyeOff /> : <Eye />}
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                   </div>
                 </div>
@@ -160,7 +162,7 @@ export default function Login() {
                   </div>
                 )}
 
-                <Button type="submit" disabled={loading} className="w-full h-12">
+                <Button type="submit" disabled={loading} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all">
                   {loading ? 'Entrando...' : 'Acessar'}
                 </Button>
               </form>
@@ -168,8 +170,8 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="text-center mt-6 text-sm text-white space-y-1">
-          <p>© 2026 NIOCHAT</p>
+        <div className="text-center mt-6 text-sm text-slate-400 space-y-1">
+          <p>© 2026 NIO HUB</p>
           <p>Versão {version}</p>
         </div>
       </motion.div>

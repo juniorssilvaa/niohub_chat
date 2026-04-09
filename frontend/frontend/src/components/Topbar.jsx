@@ -5,7 +5,7 @@ import InternalChatButton from './InternalChatButton';
 import NotificationBell from './NotificationBell';
 import StatusDot from './StatusDot';
 import { useLanguage } from '../contexts/LanguageContext';
-export default function Topbar({ onLogout, onChangelog, onNotifications, onMenuClick }) {
+export default React.memo(function Topbar({ onLogout, onChangelog, onNotifications, onMenuClick }) {
   const navigate = useNavigate();
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [isMobile, setIsMobile] = useState(false);
@@ -75,4 +75,4 @@ export default function Topbar({ onLogout, onChangelog, onNotifications, onMenuC
       </button>
     </div>
   );
-}
+});

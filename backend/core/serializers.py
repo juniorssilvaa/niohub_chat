@@ -1205,49 +1205,44 @@ class MensagemSistemaSerializer(serializers.ModelSerializer):
         return provedores
     
     def get_visualizacoes_detalhadas(self, obj):
-        """Retorna detalhes das visualizações com nomes dos provedores"""
-        from .models import Provedor
+        """Retorna detalhes das visualizações com nomes dos usuários e provedores"""
+        from .models import User, Provedor
         visualizacoes = []
-        for provedor_id, dados in obj.visualizacoes.items():
+        
+        if not obj.visualizacoes:
+            return []
+            
+        for key, dados in obj.visualizacoes.items():
             try:
-                provedor = Provedor.objects.get(id=int(provedor_id))
+                # No formato novo, a chave é o user_id
+                user_id = int(key)
+                user = User.objects.filter(id=user_id).first()
                 
-                # Verificar se dados é string (formato antigo) ou objeto (formato novo)
-                if isinstance(dados, str):
-                    # Formato antigo: string com timestamp
-                    visualizacoes.append({
-                        'provedor_id': int(provedor_id),
-                        'provedor_nome': provedor.nome,
-                        'user_id': None,
-                        'username': 'Usuário não identificado',
-                        'timestamp': dados
-                    })
-                else:
-                    # Formato novo: objeto com detalhes
-                    visualizacoes.append({
-                        'provedor_id': int(provedor_id),
-                        'provedor_nome': provedor.nome,
-                        'user_id': dados.get('user_id'),
-                        'username': dados.get('username'),
-                        'timestamp': dados.get('timestamp')
-                    })
-            except (Provedor.DoesNotExist, ValueError):
-                if isinstance(dados, str):
-                    visualizacoes.append({
-                        'provedor_id': provedor_id,
-                        'provedor_nome': f'Provedor {provedor_id} (não encontrado)',
-                        'user_id': None,
-                        'username': 'Usuário não identificado',
-                        'timestamp': dados
-                    })
-                else:
-                    visualizacoes.append({
-                        'provedor_id': provedor_id,
-                        'provedor_nome': f'Provedor {provedor_id} (não encontrado)',
-                        'user_id': dados.get('user_id'),
-                        'username': dados.get('username'),
-                        'timestamp': dados.get('timestamp')
-                    })
+                # Coletar dados básicos do JSON (conforme views.py)
+                # views.py usa: user_id, user_name, visualized_at
+                timestamp = dados.get('visualized_at') or dados.get('timestamp')
+                user_name = dados.get('user_name') or dados.get('username') or 'Usuário não identificado'
+                
+                # Tentar obter o provedor para contexto
+                provedor_nome = ''
+                if user:
+                    # Se o usuário é um admin de provedor
+                    p_admin = user.provedores_admin.first() if hasattr(user, 'provedores_admin') else None
+                    if p_admin:
+                        provedor_nome = p_admin.nome
+                    elif hasattr(user, 'provedor') and user.provedor:
+                        provedor_nome = user.provedor.nome
+                
+                visualizacoes.append({
+                    'user_id': user_id,
+                    'username': user_name,
+                    'provedor_nome': provedor_nome,
+                    'timestamp': timestamp
+                })
+            except (ValueError, TypeError):
+                # Caso ocorra algum erro no parse do ID
+                continue
+                
         return visualizacoes
     
     def create(self, validated_data):

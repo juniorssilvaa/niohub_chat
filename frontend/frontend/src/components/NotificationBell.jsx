@@ -38,8 +38,11 @@ const NotificationBell = () => {
       
       const user = userResponse.data;
       
-      // Só buscar notificações se for admin de provedor
-      if (user.user_type === 'admin' && user.provedores_admin && user.provedores_admin.length > 0) {
+      // Permitir que admins e agentes do provedor vejam notificações
+      const isAuthorized = (user.user_type === 'admin' || user.user_type === 'agent');
+      const hasProvedor = (user.provedores_admin && user.provedores_admin.length > 0) || (user.provedor_id);
+      
+      if (isAuthorized && hasProvedor) {
         const response = await axios.get('/api/mensagens-sistema/minhas_mensagens/', {
           headers: { Authorization: `Token ${token}` }
         });
@@ -82,10 +85,20 @@ const NotificationBell = () => {
     setNotifications(prev => prev.filter(n => n.id !== notificationId));
   };
   
-  // Função para limpar todas as mensagens lidas
+  // Função auxiliar para verificar se a notificação foi lida pelo usuário atual
+  const isReadByCurrentUser = (notification, userId) => {
+    if (!notification || !userId) return false;
+    if (!notification.visualizacoes) return false;
+    // O backend armazena as chaves como strings (user_id)
+    return !!notification.visualizacoes[userId.toString()];
+  };
+
+  // Função para limpar todas as mensagens lidas pelo usuário atual
   const clearReadNotifications = () => {
+    if (!currentUser?.id) return;
+    
     const readNotifications = notifications.filter(
-      n => n.visualizacoes && Object.keys(n.visualizacoes).length > 0
+      n => isReadByCurrentUser(n, currentUser.id)
     );
     
     const readIds = readNotifications.map(n => n.id);
@@ -99,9 +112,9 @@ const NotificationBell = () => {
       console.error('Erro ao salvar notificações removidas:', err);
     }
     
-    // Remover da lista local imediatamente
+    // Remover da lista local imediatamente as que o usuário já leu
     setNotifications(prev => prev.filter(
-      n => !n.visualizacoes || Object.keys(n.visualizacoes).length === 0
+      n => !isReadByCurrentUser(n, currentUser.id)
     ));
   };
 
@@ -109,7 +122,7 @@ const NotificationBell = () => {
   const markAsRead = async (notificationId) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       const response = await axios.patch(`/api/mensagens-sistema/${notificationId}/marcar-visualizada/`, {}, {
         headers: { Authorization: `Token ${token}` }
       });
@@ -159,7 +172,7 @@ const NotificationBell = () => {
     const connectWebSocket = () => {
       if (!currentUser?.id) return;
       
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       if (!token) return;
       
       // Fechar conexão anterior se existir
@@ -179,9 +192,11 @@ const NotificationBell = () => {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            console.log('[NOTIFICATION WS] Mensagem recebida:', data);
             
-              // Se recebeu uma nova mensagem do sistema, atualizar lista
-              if (data.type === 'system_message' && data.message) {
+            // Se recebeu uma nova mensagem do sistema, atualizar lista
+            if (data.type === 'system_message' && data.message) {
+              console.log('[NOTIFICATION WS] Nova mensagem do sistema detectada:', data.message.assunto);
                 // Verificar se a mensagem não foi removida pelo usuário
                 const saved = localStorage.getItem('removed_notifications');
                 const currentRemoved = saved ? JSON.parse(saved) : [];
@@ -198,27 +213,14 @@ const NotificationBell = () => {
                   });
                 }
               
-              // Mostrar modal se for a primeira mensagem não lida
-              // Mas só se o modal não foi fechado manualmente recentemente
+              // Mostrar modal se for uma nova mensagem
               if (!showModal) {
-                // Verificar se o modal foi fechado manualmente e se passou 15 minutos
-                if (modalClosedManuallyRef.current && lastModalCloseTimeRef.current) {
-                  const timeSinceClose = Date.now() - lastModalCloseTimeRef.current;
-                  const fifteenMinutes = 15 * 60 * 1000;
-                  
-                  // Se passou menos de 15 minutos, não reabrir
-                  if (timeSinceClose < fifteenMinutes) {
-                    return;
-                  }
-                  
-                  // Se passou 15 minutos, resetar flags
-                  modalClosedManuallyRef.current = false;
-                  lastModalCloseTimeRef.current = null;
-                }
+                // Resetar flags de controle manual para garantir que novas mensagens sempre apareçam
+                modalClosedManuallyRef.current = false;
+                lastModalCloseTimeRef.current = null;
                 
                 setCurrentNotification(data.message);
                 setShowModal(true);
-                modalClosedManuallyRef.current = false; // Resetar flag quando abrir
               }
             }
           } catch (err) {
@@ -260,7 +262,7 @@ const NotificationBell = () => {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
         if (!token) return;
         
         const userResponse = await axios.get('/api/auth/me/', {
@@ -281,7 +283,7 @@ const NotificationBell = () => {
     // Função que busca notificações usando o estado atual de removedNotifications
     const fetchWithFilter = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
         if (!token) return;
         
         const userResponse = await axios.get('/api/auth/me/', {
@@ -290,7 +292,10 @@ const NotificationBell = () => {
         
         const user = userResponse.data;
         
-        if (user.user_type === 'admin' && user.provedores_admin && user.provedores_admin.length > 0) {
+        const isAuthorized = (user.user_type === 'admin' || user.user_type === 'agent');
+        const hasProvedor = (user.provedores_admin && user.provedores_admin.length > 0) || (user.provedor_id);
+        
+        if (isAuthorized && hasProvedor) {
           const response = await axios.get('/api/mensagens-sistema/minhas_mensagens/', {
             headers: { Authorization: `Token ${token}` }
           });
@@ -330,9 +335,10 @@ const NotificationBell = () => {
 
   // Verificar se há novas mensagens não lidas e mostrar modal
   useEffect(() => {
-    // Só mostrar modal se for admin de provedor
-    if (notifications.length > 0) {
-      const unreadNotifications = notifications.filter(n => !n.visualizacoes || Object.keys(n.visualizacoes).length === 0);
+    // Só mostrar modal se tivermos o usuário carregado e houver notificações
+    if (currentUser?.id && notifications.length > 0) {
+      // Filtrar notificações que o usuário atual ainda não visualizou
+      const unreadNotifications = notifications.filter(n => !isReadByCurrentUser(n, currentUser.id));
       
       // Só mostrar modal se:
       // 1. Há mensagens não lidas

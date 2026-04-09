@@ -3244,19 +3244,29 @@ class UserViewSet(viewsets.ModelViewSet):
                     provedor = provedores.first()
                     logger.info(f"[MY_PROVIDER_USERS] Provedor encontrado via filter(admins): {provedor.id if provedor else None}")
             
+            # Verificar parâmetro para incluir o próprio usuário (útil para gestão de equipes)
+            include_self = request.query_params.get('include_self', 'false').lower() == 'true'
+            
             if provedor:
-                # Buscar TODOS os usuários do mesmo provedor (exceto o atual)
-                # Isso inclui todos os admins do provedor
-                users = User.objects.filter(
+                # Buscar TODOS os usuários do mesmo provedor
+                users_query = User.objects.filter(
                     provedores_admin=provedor
-                ).exclude(id=user.id).filter(is_active=True).distinct()
-                logger.info(f"[MY_PROVIDER_USERS] Usuários encontrados: {users.count()} para provedor {provedor.id}")
+                ).filter(is_active=True).distinct()
+                
+                if not include_self:
+                    users_query = users_query.exclude(id=user.id)
+                
+                users = users_query
+                logger.info(f"[MY_PROVIDER_USERS] Usuários encontrados: {users.count()} para provedor {provedor.id} (include_self={include_self})")
             else:
                 # Se não encontrou provedor, verificar se é superadmin
                 if user.user_type == 'superadmin':
                     # Superadmin pode ver todos os usuários ativos
-                    users = User.objects.filter(is_active=True).exclude(id=user.id)
-                    logger.info(f"[MY_PROVIDER_USERS] Superadmin - Usuários encontrados: {users.count()}")
+                    users_query = User.objects.filter(is_active=True)
+                    if not include_self:
+                        users_query = users_query.exclude(id=user.id)
+                    users = users_query
+                    logger.info(f"[MY_PROVIDER_USERS] Superadmin - Usuários encontrados: {users.count()} (include_self={include_self})")
                 else:
                     # Usuário sem provedor não pode ver ninguém
                     users = User.objects.none()
@@ -5773,46 +5783,88 @@ class MensagemSistemaViewSet(viewsets.ModelViewSet):
         
         # Superadmin vê todas as mensagens
         if user.user_type == 'superadmin':
-            queryset = MensagemSistema.objects.all()
-        else:
-            # Outros usuários veem apenas mensagens relacionadas aos seus provedores
-            provedores = Provedor.objects.filter(admins=user)
-            if provedores.exists():
-                # Filtrar mensagens que incluem algum dos provedores do usuário
-                provedor_ids = list(provedores.values_list('id', flat=True))
-                
-                # Filtrar mensagens onde o campo provedores (JSONField) contém algum dos IDs
-                # Usar Q objects para fazer consulta OR
-                from django.db.models import Q
-                q_objects = Q()
-                for provedor_id in provedor_ids:
-                    q_objects |= Q(provedores__contains=[provedor_id])
-                
-                queryset = MensagemSistema.objects.filter(
-                    q_objects | Q(provedor__in=provedores)
-                )
-            else:
-                queryset = MensagemSistema.objects.none()
+            return MensagemSistema.objects.all().order_by('-created_at')
         
-        return queryset.order_by('-created_at')
+        # Buscar provedores do usuário
+        provedores = Provedor.objects.filter(admins=user)
+        if not provedores.exists():
+            return MensagemSistema.objects.none()
+        
+        # IDs dos provedores do usuário
+        provedor_ids = list(provedores.values_list('id', flat=True))
+        
+        # Verificar vendor do banco de dados
+        from django.db import connection
+        from django.db.models import Q
+        
+        if connection.vendor == 'sqlite':
+            # No SQLite, buscar todas as mensagens e filtrar manualmente em Python
+            todas_mensagens = MensagemSistema.objects.all().order_by('-created_at')
+            mensagens_filtradas_ids = []
+            
+            for mensagem in todas_mensagens:
+                mensagem_provedores = mensagem.provedores if isinstance(mensagem.provedores, list) else []
+                # Converter para int se necessário
+                mensagem_provedores_int = []
+                for pid in mensagem_provedores:
+                    try:
+                        mensagem_provedores_int.append(int(pid))
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Verificar acesso e visibilidade
+                is_visible = True
+                if user.user_type == 'agent' and not mensagem.visivel_para_agentes:
+                    is_visible = False
+                    
+                if is_visible and (any(pid in mensagem_provedores_int for pid in provedor_ids) or mensagem.provedor in provedores):
+                    mensagens_filtradas_ids.append(mensagem.id)
+            
+            return MensagemSistema.objects.filter(id__in=mensagens_filtradas_ids).order_by('-created_at')
+        else:
+            # No PostgreSQL, podemos usar contains
+            q_objects = Q()
+            for provedor_id in provedor_ids:
+                q_objects |= Q(provedores__contains=[provedor_id])
+            
+            queryset = MensagemSistema.objects.filter(
+                q_objects | Q(provedor__in=provedores)
+            ).distinct()
+            
+            # Filtro adicional para agentes
+            if user.user_type == 'agent':
+                queryset = queryset.filter(visivel_para_agentes=True)
+                
+            return queryset.order_by('-created_at')
     
     def perform_create(self, serializer):
         user = self.request.user
         if user.user_type != 'superadmin':
             raise PermissionDenied('Apenas superadmin pode criar mensagens do sistema')
         
-        # Garantir que provedores está no validated_data
+        # Obter campos da requisição
         provedores_ids = self.request.data.get('provedores', [])
-        if provedores_ids:
-            # Atualizar validated_data antes de salvar
-            serializer.validated_data['provedores'] = provedores_ids
-            serializer.validated_data['provedores_count'] = len(provedores_ids)
+        visivel_para_agentes = self.request.data.get('visivel_para_agentes', True)
         
-        # Salvar dados da mensagem
-        mensagem = serializer.save()
+        # Garantir que são inteiros para consistência e segurança
+        clean_provedores_ids = []
+        for pid in provedores_ids:
+            try:
+                clean_provedores_ids.append(int(pid))
+            except (ValueError, TypeError):
+                continue
+
+        # Salvar a mensagem com os dados limpos
+        mensagem = serializer.save(
+            provedores=clean_provedores_ids,
+            provedores_count=len(clean_provedores_ids),
+            visivel_para_agentes=visivel_para_agentes
+        )
+        
+        logger.info(f"[MENSAGEM_SISTEMA] Nova mensagem criada ID: {mensagem.id} para {len(clean_provedores_ids)} provedores")
         
         # Notificar via WebSocket todos os provedores destinatários
-        self._notify_new_system_message(mensagem, provedores_ids)
+        self._notify_new_system_message(mensagem, clean_provedores_ids)
     
     def perform_update(self, serializer):
         user = self.request.user
@@ -5822,12 +5874,24 @@ class MensagemSistemaViewSet(viewsets.ModelViewSet):
         # Salvar dados da mensagem
         mensagem = serializer.save()
         
-        # Se provedores foi fornecido, atualizar o campo provedores
+        # Se provedores foi fornecido, atualizar o campo provedores de forma limpa
         provedores_ids = self.request.data.get('provedores', None)
         if provedores_ids is not None:
-            mensagem.provedores = provedores_ids
-            mensagem.provedores_count = len(provedores_ids)
-            mensagem.save()
+            clean_ids = []
+            for pid in provedores_ids:
+                try:
+                    clean_ids.append(int(pid))
+                except (ValueError, TypeError):
+                    continue
+            mensagem.provedores = clean_ids
+            mensagem.provedores_count = len(clean_ids)
+        
+        # Atualizar visibilidade se fornecida
+        if 'visivel_para_agentes' in self.request.data:
+            mensagem.visivel_para_agentes = self.request.data.get('visivel_para_agentes')
+            
+        mensagem.save()
+        logger.info(f"[MENSAGEM_SISTEMA] Mensagem {mensagem.id} atualizada com {len(clean_ids)} provedores")
     
     def perform_destroy(self, instance):
         user = self.request.user
@@ -5878,6 +5942,10 @@ class MensagemSistemaViewSet(viewsets.ModelViewSet):
                 except (ValueError, TypeError):
                     pass
             
+            # Verificar visibilidade para agentes
+            if user.user_type == 'agent' and not mensagem.visivel_para_agentes:
+                continue
+                
             # Verificar se algum provedor do usuário está na lista
             if any(pid in mensagem_provedores_int for pid in provedor_ids) or mensagem.provedor in provedores:
                 mensagens_filtradas.append(mensagem)
@@ -5890,24 +5958,33 @@ class MensagemSistemaViewSet(viewsets.ModelViewSet):
         try:
             channel_layer = get_channel_layer()
             if not channel_layer:
-                logger.warning("Channel layer não disponível. Não foi possível notificar nova mensagem do sistema.")
+                logger.warning("[MENSAGEM_SISTEMA] Channel layer não disponível para notificação")
                 return
             
             # Serializar mensagem para envio
             from core.serializers import MensagemSistemaSerializer
             mensagem_data = MensagemSistemaSerializer(mensagem).data
             
+            # Garantir que provedores_ids seja uma lista iterável
+            if not isinstance(provedores_ids, list):
+                provedores_ids = [provedores_ids] if provedores_ids else []
+
             # Notificar cada provedor destinatário
             for provedor_id in provedores_ids:
                 try:
-                    # Buscar todos os administradores do provedor
-                    provedor = Provedor.objects.filter(id=provedor_id).first()
+                    p_id = int(provedor_id)
+                    # Buscar o provedor para obter os admins
+                    provedor = Provedor.objects.filter(id=p_id).first()
                     if not provedor:
+                        logger.warning(f"[MENSAGEM_SISTEMA] Provedor {p_id} não encontrado para envio de WS")
                         continue
                     
+                    # 1. Notificar cada administrador individualmente nos seus grupos privados
                     admins = provedor.admins.all()
+                    admin_ids = [a.id for a in admins]
+                    logger.info(f"[MENSAGEM_SISTEMA] Notificando {len(admin_ids)} admins do provedor {p_id}: {admin_ids}")
+                    
                     for admin in admins:
-                        # Enviar notificação para o grupo de notificações do usuário
                         group_name = f'notifications_{admin.id}'
                         async_to_sync(channel_layer.group_send)(
                             group_name,
@@ -5921,8 +5998,8 @@ class MensagemSistemaViewSet(viewsets.ModelViewSet):
                             }
                         )
                     
-                    # Também notificar o grupo do painel do provedor
-                    group_name_painel = f'painel_{provedor_id}'
+                    # 2. Também notificar o grupo geral do painel do provedor
+                    group_name_painel = f'painel_{p_id}'
                     async_to_sync(channel_layer.group_send)(
                         group_name_painel,
                         {
@@ -5931,11 +6008,13 @@ class MensagemSistemaViewSet(viewsets.ModelViewSet):
                             'timestamp': timezone.now().isoformat()
                         }
                     )
+                    logger.info(f"[MENSAGEM_SISTEMA] WebSocket disparado com sucesso para provedor {p_id} ({admins.count()} admins notificados)")
+                    
                 except Exception as e:
-                    logger.error(f"Erro ao notificar provedor {provedor_id} sobre nova mensagem do sistema: {e}")
+                    logger.error(f"[MENSAGEM_SISTEMA] Erro ao notificar provedor {provedor_id}: {e}")
             
         except Exception as e:
-            logger.error(f"Erro ao notificar nova mensagem do sistema: {e}", exc_info=True)
+            logger.error(f"[MENSAGEM_SISTEMA] Erro de alto nível na notificação de mensagem do sistema: {e}", exc_info=True)
     
     @action(detail=True, methods=['patch'], url_path='marcar-visualizada')
     def marcar_visualizada(self, request, pk=None):

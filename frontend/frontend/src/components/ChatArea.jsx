@@ -45,6 +45,7 @@ import { useTheme } from '../hooks/useTheme';
 const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, user }) => {
   const navigate = useNavigate();
   const isDarkTheme = useTheme();
+  const authReady = !!user;
 
   // HOOKS DEVEM VIR ANTES DE QUALQUER RETURN CONDICIONAL (Regra dos Hooks)
   const [message, setMessage] = useState('');
@@ -124,6 +125,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🏓', '🏸', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸️', '🎿', '⛷️', '🏂', '🏋️', '🤺', '🤼', '🤸', '⛹️', '🤺', '🧗', '🚵', '🚴', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🏵️', '🎗️', '🎫', '🎟️', '🎪', '🎭', '🖼️', '🎨', '🧵', '🪡', '🧶', '✨', '🎈', '🎆', '🎇', '🧨', '🧧', '🎀', '🎁', '🎂', '🎉', '🎊', '🎋', '🎍', '🎑', '🎐', '🎏', '💎'
   ];
   const [pendingMessages, setPendingMessages] = useState(new Set());
+  const pendingMessagesRef = useRef(new Set());
 
   // Efeito para fechar o seletor de emojis ao clicar fora
   useEffect(() => {
@@ -605,11 +607,6 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     fetchMessages();
   }, [conversation?.id]);
 
-  // Verificar periodicamente o status da janela de 24 horas para WhatsApp
-  // NOTA: Esta verificação periódica foi removida porque agora buscamos a conversa atualizada
-  // do backend quando a conversa muda, garantindo dados sempre atualizados.
-  // O status é atualizado em tempo real via WebSocket quando mensagens chegam.
-
   // Função para marcar mensagem como lida no WhatsApp
   const markMessageAsRead = async (messageId) => {
     try {
@@ -778,7 +775,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     };
 
     let reconnectAttempts = 0;
-    const MAX_RECONNECT_ATTEMPTS = 3;
+    const MAX_RECONNECT_ATTEMPTS = 10;
     let shouldReconnect = true;
     let reconnectTimeout = null;
 
@@ -809,6 +806,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[WebSocket] Evento recebido:', {
+              type: data.type,
+              message_id: data.message?.id,
+              action: data.action,
+              has_conversation: !!data.conversation
+            });
+          }
           // WebSocket recebeu dados
 
           if (data.type === 'message' || data.type === 'chat_message' || data.type === 'message_created' || data.type === 'message_received') {
@@ -830,10 +836,22 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               }
 
               setMessages(currentMessages => {
-                //  Verificação mais robusta de duplicatas
-                const messageExists = currentMessages.some(m => m.id === data.message.id);
+                // VERIFICAÇÃO DE DUPLICATAS (ID real ou temp_id)
+                const messageExists = currentMessages.some(m => 
+                  (m.id && m.id === data.message.id) || 
+                  (m.temp_id && m.temp_id === data.message.temp_id)
+                );
 
-                if (!messageExists) {
+                if (messageExists) {
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`[WebSocket] Mensagem ${data.message.id} já existe no estado. Ignorando.`);
+                  }
+                  return currentMessages;
+                }
+
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[WebSocket] Adicionando nova mensagem: ${data.message.id}`);
+                }
                   let processedContent = processMessageContent(data.message.content, data.message.is_from_customer);
 
                   //  Remover assinatura do agente se presente (WebSocket)
@@ -917,6 +935,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                     // Remover a mensagem original (sem assinatura) das pendentes
                     const originalContent = processedMessage.content.replace(/\*.*disse:\*\n/, '');
                     newSet.delete(originalContent);
+                    pendingMessagesRef.current.delete(originalContent);
                     return newSet;
                   });
 
@@ -934,8 +953,6 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                   return [...filteredMessages, processedMessage].sort((a, b) =>
                     new Date(a.created_at) - new Date(b.created_at)
                   );
-                }
-                return currentMessages;
               });
             }
           }
@@ -1133,8 +1150,10 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           }
 
         } catch (error) {
-          // CORREÇÃO DE SEGURANÇA: Não expor detalhes do erro
-          // Silenciar erro para não expor informações sensíveis
+          console.error('[WebSocket] Erro ao processar mensagem:', error);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('[WebSocket] Payload problemático:', event.data);
+          }
         }
       };
 
@@ -1218,6 +1237,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
       // Fechando WebSocket
       if (wsRef.current) {
+        // Log para identificar quando REALMENTE precisamos fechar (mudança de conversa ou unmount)
+        console.log(`[WebSocket] Finalizando conexão para conversa ${conversation?.id || 'atual'}`);
         if (wsRef.current.heartbeatInterval) {
           clearInterval(wsRef.current.heartbeatInterval);
         }
@@ -1227,7 +1248,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         wsRef.current = null;
       }
     };
-  }, [conversation, onConversationClose]);
+  }, [conversation?.id, authReady]); // ESTABILIZADO: Só reconecta se trocar de conversa ou mudar auth
 
   //  LIMPEZA AUTOMÁTICA DE MENSAGENS TEMPORÁRIAS
   useEffect(() => {
@@ -1322,23 +1343,23 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
-    //  Marcar mensagem como pendente para evitar duplicatas
+    //  Marcar mensagem como pendente para evitar duplicatas - Usar REF para evitar stale closure
     const messageKey = message.trim();
-    if (pendingMessages.has(messageKey)) {
+    if (pendingMessagesRef.current.has(messageKey)) {
       // Mensagem já está sendo enviada, ignorando
       return;
     }
 
-    setPendingMessages(prev => new Set(prev).add(messageKey));
+    setPendingMessages(prev => {
+      const newSet = new Set(prev);
+      newSet.add(messageKey);
+      return newSet;
+    });
+    pendingMessagesRef.current.add(messageKey);
 
     try {
-      // Buscar informações do usuário atual para adicionar assinatura
-      const userResponse = await axios.get('/api/auth/me/', {
-        headers: { Authorization: `Token ${token}` }
-      });
-
-      const currentUser = userResponse.data;
-      const userName = currentUser.first_name || currentUser.username || 'Usuário';
+      // Otimização: Usar os dados do usuário já presentes na prop 'user'
+      const userName = user?.first_name || user?.username || 'Usuário';
 
       // Formatar mensagem com nome do usuário para enviar ao WhatsApp
       const formattedMessage = `*${userName} disse:*\n${message}`;
@@ -1366,8 +1387,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
       //  Se o WebSocket não funcionar, adicionar mensagem do response
       setTimeout(() => {
-        if (pendingMessages.has(messageKey)) {
-          // WebSocket não recebeu mensagem, adicionando do response
+        // CORREÇÃO: Usar pendingMessagesRef.current em vez do estado pendingMessages
+        // para evitar o problema de "stale closure" no setTimeout
+        if (pendingMessagesRef.current.has(messageKey)) {
+          console.warn(`[WebSocket] Mensagem "${messageKey.substring(0, 20)}..." não recebida via WS após 2s, usando fallback da API.`);
+          
           if (response.data && response.data.id) {
             const processedMessage = {
               ...response.data,
@@ -1385,7 +1409,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             });
           }
 
-          // Remover das pendentes
+          // Remover das pendentes (ref e estado)
+          pendingMessagesRef.current.delete(messageKey);
           setPendingMessages(prev => {
             const newSet = new Set(prev);
             newSet.delete(messageKey);
@@ -1427,6 +1452,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       toast.error(errorMessage);
 
       //  Remover das pendentes em caso de erro
+      pendingMessagesRef.current.delete(messageKey);
       setPendingMessages(prev => {
         const newSet = new Set(prev);
         newSet.delete(messageKey);

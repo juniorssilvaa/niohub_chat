@@ -33,7 +33,7 @@ const Sidebar = () => {
         <div className="mb-8 text-center">
           <Link to="/app/dashboard" className="flex justify-center items-center">
             <Crown className="w-6 h-6 text-yellow-400 mr-2" />
-            <span className="text-lg font-bold">NioChat</span>
+            <span className="text-lg font-bold">NIO HUB</span>
           </Link>
         </div>
 

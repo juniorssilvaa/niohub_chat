@@ -37,7 +37,8 @@ const AddEditTeamModal = ({ isOpen, onClose, onSave, team }) => {
         console.log('URL da requisição:', '/api/users/my_provider_users/');
 
         // Usar o endpoint correto que retorna apenas os usuários do provedor
-        const response = await fetch('/api/users/my_provider_users/', {
+        // Adicionamos include_self=true para que o administrador possa se adicionar à equipe
+        const response = await fetch('/api/users/my_provider_users/?include_self=true', {
           headers: {
             'Authorization': `Token ${token}`,
             'Content-Type': 'application/json'
