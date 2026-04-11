@@ -88,6 +88,10 @@ checks = [
     ('0062_chatbotflow', table_exists('core_chatbotflow')),
     ('0063_add_bot_mode_to_provedor', column_exists('core_provedor', 'bot_mode')),
     ('0067_add_canal_to_chatbotflow', column_exists('core_chatbotflow', 'canal_id')),
+    ('0070_add_asaas_fields', column_exists('core_systemconfig', 'asaas_access_token')),
+    ('0071_provedor_asaas_details', column_exists('core_provedor', 'asaas_customer_id')),
+    ('0072_provedor_subscription_fields', column_exists('core_provedor', 'asaas_subscription_id')),
+    ('0073_provedor_subscription_next_due_date', column_exists('core_provedor', 'subscription_next_due_date')),
 ]
 
 with connection.cursor() as cursor:
