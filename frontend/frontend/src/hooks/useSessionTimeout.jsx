@@ -1,7 +1,7 @@
-import { useRef } from 'react';
+import { useRef, useCallback } from 'react';
 import axios from 'axios';
 
-const useSessionTimeout = () => {
+const useSessionTimeout = (user) => {
   // Hooks devem ser chamados sempre, antes de qualquer retorno condicional.
   const timeoutRef = useRef(null);
   const warningTimeoutRef = useRef(null);
@@ -10,8 +10,14 @@ const useSessionTimeout = () => {
   const isClient = typeof window !== 'undefined';
 
   // Buscar timeout configurado do usuário
-  const fetchUserSessionTimeout = async () => {
+  const fetchUserSessionTimeout = useCallback(async () => {
     if (!isClient) return 30;
+
+    // Se o usuário já foi passado e tem o timeout, usar direto
+    if (user?.session_timeout) {
+      sessionTimeoutRef.current = user.session_timeout;
+      return user.session_timeout;
+    }
     
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -36,9 +42,9 @@ const useSessionTimeout = () => {
       } catch (e) {}
     }
     return sessionTimeoutRef.current; // mantém o valor atual se falhar
-  };
+  }, [user, isClient]);
 
-  const resetTimeout = () => {
+  const resetTimeout = useCallback(() => {
     if (!isClient) return;
     
     // Limpar timeouts anteriores
@@ -80,9 +86,9 @@ const useSessionTimeout = () => {
         alert(`Sua sessão expirará em 30 segundos por inatividade. Realize alguma ação para continuar.`);
       }, 30 * 1000);
     }
-  };
+  }, [isClient]);
 
-  const startTimeout = () => {
+  const startTimeout = useCallback(() => {
     if (!isClient) return;
 
     fetchUserSessionTimeout().then(() => {
@@ -105,13 +111,13 @@ const useSessionTimeout = () => {
         });
       };
     });
-  };
+  }, [isClient, fetchUserSessionTimeout, resetTimeout]);
 
-  const updateTimeout = async () => {
+  const updateTimeout = useCallback(async () => {
     if (!isClient) return;
     await fetchUserSessionTimeout();
     resetTimeout();
-  };
+  }, [isClient, fetchUserSessionTimeout, resetTimeout]);
 
   return { startTimeout, updateTimeout };
 };

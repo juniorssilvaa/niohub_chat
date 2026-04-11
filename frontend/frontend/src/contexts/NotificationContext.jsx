@@ -571,14 +571,22 @@ export const NotificationProvider = ({ children }) => {
   const setFavicon = (hrefBase) => {
     try {
       const href = `${hrefBase}?v=${Date.now()}`;
-      const links = Array.from(document.querySelectorAll("link[rel~='icon']"));
+      // Alvos principais: link rel="icon" e link rel="shortcut icon"
+      // Evitamos sobrescrever o manifest ou o apple-touch-icon aqui.
+      const selectors = [
+        "link[rel='icon']",
+        "link[rel='shortcut icon']",
+        "link[rel~='icon']"
+      ];
+      const links = Array.from(document.querySelectorAll(selectors.join(',')));
+      
       if (links.length > 0) {
-        links.forEach(l => { l.href = href; });
-      } else {
-        const l1 = document.createElement('link');
-        l1.rel = 'icon'; l1.type = 'image/png'; l1.href = href; document.head.appendChild(l1);
-        const l2 = document.createElement('link');
-        l2.rel = 'shortcut icon'; l2.type = 'image/png'; l2.href = href; document.head.appendChild(l2);
+        links.forEach(l => {
+          // Só atualizar se for um dos ícones principais de exibição na aba
+          if (l.rel.includes('icon') && !l.rel.includes('apple-touch-icon')) {
+            l.href = href;
+          }
+        });
       }
     } catch (_) { }
   };
@@ -586,7 +594,7 @@ export const NotificationProvider = ({ children }) => {
   const startBlinkingFavicon = () => {
     if (isFaviconBlinkingRef.current) return;
     isFaviconBlinkingRef.current = true;
-    const defaultIcon = '/favicon.png';
+    const defaultIcon = '/favicon-96x96.png';
     const notifyIcon = '/favicon_red.png';
     let toggle = false;
     faviconTimerRef.current = setInterval(() => {
@@ -605,7 +613,14 @@ export const NotificationProvider = ({ children }) => {
       faviconTimerRef.current = null;
     }
     isFaviconBlinkingRef.current = false;
-    setFavicon('/favicon.png');
+    // Restaurar para o ícone padrão de 96x96 que é o principal do pacote
+    setFavicon('/favicon-96x96.png');
+    
+    // Pequeno delay para garantir que o navegador perceba a mudança e normalize
+    setTimeout(() => {
+       // Opcional: recarregar o .ico como backup
+       // setFavicon('/favicon.ico');
+    }, 100);
   };
 
   const clearNotifications = () => {

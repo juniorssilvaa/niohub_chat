@@ -42,7 +42,7 @@ export default function App() {
   const [isBlocked, setIsBlocked] = useState(false);
   const [checkingBilling, setCheckingBilling] = useState(false);
 
-  const { startTimeout } = useSessionTimeout();
+  const { startTimeout } = useSessionTimeout(user);
 
   // Extrair dados do usuário (sem acessar localStorage)
   const userRole = user?.user_type || user?.role || null;
