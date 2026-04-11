@@ -414,13 +414,14 @@ const SgpSidebar = ({ conversation, user, messages = [], onClose }) => {
                     </div>
                   </div>
                 </div>
-              )}
+               </div>
+               )}
 
-              {/* === ABA FINANCEIRO === */}
-              {activeTab === 'financeiro' && (
-              <div className="m-0 space-y-4 focus:outline-none flex-1 mt-0 animate-in fade-in duration-300">
+               {/* === ABA FINANCEIRO === */}
+               {activeTab === 'financeiro' && (
+               <div className="m-0 space-y-4 focus:outline-none flex-1 mt-0 animate-in fade-in duration-300">
                 {/* Header Condensado */}
-                      <div className="bg-[#24262d] rounded-xl p-4 shadow-sm border border-white/5">
+                <div className="bg-[#24262d] rounded-xl p-4 shadow-sm border border-white/5">
                   <div className="flex justify-between items-center border-b border-white/10 pb-3 mb-4">
                      <span className="text-sm font-semibold text-gray-200">Cliente identificado</span>
                      <button onClick={handleReset} className="text-xs text-gray-400 hover:text-white mr-8 transition-colors">Alterar</button>
@@ -484,123 +485,118 @@ const SgpSidebar = ({ conversation, user, messages = [], onClose }) => {
 
                        {/* Botões de Boleto */}
                        <div className="p-4 bg-[#24262d]">
-                         <span className="text-[11px] text-gray-400 block mb-3 pl-1">Boleto</span>
-                       {/* Botões de Boleto Estilo Premium */}
-                       <div className="p-4 bg-[#24262d]/50 backdrop-blur-sm">
-                         <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider block mb-4 l-1 opacity-70">Ações de Pagamento</span>
-                         <div className="grid grid-cols-2 gap-3">
-                           {/* Cód Pix */}
-                           <button 
-                             onClick={() => handleGerarPix(currentFatura)} 
-                             className="group bg-[#1a1c23] hover:bg-[#252536] transition-all duration-300 rounded-2xl flex flex-col items-center justify-center p-4 gap-2 border border-white/5 hover:border-[#10b981]/30 hover:scale-[1.02] active:scale-[0.98] shadow-sm"
-                           >
-                             <div className="bg-[#10b981]/10 p-2.5 rounded-xl group-hover:bg-[#10b981]/20 transition-colors">
-                               <QrCode className="w-6 h-6 text-[#10b981]" />
-                             </div>
-                             <span className="text-[11px] font-bold text-gray-300 group-hover:text-white">Cód Pix</span>
-                           </button>
- 
-                           {/* Cód Barras */}
-                           <button 
-                             onClick={() => handleEnviarFaturaInterativa(currentFatura, 'boleto')} 
-                             className="group bg-[#1a1c23] hover:bg-[#252536] transition-all duration-300 rounded-2xl flex flex-col items-center justify-center p-4 gap-2 border border-white/5 hover:border-gray-500/30 hover:scale-[1.02] active:scale-[0.98] shadow-sm"
-                           >
-                             <div className="bg-gray-500/10 p-2.5 rounded-xl group-hover:bg-gray-500/20 transition-colors">
-                               <Barcode className="w-6 h-6 text-gray-400" />
-                             </div>
-                             <span className="text-[11px] font-bold text-gray-300 group-hover:text-white">Boleto</span>
-                           </button>
- 
-                           {/* Link Fatura */}
-                           <button 
-                             onClick={() => handleEnviarFaturaInterativa(currentFatura, 'ambos')}
-                             className="group bg-[#1a1c23] hover:bg-[#252536] transition-all duration-300 rounded-2xl flex flex-col items-center justify-center p-4 gap-2 border border-white/5 hover:border-blue-500/30 hover:scale-[1.02] active:scale-[0.98] shadow-sm"
-                           >
-                             <div className="bg-blue-500/10 p-2.5 rounded-xl group-hover:bg-blue-500/20 transition-colors">
-                               <LinkIcon className="w-6 h-6 text-blue-400" />
-                             </div>
-                             <span className="text-[11px] font-bold text-gray-300 group-hover:text-white">Link Fatura</span>
-                           </button>
- 
-                           {/* PDF Fatura */}
-                           <button 
-                             onClick={() => toast.info('O PDF será enviado como documento no chat.')} 
-                             className="group bg-[#1a1c23] hover:bg-[#252536] transition-all duration-300 rounded-2xl flex flex-col items-center justify-center p-4 gap-2 border border-white/5 hover:border-red-500/30 hover:scale-[1.02] active:scale-[0.98] shadow-sm"
-                           >
-                             <div className="bg-red-500/10 p-2.5 rounded-xl group-hover:bg-red-500/20 transition-colors">
-                               <FileText className="w-6 h-6 text-red-500" />
-                             </div>
-                             <span className="text-[11px] font-bold text-gray-300 group-hover:text-white">PDF Fatura</span>
-                           </button>
-                         </div>
-                       </div>
+                          <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider block mb-4 l-1 opacity-70">Ações de Pagamento</span>
+                          <div className="grid grid-cols-2 gap-3">
+                            {/* Cód Pix */}
+                            <button 
+                              onClick={() => handleGerarPix(currentFatura)} 
+                              className="group bg-[#1a1c23] hover:bg-[#252536] transition-all duration-300 rounded-2xl flex flex-col items-center justify-center p-4 gap-2 border border-white/5 hover:border-[#10b981]/30 hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+                            >
+                              <div className="bg-[#10b981]/10 p-2.5 rounded-xl group-hover:bg-[#10b981]/20 transition-colors">
+                                <QrCode className="w-6 h-6 text-[#10b981]" />
+                              </div>
+                              <span className="text-[11px] font-bold text-gray-300 group-hover:text-white">Cód Pix</span>
+                            </button>
+  
+                            {/* Cód Barras */}
+                            <button 
+                              onClick={() => handleEnviarFaturaInterativa(currentFatura, 'boleto')} 
+                              className="group bg-[#1a1c23] hover:bg-[#252536] transition-all duration-300 rounded-2xl flex flex-col items-center justify-center p-4 gap-2 border border-white/5 hover:border-gray-500/30 hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+                            >
+                              <div className="bg-gray-500/10 p-2.5 rounded-xl group-hover:bg-gray-500/20 transition-colors">
+                                <Barcode className="w-6 h-6 text-gray-400" />
+                              </div>
+                              <span className="text-[11px] font-bold text-gray-300 group-hover:text-white">Boleto</span>
+                            </button>
+  
+                            {/* Link Fatura */}
+                            <button 
+                              onClick={() => handleEnviarFaturaInterativa(currentFatura, 'ambos')}
+                              className="group bg-[#1a1c23] hover:bg-[#252536] transition-all duration-300 rounded-2xl flex flex-col items-center justify-center p-4 gap-2 border border-white/5 hover:border-blue-500/30 hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+                            >
+                              <div className="bg-blue-500/10 p-2.5 rounded-xl group-hover:bg-blue-500/20 transition-colors">
+                                <LinkIcon className="w-6 h-6 text-blue-400" />
+                              </div>
+                              <span className="text-[11px] font-bold text-gray-300 group-hover:text-white">Link Fatura</span>
+                            </button>
+  
+                            {/* PDF Fatura */}
+                            <button 
+                              onClick={() => toast.info('O PDF será enviado como documento no chat.')} 
+                              className="group bg-[#1a1c23] hover:bg-[#252536] transition-all duration-300 rounded-2xl flex flex-col items-center justify-center p-4 gap-2 border border-white/5 hover:border-red-500/30 hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+                            >
+                              <div className="bg-red-500/10 p-2.5 rounded-xl group-hover:bg-red-500/20 transition-colors">
+                                <FileText className="w-6 h-6 text-red-500" />
+                              </div>
+                              <span className="text-[11px] font-bold text-gray-300 group-hover:text-white">PDF Fatura</span>
+                            </button>
+                          </div>
                        </div>
                     </div>
                   )}
                 </div>
-              </div>
-              )}
+               </div>
+               )}
 
-              {/* === ABA SUPORTE === */}
-              {activeTab === 'suporte' && (
-              <div className="m-0 space-y-4 focus:outline-none flex-1 mt-0 animate-in fade-in duration-300">
-                 <div className="bg-[#24262d] rounded-xl p-4 shadow-sm border border-white/5">
-                  <div className="flex justify-between items-center border-b border-white/10 pb-3 mb-4">
-                     <span className="text-sm font-semibold text-gray-200">Cliente identificado</span>
-                     <button onClick={handleReset} className="text-xs text-gray-400 hover:text-white mr-8 transition-colors">Alterar</button>
-                  </div>
-                  <select 
-                    className="w-full bg-[#1a1c23] border border-white/10 rounded-lg p-2.5 text-sm text-gray-200 focus:outline-none appearance-none"
-                    value={selectedContrato?.id || selectedContrato?.id_contrato || selectedContrato?.contrato_id || selectedContrato?.contratoId || selectedContrato?.codigo || ''}
-                    onChange={(e) => {
-                      const c = clienteData.contratos.find(cnt => (cnt.id || cnt.id_contrato || cnt.contrato_id || cnt.contratoId || cnt.codigo) == e.target.value);
-                      setSelectedContrato(c);
-                    }}
-                  >
-                    {clienteData.contratos.map(c => {
-                      const cId = c.id || c.id_contrato || c.contrato_id || c.contratoId || c.codigo;
-                      return (
-                        <option key={cId || Math.random()} value={cId}>{c.plano_nome || c.plano || c.servico || `Contrato ${cId}`}</option>
-                      );
-                    })}
-                  </select>
+               {/* === ABA SUPORTE === */}
+               {activeTab === 'suporte' && (
+               <div className="m-0 space-y-4 focus:outline-none flex-1 mt-0 animate-in fade-in duration-300">
+                  <div className="bg-[#24262d] rounded-xl p-4 shadow-sm border border-white/5">
+                   <div className="flex justify-between items-center border-b border-white/10 pb-3 mb-4">
+                      <span className="text-sm font-semibold text-gray-200">Cliente identificado</span>
+                      <button onClick={handleReset} className="text-xs text-gray-400 hover:text-white mr-8 transition-colors">Alterar</button>
+                   </div>
+                   <select 
+                     className="w-full bg-[#1a1c23] border border-white/10 rounded-lg p-2.5 text-sm text-gray-200 focus:outline-none appearance-none"
+                     value={selectedContrato?.id || selectedContrato?.id_contrato || selectedContrato?.contrato_id || selectedContrato?.contratoId || selectedContrato?.codigo || ''}
+                     onChange={(e) => {
+                       const c = clienteData.contratos.find(cnt => (cnt.id || cnt.id_contrato || cnt.contrato_id || cnt.contratoId || cnt.codigo) == e.target.value);
+                       setSelectedContrato(c);
+                     }}
+                   >
+                     {clienteData.contratos.map(c => {
+                       const cId = c.id || c.id_contrato || c.contrato_id || c.contratoId || c.codigo;
+                       return (
+                         <option key={cId || Math.random()} value={cId}>{c.plano_nome || c.plano || c.servico || `Contrato ${cId}`}</option>
+                       );
+                     })}
+                   </select>
 
-                  {/* Abertura de Chamado */}
-                  <div className="mt-4 pt-4 border-t border-white/10 space-y-4">
-                     <span className="text-sm font-semibold text-gray-200">Abertura de Chamado</span>
-                     
-                     <div className="space-y-3">
-                        <select 
-                           className="w-full bg-[#1a1c23] border border-white/10 rounded-lg p-2.5 text-sm text-gray-200 focus:outline-none appearance-none"
-                           value={ticketType}
-                           onChange={e => setTicketType(e.target.value)}
-                        >
-                           <option value="1">Sem acesso à internet</option>
-                           <option value="2">Serviço com lentidão</option>
-                           <option value="3">Dúvidas financeiras</option>
-                           <option value="4">Outros problemas</option>
-                        </select>
-
-                        <textarea
-                           className="w-full h-24 bg-[#1a1c23] border border-white/10 rounded-lg p-3 text-sm text-gray-200 focus:outline-none resize-none placeholder:text-gray-500"
-                           placeholder="Descreva o problema em detalhes..."
-                           value={ticketDescription}
-                           onChange={e => setTicketDescription(e.target.value)}
-                        ></textarea>
-
-                        <button 
-                           onClick={abrirChamado}
-                           disabled={openingTicket}
-                           className="w-full bg-[#10b981] hover:bg-[#059669] text-white py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                   {/* Abertura de Chamado */}
+                   <div className="mt-4 pt-4 border-t border-white/10 space-y-4">
+                      <span className="text-sm font-semibold text-gray-200">Abertura de Chamado</span>
+                      
+                      <div className="space-y-3">
+                         <select 
+                            className="w-full bg-[#1a1c23] border border-white/10 rounded-lg p-2.5 text-sm text-gray-200 focus:outline-none appearance-none"
+                            value={ticketType}
+                            onChange={e => setTicketType(e.target.value)}
                          >
-                           {openingTicket ? 'Abrindo chamado...' : 'Abrir chamado'}
-                        </button>
-                     </div>
-                  </div>
-                </div>
-              </div>
-              )}
+                            <option value="1">Sem acesso à internet</option>
+                            <option value="2">Serviço com lentidão</option>
+                            <option value="3">Dúvidas financeiras</option>
+                            <option value="4">Outros problemas</option>
+                         </select>
 
+                         <textarea
+                            className="w-full h-24 bg-[#1a1c23] border border-white/10 rounded-lg p-3 text-sm text-gray-200 focus:outline-none resize-none placeholder:text-gray-500"
+                            placeholder="Descreva o problema em detalhes..."
+                            value={ticketDescription}
+                            onChange={e => setTicketDescription(e.target.value)}
+                         ></textarea>
+
+                         <button 
+                            onClick={abrirChamado}
+                            disabled={openingTicket}
+                            className="w-full bg-[#10b981] hover:bg-[#059669] text-white py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                          >
+                            {openingTicket ? 'Abrindo chamado...' : 'Abrir chamado'}
+                         </button>
+                      </div>
+                   </div>
+                  </div>
+               </div>
+               )}
          </div>
     </div>
   );
