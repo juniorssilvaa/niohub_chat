@@ -105,8 +105,8 @@ jobs:
       env:
         VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        VITE_API_URL: "https://app.niochat.com.br/api"
-        VITE_WS_URL: "wss://app.niochat.com.br/ws"
+        VITE_API_URL: "https://api.niohub.com.br/api"
+        VITE_WS_URL: "wss://api.niohub.com.br/ws"
       run: |
         cd frontend/frontend
         pnpm install --no-frozen-lockfile
@@ -155,8 +155,8 @@ jobs:
         build-args: |
           VITE_SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          VITE_API_URL=https://app.niochat.com.br/api
-          VITE_WS_URL=wss://app.niochat.com.br/ws
+          VITE_API_URL=https://api.niohub.com.br/api
+          VITE_WS_URL=wss://api.niohub.com.br/ws
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ github.sha }}
@@ -192,7 +192,7 @@ jobs:
     steps:
     - name: Deploy to Portainer
       env:
-        PORTAINER_URL: https://portainer.niochat.com.br
+        PORTAINER_URL: https://portainer.niohub.com.br
         PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
         BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
         FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
