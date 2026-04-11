@@ -28,7 +28,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f'! Usuário "{username}" não encontrado. Criando...'))
             user = User.objects.create_superuser(
                 username=username,
-                email='admin@niochat.com.br',
+                email='admin@niohub.com.br',
                 password='admin', # Senha padrão inicial, deve ser alterada
                 user_type='superadmin'
             )

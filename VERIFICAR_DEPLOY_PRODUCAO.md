@@ -45,7 +45,7 @@ docker logs niochat-backend --tail=100
 
 ### Opção 1: Via Portainer (Recomendado)
 
-1. Acesse: https://portainer.niochat.com.br
+1. Acesse: https://portainer.niohub.com.br
 2. Vá em **Stacks** → **niochat**
 3. Clique em **Editor**
 4. Clique em **Update the stack**
@@ -152,6 +152,6 @@ cat /app/backend/.git/HEAD 2>/dev/null || echo "Git não disponível"
 ## 🔗 Links Úteis
 
 - GitHub Actions: https://github.com/juniorssilvaa/niochat/actions
-- Portainer: https://portainer.niochat.com.br
+- Portainer: https://portainer.niohub.com.br
 - GitHub Container Registry: https://github.com/juniorssilvaa/niochat/pkgs/container/niochat
 

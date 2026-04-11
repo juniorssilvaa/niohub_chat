@@ -26,13 +26,18 @@ export const getWebSocketHost = () => {
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
     
-    // Se estiver em qualquer subdomínio niochat.com.br
-    if (hostname.endsWith('niochat.com.br')) {
+    // Se estiver em qualquer subdomínio niohub.com.br
+    if (hostname.endsWith('niohub.com.br')) {
       if (hostname.startsWith('api-local') || hostname.startsWith('front-local')) {
-        return 'api-local.niochat.com.br';
+        return 'api-local.niohub.com.br';
       }
-      // Para app.niochat.com.br, front.niochat.com.br ou outros
-      return 'api.niochat.com.br';
+      // Padrão: api.niohub.com.br
+      return 'api.niohub.com.br';
+    }
+
+    // Compatibilidade temporária com niochat.com.br
+    if (hostname.endsWith('niochat.com.br')) {
+      return 'api.niohub.com.br';
     }
     
     // Se estiver em desenvolvimento local, usar localhost
@@ -46,10 +51,8 @@ export const getWebSocketHost = () => {
     return 'localhost:8010';
   }
   
-  // FALLBACK SEGURO: Em caso de dúvida, usar localhost (nunca produção)
-  // Isso evita que desenvolvimento acesse produção acidentalmente
-  console.warn('[WebSocket] Hostname desconhecido, usando localhost como fallback seguro');
-  return 'localhost:8010';
+  // FALLBACK SEGURO: Em caso de dúvida, usar api.niohub.com.br
+  return 'api.niohub.com.br';
 };
 
 /**

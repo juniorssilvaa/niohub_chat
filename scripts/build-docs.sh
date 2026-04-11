@@ -32,7 +32,7 @@ if [ -d "site" ]; then
     sudo cp -r site/* /var/lib/docker/volumes/niochat-docs/_data/
     
     echo "🎉 Documentação pronta para deploy!"
-    echo "🌐 Acesse: https://docs.niochat.com.br"
+    echo "🌐 Acesse: https://docs.niohub.com.br"
 else
     echo "❌ Erro ao gerar documentação!"
     exit 1

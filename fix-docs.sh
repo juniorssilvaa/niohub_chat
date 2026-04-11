@@ -24,4 +24,4 @@ sudo cp -r /home/junior/niochat/docs/site/* /var/lib/docker/volumes/niochat-docs
 echo "🔄 Reiniciando container de documentação..."
 sudo docker restart niochat-docs
 
-echo "✅ Documentação corrigida! Acesse: https://docs.niochat.com.br"
+echo "✅ Documentação corrigida! Acesse: https://docs.niohub.com.br"

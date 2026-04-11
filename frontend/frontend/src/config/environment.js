@@ -3,9 +3,9 @@
 // IMPORTANTE: Em desenvolvimento, SEMPRE usar localhost, nunca produção
 
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const isProduction = hostname === 'app.niochat.com.br';
-const isStaging = hostname === 'front.niochat.com.br';
-const isStagingLocal = hostname === 'front-local.niochat.com.br';
+const isProduction = hostname === 'chat.niohub.com.br' || hostname === 'app.niohub.com.br';
+const isStaging = hostname === 'front.niohub.com.br' || hostname === 'front.niochat.com.br';
+const isStagingLocal = hostname === 'front-local.niohub.com.br' || hostname === 'front-local.niochat.com.br';
 const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
 const isDev = import.meta.env.DEV; // Modo de desenvolvimento do Vite
 
@@ -24,12 +24,12 @@ const getApiUrl = () => {
   
   // PRIORIDADE 3: Detecção por hostname (apenas em produção/staging)
   if (isProduction || isStaging) {
-    return 'https://api.niochat.com.br';
+    return 'https://api.niohub.com.br';
   }
   
   // Em staging local via Cloudflare Tunnel
   if (isStagingLocal) {
-    return 'https://api-local.niochat.com.br';
+    return 'https://api-local.niohub.com.br';
   }
   
   // FALLBACK SEGURO: Em desenvolvimento, usar proxy (nunca produção)
@@ -51,12 +51,12 @@ const getWsUrl = () => {
   
   // PRIORIDADE 3: Detecção por hostname (apenas em produção/staging)
   if (isProduction || isStaging) {
-    return 'wss://api.niochat.com.br';
+    return 'wss://api.niohub.com.br';
   }
   
   // Em staging local via Cloudflare Tunnel
   if (isStagingLocal) {
-    return 'wss://api-local.niochat.com.br';
+    return 'wss://api-local.niohub.com.br';
   }
   
   // FALLBACK SEGURO: Em desenvolvimento, usar localhost (nunca produção)
@@ -78,12 +78,12 @@ const getMediaUrl = () => {
   
   // PRIORIDADE 3: Detecção por hostname (apenas em produção/staging)
   if (isProduction || isStaging) {
-    return 'https://api.niochat.com.br';
+    return 'https://api.niohub.com.br';
   }
   
   // Em staging local via Cloudflare Tunnel
   if (isStagingLocal) {
-    return 'https://api-local.niochat.com.br';
+    return 'https://api-local.niohub.com.br';
   }
   
   // FALLBACK SEGURO: Em desenvolvimento, usar localhost (nunca produção)
@@ -93,11 +93,11 @@ const getMediaUrl = () => {
 export const config = {
   // URLs baseadas em prioridade: env > DEV > hostname
   baseUrl: isProduction 
-    ? 'https://app.niochat.com.br'   // PRODUÇÃO
+    ? 'https://chat.niohub.com.br'   // PRODUÇÃO
     : isStagingLocal
-    ? 'https://front-local.niochat.com.br'  // STAGING LOCAL (Cloudflare Tunnel)
+    ? 'https://front-local.niohub.com.br'  // STAGING LOCAL (Cloudflare Tunnel)
     : isStaging
-    ? 'https://front.niochat.com.br'  // STAGING/DESENVOLVIMENTO
+    ? 'https://front.niohub.com.br'  // STAGING/DESENVOLVIMENTO
     : 'http://localhost:8012',        // LOCAL
   
   // Configurações de API - prioriza variável de ambiente

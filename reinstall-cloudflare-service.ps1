@@ -47,8 +47,8 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "Servico iniciado!" -ForegroundColor Green
     Write-Host "Tunnel ativo:" -ForegroundColor Cyan
-    Write-Host "   Frontend: https://front.niochat.com.br" -ForegroundColor Green
-    Write-Host "   Backend:  https://api.niochat.com.br" -ForegroundColor Green
+    Write-Host "   Frontend: https://front.niohub.com.br" -ForegroundColor Green
+    Write-Host "   Backend:  https://api.niohub.com.br" -ForegroundColor Green
 } else {
     Write-Host "ERRO: Erro ao reinstalar servico" -ForegroundColor Red
 }

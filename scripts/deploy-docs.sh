@@ -48,10 +48,10 @@ fi
 # 5. Verificar se está funcionando
 echo "✅ Verificando se a documentação está funcionando..."
 sleep 5
-if curl -f -s "https://docs.niochat.com.br" > /dev/null; then
+if curl -f -s "https://docs.niohub.com.br" > /dev/null; then
     echo "🎉 Documentação deployada com sucesso!"
-    echo "🌐 Acesse: https://docs.niochat.com.br"
+    echo "🌐 Acesse: https://docs.niohub.com.br"
 else
     echo "⚠️ Documentação pode estar ainda inicializando..."
-    echo "🌐 Acesse: https://docs.niochat.com.br"
+    echo "🌐 Acesse: https://docs.niohub.com.br"
 fi

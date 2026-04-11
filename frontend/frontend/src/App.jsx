@@ -89,7 +89,7 @@ export default function App() {
     const evoInstance = localStorage.getItem('evoInstance');
     if (!evoInstance) return;
 
-    const socket = io(`wss://evo.niochat.com.br/${evoInstance}`, {
+    const socket = io(`wss://evo.niohub.com.br/${evoInstance}`, {
       transports: ['websocket'],
     });
 

@@ -43,7 +43,7 @@ export default function CustomAudioPlayer({ src, isCustomer, conversationId }) {
       if (src.includes('lookaside.fbsbx.com') || src.includes('facebook.com') || 
           (!src.includes('/api/media/') && !src.includes(window.location.hostname))) {
         // Usar proxy do backend
-        const apiUrl = import.meta.env.VITE_API_URL || (window.location.hostname.includes('localhost') ? 'http://localhost:8010' : 'https://api.niochat.com.br');
+        const apiUrl = import.meta.env.VITE_API_URL || (window.location.hostname.includes('localhost') ? 'http://localhost:8010' : 'https://api.niohub.com.br');
         let proxyUrl = `${apiUrl}/api/conversations/media/proxy/?url=${encodeURIComponent(src)}`;
         // Adicionar conversation_id se disponível para autenticação
         if (conversationId) {

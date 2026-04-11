@@ -84,7 +84,7 @@ const MetaFinalizing = () => {
     if (hasLaunched.current) return;
     hasLaunched.current = true;
     // redirect_uri deve ser a URL do backend onde a Meta redireciona com o code (deve estar no Meta App Dashboard)
-    const baseUrl = getApiBaseUrl() || import.meta.env.VITE_API_URL || 'https://api.niochat.com.br';
+    const baseUrl = getApiBaseUrl() || import.meta.env.VITE_API_URL || 'https://api.niohub.com.br';
     const BACKEND_URL = baseUrl.replace(/\/+$/, '');
     const redirectUri = encodeURIComponent(`${BACKEND_URL}/api/auth/facebook/callback/`);
 
