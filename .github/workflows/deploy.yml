@@ -192,7 +192,7 @@ jobs:
     steps:
     - name: Deploy to Portainer
       env:
-        PORTAINER_URL: https://portainer.niohub.com.br
+        PORTAINER_URL: https://portainer.niochat.com.br
         PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
         BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
         FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
