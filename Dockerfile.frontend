@@ -37,12 +37,9 @@ RUN npm install -g serve
 
 WORKDIR /app
 
-# Copiar o dist gerado (inclui public/ automaticamente pelo Vite)
+# O Vite já copia public/ para dist/ automaticamente durante o build
+# Os favicons (favicon.ico e favicon.png) já estão incluídos no dist/
 COPY --from=build /app/dist ./dist
-
-# Garantir que os favicons estão na raiz do dist
-COPY --from=build /app/public/favicon.ico ./dist/favicon.ico
-COPY --from=build /app/public/favicon.png ./dist/favicon.png
 
 EXPOSE 8012
 
