@@ -86,8 +86,8 @@ def whatsapp_oauth_callback(request):
             return redirect('/app/accounts/1/integracoes?oauth_error=provider_not_found')
         
         # Determinar redirect_uri usado (dev ou prod)
-        is_production = request.get_host() == 'app.niochat.com.br'
-        redirect_uri = 'https://app.niochat.com.br/app/oauth/callback/' if is_production else 'https://front.niochat.com.br/app/oauth/callback/'
+        is_production = request.get_host() == 'chat.niohub.com.br'
+        redirect_uri = 'https://chat.niohub.com.br/app/oauth/callback/' if is_production else 'https://chat.niohub.com.br/app/oauth/callback/'
         
         # Trocar code por access_token
         token_url = 'https://graph.facebook.com/v24.0/oauth/access_token'

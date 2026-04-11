@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 META_APP_ID = '713538217881661'
 META_APP_SECRET = getattr(settings, 'FACEBOOK_APP_SECRET', None)
 
-FRONT_URL = getattr(settings, 'FRONTEND_URL', 'https://app.niochat.com.br')
-BACK_URL = getattr(settings, 'BACKEND_URL', 'https://api.niochat.com.br')
+FRONT_URL = getattr(settings, 'FRONTEND_URL', 'https://chat.niohub.com.br')
+BACK_URL = getattr(settings, 'BACKEND_URL', 'https://api.niohub.com.br')
 
 GRAPH_API_VERSION = 'v19.0'
 PHONE_NUMBERS_API_VERSION = 'v24.0'
@@ -68,9 +68,9 @@ def get_backend_url() -> str:
     )
     
     if is_localhost:
-        backend_url = 'https://api.niochat.com.br'
+        backend_url = 'https://api.niohub.com.br'
     
-    if backend_url.startswith('http://') and 'api.niochat.com.br' in backend_url:
+    if backend_url.startswith('http://') and 'api.niohub.com.br' in backend_url:
         backend_url = backend_url.replace('http://', 'https://')
     
     return backend_url
@@ -79,13 +79,13 @@ def get_backend_url() -> str:
 def build_facebook_oauth_url(provider_id: int, config_id: Optional[str] = None) -> str:
     """Constrói a URL OAuth do Facebook para WhatsApp Embedded Signup."""
     # IMPORTANTE: redirect_uri DEVE corresponder exatamente ao configurado no Meta App Dashboard
-    # Configurado no painel: https://api.niochat.com.br/api/auth/facebook/callback/
+    # Configurado no painel: https://api.niohub.com.br/api/auth/facebook/callback/
     backend_url = get_backend_url()
     redirect_uri = f"{backend_url}/api/auth/facebook/callback/"
     
     redirect_uri_lower = redirect_uri.lower()
     if 'localhost' in redirect_uri_lower or '127.0.0.1' in redirect_uri_lower:
-        redirect_uri = "https://api.niochat.com.br/api/auth/facebook/callback/"
+        redirect_uri = "https://api.niohub.com.br/api/auth/facebook/callback/"
     
     if not config_id:
         config_id = '1888449245359692'

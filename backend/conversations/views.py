@@ -16,6 +16,7 @@ from .serializers import (
     ConversationListSerializer, ConversationUpdateSerializer, MessageSerializer, TeamSerializer, TeamMemberSerializer
 )
 from .services import ConversationNotificationService
+from integrations.asaas_service import AsaasService
 from rest_framework.permissions import AllowAny
 from integrations.models import WhatsAppIntegration
 from integrations.whatsapp_cloud_send import send_via_whatsapp_cloud_api, send_reaction, translate_whatsapp_error

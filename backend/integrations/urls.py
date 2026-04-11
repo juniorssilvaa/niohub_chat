@@ -19,7 +19,7 @@ urlpatterns = [
     # 🔵 Facebook OAuth Callback
     # IMPORTANTE: Esta rota será acessível em /api/auth/facebook/callback/
     # através do include em core/urls.py. URL configurada no painel da Meta:
-    # https://api.niochat.com.br/api/auth/facebook/callback/
+    # https://api.niohub.com.br/api/auth/facebook/callback/
     # ===================================================================
     path('auth/facebook/callback/', meta_callback, name='facebook_callback'),
     

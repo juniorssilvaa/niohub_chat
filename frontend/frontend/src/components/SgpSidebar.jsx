@@ -12,7 +12,8 @@ import {
   QrCode,
   FileText,
   ScanLine,
-  X
+  X,
+  CreditCard
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -413,7 +414,6 @@ const SgpSidebar = ({ conversation, user, messages = [], onClose }) => {
                     </div>
                   </div>
                 </div>
-              </div>
               )}
 
               {/* === ABA FINANCEIRO === */}

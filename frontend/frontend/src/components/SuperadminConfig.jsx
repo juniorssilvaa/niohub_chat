@@ -10,6 +10,7 @@ export default function SuperadminConfig() {
   const [success, setSuccess] = useState('');
   const [showGoogleAIKey, setShowGoogleAIKey] = useState(false);
   const [showOpenAITranscriptionKey, setShowOpenAITranscriptionKey] = useState(false);
+  const [showAsaasKey, setShowAsaasKey] = useState(false);
 
   useEffect(() => {
     async function fetchConfig() {
@@ -267,6 +268,55 @@ export default function SuperadminConfig() {
                     Esta chave <strong className="text-foreground">NÃO será usada</strong> para geração de respostas ao cliente.
                     As respostas continuam sendo geradas pelo Google Gemini em 100% dos casos.
                   </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Configurações do Asaas */}
+            <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-900/20 to-indigo-900/20 px-6 py-4 border-b border-border">
+                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <Building className="w-5 h-5 text-blue-400" />
+                  Configurações do Asaas
+                </h3>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block font-medium mb-2 text-foreground">Asaas Access Token</label>
+                  <div className="relative">
+                    <input
+                      type={showAsaasKey ? "text" : "password"}
+                      name="asaas_access_token"
+                      value={config?.asaas_access_token || ''}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 pr-12 rounded-lg bg-background border border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                      placeholder="$..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAsaasKey(!showAsaasKey)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showAsaasKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Token de acesso da API do Asaas para faturamento global e criação de clientes.
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-3 pt-2">
+                  <input
+                    type="checkbox"
+                    name="asaas_sandbox"
+                    id="asaas_sandbox"
+                    checked={!!config?.asaas_sandbox}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-primary bg-background border-border rounded focus:ring-primary focus:ring-2"
+                  />
+                  <label htmlFor="asaas_sandbox" className="font-medium text-foreground">
+                    Modo Sandbox (Ambiente de Teste)
+                  </label>
                 </div>
               </div>
             </div>

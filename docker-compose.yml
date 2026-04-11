@@ -76,19 +76,19 @@ services:
     labels:
       - "traefik.enable=true"
 
-      - "traefik.http.routers.niochat-backend.rule=(Host(`api.niochat.com.br`) || Host(`app.niochat.com.br`)) && PathPrefix(`/api/`)"
+      - "traefik.http.routers.niochat-backend.rule=(Host(`api.niohub.com.br`) || Host(`chat.niohub.com.br`)) && PathPrefix(`/api/`)"
       - "traefik.http.routers.niochat-backend.entrypoints=websecure"
       - "traefik.http.routers.niochat-backend.tls.certresolver=letsencryptresolver"
       - "traefik.http.routers.niochat-backend.priority=20"
       - "traefik.http.services.niochat-backend.loadbalancer.server.port=8010"
 
-      - "traefik.http.routers.niochat-backend-ws.rule=(Host(`api.niochat.com.br`) || Host(`app.niochat.com.br`)) && PathPrefix(`/ws/`)"
+      - "traefik.http.routers.niochat-backend-ws.rule=(Host(`api.niohub.com.br`) || Host(`chat.niohub.com.br`)) && PathPrefix(`/ws/`)"
       - "traefik.http.routers.niochat-backend-ws.entrypoints=websecure"
       - "traefik.http.routers.niochat-backend-ws.tls.certresolver=letsencryptresolver"
       - "traefik.http.routers.niochat-backend-ws.priority=20"
       - "traefik.http.routers.niochat-backend-ws.service=niochat-backend"
 
-      - "traefik.http.routers.niochat-backend-webhooks.rule=(Host(`api.niochat.com.br`) || Host(`app.niochat.com.br`)) && PathPrefix(`/webhooks/`)"
+      - "traefik.http.routers.niochat-backend-webhooks.rule=(Host(`api.niohub.com.br`) || Host(`chat.niohub.com.br`)) && PathPrefix(`/webhooks/`)"
       - "traefik.http.routers.niochat-backend-webhooks.entrypoints=websecure"
       - "traefik.http.routers.niochat-backend-webhooks.tls.certresolver=letsencryptresolver"
       - "traefik.http.routers.niochat-backend-webhooks.priority=20"
@@ -171,7 +171,7 @@ services:
       - nioNet
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.niochat-frontend.rule=Host(`app.niochat.com.br`)"
+      - "traefik.http.routers.niochat-frontend.rule=Host(`chat.niohub.com.br`)"
       - "traefik.http.routers.niochat-frontend.entrypoints=websecure"
       - "traefik.http.routers.niochat-frontend.tls.certresolver=letsencryptresolver"
       - "traefik.http.routers.niochat-frontend.priority=1"

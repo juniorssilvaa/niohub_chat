@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 8012,
       strictPort: true,
-      allowedHosts: ['app.niochat.com.br'],
+      allowedHosts: ['chat.niohub.com.br'],
       cors: true,
       headers: {
         'Access-Control-Allow-Origin': '*',

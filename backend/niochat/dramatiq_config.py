@@ -101,7 +101,7 @@ if not DRAMATIQ_BROKER_URL:
         raise RuntimeError(
             "DRAMATIQ_BROKER_URL não configurado.\n"
             "Exemplo correto:\n"
-            "amqps://usuario:senha@rabbitmq.niochat.com.br:5671/"
+            "amqps://usuario:senha@rabbitmq.niohub.com.br:5671/"
         )
 
 if USE_STUB_BROKER:

@@ -39,6 +39,8 @@ export default function App() {
   const { user, loading: authLoading, logout } = useAuth();
   const [showChangelog, setShowChangelog] = useState(false);
   const [whatsappDisconnected, setWhatsappDisconnected] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [checkingBilling, setCheckingBilling] = useState(false);
 
   const { startTimeout } = useSessionTimeout();
 
@@ -56,8 +58,26 @@ export default function App() {
       if (lastSeenVersion !== APP_VERSION) {
         setShowChangelog(true);
       }
+
+      // Verificar inadimplência do provedor (apenas usuários não-superadmin)
+      if (userRole !== 'superadmin' && !checkingBilling) {
+        const checkBilling = async () => {
+          setCheckingBilling(true);
+          try {
+            const response = await axios.get('/api/provedores/status_pagamento/');
+            if (response.data.blocked) {
+              setIsBlocked(true);
+            }
+          } catch (error) {
+            console.error('[BILLING] Erro ao verificar status:', error);
+          } finally {
+            setCheckingBilling(false);
+          }
+        };
+        checkBilling();
+      }
     }
-  }, [user?.id, startTimeout]);
+  }, [user?.id, userRole, startTimeout]);
 
   /* =====================================================
      WEBSOCKET (SÓ DEPOIS DO AUTH)
@@ -152,6 +172,10 @@ export default function App() {
   /* =====================================================
      ROTAS
   ===================================================== */
+
+  if (isBlocked) {
+    return <BlockedScreen onLogout={handleLogout} />;
+  }
 
   return (
     <>

@@ -18,8 +18,8 @@ from integrations.serializers import (
     TelegramIntegrationSerializer, EmailIntegrationSerializer,
     WhatsAppIntegrationSerializer, WebchatIntegrationSerializer
 )
-from integrations.telegram_service import telegram_manager
 from integrations.email_service import email_manager
+from integrations.asaas_service import AsaasService
 import asyncio
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, HttpResponse
@@ -2743,48 +2743,11 @@ class LoginView(APIView):
             logger.warning(f"Falha de login: credenciais inválidas para username={username}")
             return Response({'error': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
         
-        logger.info(f"[LOGIN] Login realizado: user_id={user.id}, username={user.username}, full_name='{user.get_full_name()}'")
-        
-        # CRÍTICO: Usar transaction.atomic() para garantir commit imediato
-        # Isso evita race conditions onde o frontend tenta usar o token antes dele estar disponível
+        # Obter ou criar token para o usuário
         from django.db import transaction
-        
         with transaction.atomic():
-            # Obter ou criar token dentro da transação
             token, created = Token.objects.get_or_create(user=user)
-            logger.info(f"[LOGIN] Token {'criado' if created else 'existente'}: user_id={user.id}, token_key={token.key[:20]}...")
-            
-            # Forçar refresh do token do banco para garantir que está sincronizado
             token.refresh_from_db()
-            logger.debug(f"[LOGIN] Token refresh_from_db concluído: user_id={user.id}, token_key={token.key[:20]}...")
-            
-            # Verificar se o token realmente existe no banco (validação adicional)
-            try:
-                db_token = Token.objects.get(key=token.key, user=user)
-                logger.info(f"[LOGIN] Token confirmado no banco: user_id={user.id}, token_key={token.key[:20]}..., db_user_id={db_token.user.id}")
-            except Token.DoesNotExist:
-                logger.error(f"[LOGIN] ERRO CRÍTICO: Token criado mas não encontrado no banco! user_id={user.id}, token_key={token.key[:20]}...")
-                # Recriar token se necessário
-                if created:
-                    token.delete()
-                token = Token.objects.create(user=user)
-                logger.warning(f"[LOGIN] Token recriado: user_id={user.id}, token_key={token.key[:20]}...")
-            
-            # Commit é automático ao sair do bloco transaction.atomic()
-            # Isso garante que o token está disponível para outras requisições imediatamente
-        
-        # Verificar novamente após o commit para confirmar que está disponível
-        # Usar select_for_update(nowait=True) para garantir que vemos o commit
-        try:
-            from django.db import connection
-            connection.ensure_connection()
-            final_token = Token.objects.select_for_update(nowait=True).get(key=token.key, user=user)
-            logger.info(f"[LOGIN] Token confirmado após commit: user_id={user.id}, token_key={final_token.key[:20]}...")
-        except Token.DoesNotExist:
-            logger.error(f"[LOGIN] ERRO CRÍTICO: Token não encontrado após commit! user_id={user.id}")
-        except Exception as e:
-            # select_for_update pode falhar em algumas situações, mas não é crítico
-            logger.debug(f"[LOGIN] Não foi possível fazer select_for_update: {e}")
         
         # Obter provedor_id do usuário
         provedor_id = None
@@ -2905,35 +2868,11 @@ class UserMeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
-        # Log do header de autorização recebido
-        auth_header = request.headers.get('Authorization', 'N/A')
-        logger.info(f"[USER_ME] Request recebido - Header: {auth_header[:30]}...")
-        
         try:
             user = request.user
-            logger.info(f"[USER_ME] Usuário obtido do request: user_id={getattr(user, 'id', 'N/A')}, username={getattr(user, 'username', 'N/A')}, is_authenticated={getattr(user, 'is_authenticated', False)}")
-            
             # Verificar se o usuário está autenticado
             if not user or not user.is_authenticated:
-                logger.warning(f"[USER_ME] Usuário NÃO autenticado - user={user}, is_authenticated={getattr(user, 'is_authenticated', False) if user else False}")
-                logger.warning(f"[USER_ME] Header recebido: {auth_header[:30]}...")
-                
-                # Tentar verificar o token diretamente
-                if auth_header.startswith('Token '):
-                    token_key = auth_header.replace('Token ', '').strip()
-                    from rest_framework.authtoken.models import Token
-                    try:
-                        token = Token.objects.select_related('user').get(key=token_key)
-                        logger.warning(f"[USER_ME] Token existe no banco mas user não está autenticado! token_key={token_key[:20]}..., user_id={token.user.id}")
-                    except Token.DoesNotExist:
-                        logger.warning(f"[USER_ME] Token NÃO encontrado no banco: {token_key[:20]}...")
-                    except Exception as e:
-                        logger.error(f"[USER_ME] Erro ao verificar token: {e}", exc_info=True)
-                
                 return Response({'error': 'Usuário não autenticado'}, status=401)
-            
-            # Log detalhado para identificar crosstalk de sessão
-            logger.info(f"[USER_ME] UserMeView [REQUEST]: user_id={user.id}, username={user.username}, email={user.email}, full_name='{user.get_full_name()}'")
             
             # Obter provedor_id do primeiro provedor associado ao usuário
             provedor_id = None
@@ -2943,6 +2882,8 @@ class UserMeView(APIView):
                     if provedores.exists():
                         provedor = provedores.first()
                         provedor_id = provedor.id if provedor else None
+                else:
+                    logger.warning(f"Usuário {user.id} não possui provedores_admin")
             except Exception as e:
                 logger.warning(f"Erro ao buscar provedor do usuário {user.id}: {e}")
                 provedor_id = None
@@ -3171,11 +3112,13 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def perform_update(self, serializer):
         user = self.request.user
+        
         # Verificar permissões
         if user.user_type not in ['superadmin', 'admin']:
             # Agentes só podem atualizar a si mesmos
             if serializer.instance.id != user.id:
                 raise PermissionDenied('Você não tem permissão para atualizar este usuário')
+        
         serializer.save()
     
     def perform_destroy(self, instance):
@@ -3183,6 +3126,14 @@ class UserViewSet(viewsets.ModelViewSet):
         # Verificar permissões
         if user.user_type not in ['superadmin', 'admin']:
             raise PermissionDenied('Apenas administradores podem deletar usuários')
+        
+        # Invalidar token antes de excluir para deslogar sessões ativas imediatamente
+        from rest_framework.authtoken.models import Token
+        try:
+            Token.objects.filter(user=instance).delete()
+        except Exception:
+            pass
+        
         instance.delete()
 
     @action(detail=False, methods=['post'], url_path='reset-password')
@@ -3568,7 +3519,7 @@ class CanalViewSet(viewsets.ModelViewSet):
         {
             "success": true,
             "oauth_url": "https://www.facebook.com/v24.0/dialog/oauth?...",
-            "redirect_uri": "https://api.niochat.com.br/api/auth/facebook/callback/",
+            "redirect_uri": "https://api.niohub.com.br/api/auth/facebook/callback/",
             "channel_id": 123
         }
         """
@@ -3670,7 +3621,7 @@ class CanalViewSet(viewsets.ModelViewSet):
         {
             "success": true,
             "oauth_url": "https://www.facebook.com/v24.0/dialog/oauth?...",
-            "redirect_uri": "https://api.niochat.com.br/api/auth/facebook/callback/"
+            "redirect_uri": "https://api.niohub.com.br/api/auth/facebook/callback/"
         }
         """
         try:
@@ -5360,7 +5311,48 @@ class ProvedorViewSet(viewsets.ModelViewSet):
         user_type = getattr(user, 'user_type', None)
         if user_type != 'superadmin':
             raise PermissionDenied('Apenas superadmin pode criar provedores')
-        serializer.save()
+            
+        provedor = serializer.save()
+        
+        # Setup Automático Asaas se houver CPF/CNPJ
+        if provedor.cpf_cnpj:
+            try:
+                from integrations.asaas_service import AsaasService
+                asaas_service = AsaasService()
+                logger.info(f"[AsaasAuto] Iniciando setup automático para {provedor.nome}")
+                
+                # 1. Sincronizar Cliente
+                from django.forms.models import model_to_dict
+                provider_data = model_to_dict(provedor)
+                res_customer = asaas_service.create_customer(provider_data)
+                
+                if res_customer.get('success'):
+                    provedor.asaas_customer_id = res_customer.get('customer_id')
+                    provedor.save()
+                    
+                    # Desativação granular se configurado
+                    if provedor.notification_disabled:
+                        asaas_service.bulk_disable_notifications(provedor.asaas_customer_id)
+                    
+                    # 2. Criar Assinatura se houver valor
+                    if provedor.subscription_value and provedor.subscription_value > 0 and provedor.subscription_next_due_date:
+                        sub_data = {
+                            "customer": provedor.asaas_customer_id,
+                            "billingType": provedor.subscription_billing_type or "BOLETO",
+                            "value": float(provedor.subscription_value),
+                            "nextDueDate": provedor.subscription_next_due_date.isoformat(),
+                            "cycle": provedor.subscription_cycle or "MONTHLY",
+                            "description": f"Assinatura Nio Hub - {provedor.nome}",
+                            "externalReference": f"sub_provider_{provedor.id}",
+                            "notificationDisabled": provedor.notification_disabled
+                        }
+                        res_sub = asaas_service.create_subscription(sub_data)
+                        if res_sub.get('success'):
+                            provedor.asaas_subscription_id = res_sub.get('subscription_id')
+                            provedor.save()
+                            logger.info(f"[AsaasAuto] Assinatura criada: {provedor.asaas_subscription_id}")
+            except Exception as e:
+                logger.error(f"[AsaasAuto] Falha no setup automático para provedor {provedor.id}: {str(e)}")
     
     def perform_update(self, serializer):
         user = self.request.user
@@ -5695,6 +5687,323 @@ class ProvedorViewSet(viewsets.ModelViewSet):
                 {'error': f'Erro ao executar limpeza de logs de auditoria: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=True, methods=['post'], url_path='sync_asaas')
+    def sync_asaas(self, request, pk=None):
+        """
+        Sincroniza os dados do provedor com o Asaas criando um novo cliente.
+        Agora aceita dados no request para atualizar o provedor antes de sincronizar.
+        """
+        user = request.user
+        provedor = self.get_object()
+        
+        # Verificar permissão (apenas superadmin)
+        if getattr(user, 'user_type', None) != 'superadmin':
+            return Response(
+                {'error': 'Apenas superadmin pode sincronizar com Asaas'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        try:
+            # 1. Atualizar provedor com dados enviados (se houver)
+            # Isso garante que campos como notification_disabled sejam salvos antes da sincronização
+            data = request.data
+            if data:
+                logger.info(f"[AsaasSync] Atualizando dados locais do provedor {provedor.id} antes de sincronizar")
+                if 'nome' in data: provedor.nome = data.get('nome')
+                if 'cpf_cnpj' in data: provedor.cpf_cnpj = data.get('cpf_cnpj')
+                if 'email_contato' in data: provedor.email_contato = data.get('email_contato')
+                if 'mobile_phone' in data: provedor.mobile_phone = data.get('mobile_phone')
+                if 'postal_code' in data: provedor.postal_code = data.get('postal_code')
+                if 'endereco' in data: provedor.endereco = data.get('endereco')
+                if 'address_number' in data: provedor.address_number = data.get('address_number')
+                if 'notification_disabled' in data: 
+                    provedor.notification_disabled = data.get('notification_disabled')
+                if 'foreign_customer' in data:
+                    provedor.foreign_customer = data.get('foreign_customer')
+                if 'company' in data: provedor.company = data.get('company')
+                if 'group_name' in data: provedor.group_name = data.get('group_name')
+                if 'additional_emails' in data: provedor.additional_emails = data.get('additional_emails')
+                
+                provedor.save()
+
+            # 2. Validar campos obrigatórios
+            if not provedor.cpf_cnpj or not provedor.nome:
+                return Response(
+                    {'error': 'Nome e CPF/CNPJ são obrigatórios para sincronizar com Asaas'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            asaas_service = AsaasService()
+            
+            # Preparar dados para o serviço
+            from django.forms.models import model_to_dict
+            provider_data = model_to_dict(provedor)
+            
+            logger.info(f"[AsaasSync] Enviando para Asaas: notificationDisabled={provider_data.get('notification_disabled')}")
+            
+            # 3. Executar a criação do cliente no Asaas
+            result = asaas_service.create_customer(provider_data)
+            
+            if result.get('success'):
+                # Salvar o ID retornado
+                provedor.asaas_customer_id = result.get('customer_id')
+                provedor.save()
+                
+                # Se notificações devem ser desativadas, fazer a desativação granular
+                if provedor.notification_disabled:
+                    logger.info(f"[AsaasSync] Desativando notificações granulares para o cliente {provedor.asaas_customer_id}")
+                    asaas_service.bulk_disable_notifications(provedor.asaas_customer_id)
+                
+                return Response({
+                    'success': True,
+                    'message': 'Provedor sincronizado com sucesso no Asaas!',
+                    'customer_id': provedor.asaas_customer_id,
+                    'data': result.get('data')
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'success': False,
+                    'error': result.get('error')
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Erro ao sincronizar provedor {provedor.id} com Asaas: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'Erro na sincronização: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'], url_path='create_subscription')
+    def create_subscription(self, request, pk=None):
+        """
+        Cria uma assinatura no Asaas para o provedor
+        """
+        user = request.user
+        provedor = self.get_object()
+        
+        # Verificar permissão (apenas superadmin)
+        if getattr(user, 'user_type', None) != 'superadmin':
+            return Response(
+                {'error': 'Apenas superadmin pode gerenciar assinaturas'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        if not provedor.asaas_customer_id:
+            return Response(
+                {'error': 'Provedor não sincronizado com Asaas. Sincronize o cliente primeiro.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Dados vindos do frontend
+            value = request.data.get('value')
+            next_due_date = request.data.get('nextDueDate')
+            cycle = request.data.get('cycle', 'MONTHLY')
+            billing_type = request.data.get('billingType', 'BOLETO')
+            description = f"Assinatura Nio Hub - {provedor.nome}"
+
+            if not value or not next_due_date:
+                return Response(
+                    {'error': 'Valor e Data de Vencimento são obrigatórios'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            asaas_service = AsaasService()
+            
+            subscription_data = {
+                "customer": provedor.asaas_customer_id,
+                "billingType": billing_type,
+                "value": value,
+                "nextDueDate": next_due_date,
+                "cycle": cycle,
+                "description": description,
+                "externalReference": f"sub_provider_{provedor.id}",
+                "notificationDisabled": provedor.notification_disabled
+            }
+
+            result = asaas_service.create_subscription(subscription_data)
+            
+            if result.get('success'):
+                # Salvar detalhes no modelo
+                provedor.asaas_subscription_id = result.get('subscription_id')
+                provedor.subscription_value = value
+                provedor.subscription_cycle = cycle
+                provedor.subscription_billing_type = billing_type
+                provedor.subscription_status = result.get('data', {}).get('status')
+                provedor.save()
+                
+                return Response({
+                    'success': True,
+                    'message': 'Assinatura criada com sucesso!',
+                    'subscription_id': provedor.asaas_subscription_id,
+                    'data': result.get('data')
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    'success': False,
+                    'error': result.get('error')
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.error(f"Erro ao criar assinatura para provedor {provedor.id}: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'Erro na criação da assinatura: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['get'])
+    def subscription_payments(self, request, pk=None):
+        """
+        Retorna a lista de cobranças vinculadas à assinatura do provedor
+        """
+        user = request.user
+        provedor = self.get_object()
+        
+        if getattr(user, 'user_type', None) != 'superadmin':
+            return Response({'error': 'Acesso negado'}, status=403)
+            
+        if not provedor.asaas_subscription_id:
+            return Response({'success': True, 'data': []})
+            
+        asaas_service = AsaasService()
+        result = asaas_service.list_payments(provedor.asaas_subscription_id)
+        
+        if result.get('success'):
+            # Formatar dados para o frontend
+            payments = []
+            for p in result.get('data', []):
+                payments.append({
+                    'id': p.get('id'),
+                    'dueDate': p.get('dueDate'),
+                    'value': p.get('value'),
+                    'netValue': p.get('netValue'),
+                    'status': p.get('status'),
+                    'billingType': p.get('billingType'),
+                    'confirmedDate': p.get('confirmedDate'),
+                    'paymentDate': p.get('paymentDate'),
+                    'invoiceUrl': p.get('invoiceUrl'),
+                    'bankSlipUrl': p.get('bankSlipUrl')
+                })
+            return Response({'success': True, 'data': payments})
+        
+        return Response({'error': result.get('error')}, status=400)
+
+    @action(detail=True, methods=['post'], url_path='verify_asaas')
+    def verify_asaas(self, request, pk=None):
+        """
+        Verifica se o cliente e a assinatura ainda existem no Asaas.
+        Se não existirem (404), limpa os campos locais.
+        """
+        user = request.user
+        provedor = self.get_object()
+        
+        if getattr(user, 'user_type', None) != 'superadmin':
+            return Response({'error': 'Acesso negado'}, status=403)
+            
+        asaas_service = AsaasService()
+        changes = False
+        status_info = {"customer": "not_checked", "subscription": "not_checked"}
+
+        # 1. Verificar Cliente
+        if provedor.asaas_customer_id:
+            res = asaas_service.get_customer(provedor.asaas_customer_id)
+            if not res.get('success') and res.get('status_code') == 404:
+                logger.warning(f"[AsaasVerify] Cliente {provedor.asaas_customer_id} não encontrado. Limpando IDs.")
+                provedor.asaas_customer_id = None
+                provedor.asaas_subscription_id = None
+                status_info["customer"] = "deleted_locally"
+                changes = True
+            elif res.get('success'):
+                status_info["customer"] = "active"
+            else:
+                status_info["customer"] = f"error: {res.get('error')}"
+
+        # 2. Verificar Assinatura (se o cliente ainda for válido)
+        if provedor.asaas_customer_id and provedor.asaas_subscription_id:
+            res = asaas_service.get_subscription(provedor.asaas_subscription_id)
+            if not res.get('success'):
+                # Assumindo que falha de busca de assinatura individual pode ser 404
+                # Infelizmente asaas_service.get_subscription não retorna status_code ainda, mas podemos inferir pelo erro
+                error_msg = res.get('error', '').lower()
+                if 'not_found' in error_msg or '404' in error_msg or 'não encontrada' in error_msg:
+                    logger.warning(f"[AsaasVerify] Assinatura {provedor.asaas_subscription_id} não encontrada. Limpando.")
+                    provedor.asaas_subscription_id = None
+                    status_info["subscription"] = "deleted_locally"
+                    changes = True
+                else:
+                    status_info["subscription"] = f"error: {res.get('error')}"
+            else:
+                # Atualizar status local se necessário
+                new_status = res.get('data', {}).get('status')
+                if provedor.subscription_status != new_status:
+                    provedor.subscription_status = new_status
+                    changes = True
+                status_info["subscription"] = "active"
+
+        if changes:
+            provedor.save()
+            
+        return Response({
+            "success": True,
+            "status_info": status_info,
+            "asaas_customer_id": provedor.asaas_customer_id,
+            "asaas_subscription_id": provedor.asaas_subscription_id,
+            "subscription_status": provedor.subscription_status
+        })
+
+    @action(detail=False, methods=['get'])
+    def status_pagamento(self, request):
+        """
+        Verifica o status de pagamento do provedor do usuário atual
+        e retorna dados de cobrança se estiver bloqueado.
+        """
+        user = request.user
+        
+        # Encontrar provedor do usuário (ou o que ele administra)
+        provedor = None
+        if hasattr(user, 'provedores_admin'):
+            provedor = user.provedores_admin.first()
+            
+        if not provedor:
+            return Response({'blocked': False})
+
+        # Se o provedor estiver inativo por motivo de atraso no Asaas
+        if not provedor.is_active and provedor.block_reason and 'Asaas' in provedor.block_reason:
+            asaas_service = AsaasService()
+            
+            # Buscar a fatura atrasada mais recente
+            result = asaas_service.list_payments(
+                customer=provedor.asaas_customer_id,
+                status='OVERDUE'
+            )
+            
+            if result.get('success') and result.get('data'):
+                # Pegar a cobrança mais antiga que está atrasada primeiro (ou a primeira da lista)
+                overdue_payments = result.get('data', [])
+                # Ordenar por vencimento (mais antiga primeiro)
+                overdue_payments.sort(key=lambda x: x.get('dueDate', ''))
+                
+                latest_overdue = overdue_payments[0]
+                payment_id = latest_overdue.get('id')
+                
+                # Buscar QR Code Pix desta fatura
+                qr_result = asaas_service.get_payment_pix_qr_code(payment_id)
+                
+                return Response({
+                    'blocked': True,
+                    'reason': provedor.block_reason,
+                    'payment': {
+                        'id': payment_id,
+                        'value': latest_overdue.get('value'),
+                        'dueDate': latest_overdue.get('dueDate'),
+                        'invoiceUrl': latest_overdue.get('invoiceUrl'),
+                        'description': latest_overdue.get('description')
+                    },
+                    'pix': qr_result.get('data') if qr_result.get('success') else None
+                })
+        
+        return Response({'blocked': False})
 
 class CompanyViewSet(viewsets.ModelViewSet):
     """

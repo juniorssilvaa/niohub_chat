@@ -27,13 +27,14 @@ export default function SuperadminUserList() {
   const [selectedUser, setSelectedUser] = useState(null);
   const menuBtnRefs = useRef({});
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [refreshKey, setRefreshKey] = useState(0); // Força re-fetch quando incrementa
 
   useEffect(() => {
     async function fetchUsers() {
       setLoading(true);
       setError('');
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('auth_token'); // CORRIGIDO: 'auth_token'
         // Buscar usuários com status básico vindo do próprio endpoint
         const res = await axios.get('/api/users/?include_status=true', {
           headers: { Authorization: `Token ${token}` }
@@ -96,12 +97,12 @@ export default function SuperadminUserList() {
     }, 30000);
 
     return () => clearInterval(intervalId);
-  }, [success]);
+  }, [success, refreshKey]);
 
   useEffect(() => {
     async function fetchProvedores() {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('auth_token'); // CORRIGIDO: 'auth_token'
         const res = await axios.get('/api/provedores/', {
           headers: { Authorization: `Token ${token}` }
         });
@@ -112,8 +113,8 @@ export default function SuperadminUserList() {
         setProvedores([]);
       }
     }
-    if (showModal) fetchProvedores();
-  }, [showModal]);
+    if (showModal || showEditModal) fetchProvedores();
+  }, [showModal, showEditModal]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -174,7 +175,10 @@ export default function SuperadminUserList() {
     setShowMenuId(showMenuId === userId ? null : userId);
   };
   const handleEditUser = (user) => {
-    setSelectedUser(user);
+    setSelectedUser({
+      ...user,
+      write_provedor_id: user.provedor_id || ''
+    });
     setShowEditModal(true);
     setShowMenuId(null);
   };
@@ -338,21 +342,32 @@ export default function SuperadminUserList() {
                 setSaving(true);
                 setError('');
                 try {
-                  const token = localStorage.getItem('token');
-                  await axios.patch(`/api/users/${selectedUser.id}/`, {
+                  const token = localStorage.getItem('auth_token');
+                  
+                  if (!token) {
+                    setError('Sessão expirada. Faça login novamente.');
+                    setSaving(false);
+                    return;
+                  }
+
+                  const payload = {
                     username: selectedUser.username,
                     email: selectedUser.email,
                     first_name: selectedUser.first_name,
                     last_name: selectedUser.last_name,
                     user_type: selectedUser.user_type,
                     is_active: selectedUser.is_active,
-                  }, {
-                    headers: { Authorization: `Token ${token}` }
-                  });
+                    write_provedor_id: selectedUser.write_provedor_id ? parseInt(selectedUser.write_provedor_id) : null,
+                  };
+
+                  const response = await axios.patch(`/api/users/${selectedUser.id}/`, payload);
+                  
                   setSuccess('Usuário atualizado com sucesso!');
                   setShowEditModal(false);
+                  setRefreshKey(k => k + 1);
                 } catch (e) {
-                  setError('Erro ao atualizar usuário.');
+                  const errorMsg = e.response?.data?.error || e.response?.data?.detail || JSON.stringify(e.response?.data) || 'Erro desconhecido ao atualizar';
+                  setError(`Erro ao atualizar: ${errorMsg}`);
                 }
                 setSaving(false);
               }} className="space-y-4">
@@ -384,6 +399,23 @@ export default function SuperadminUserList() {
                     <option value="superadmin">Superadmin</option>
                     <option value="admin">Administrador</option>
                     <option value="agent">Atendente</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-medium mb-1 text-gray-200">Provedor</label>
+                  <select 
+                    value={selectedUser.write_provedor_id || ''} 
+                    onChange={e => setSelectedUser({ ...selectedUser, write_provedor_id: e.target.value })} 
+                    className="input w-full bg-[#181b20] text-white border border-border rounded px-3 py-2"
+                  >
+                    <option value="">Selecione...</option>
+                    {provedores.map(p => (
+                      <option key={p.id} value={p.id}>{p.nome}</option>
+                    ))}
+                    {provedores.length === 0 && (
+                      <option disabled>Carregando provedores...</option>
+                    )}
                   </select>
                 </div>
 

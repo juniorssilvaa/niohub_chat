@@ -1,6 +1,6 @@
-const FRONT_HOST = 'front.niochat.com.br';
-const FRONT_LOCAL_HOST = 'front-local.niochat.com.br';
-const APP_HOST = 'app.niochat.com.br';
+const FRONT_HOST = 'chat.niohub.com.br';
+const FRONT_LOCAL_HOST = 'chat-local.niohub.com.br';
+const APP_HOST = 'chat.niohub.com.br';
 
 function stripTrailingSlash(value = '') {
   return value.replace(/\/+$/, '');
@@ -33,19 +33,19 @@ export function getApiBaseUrl() {
   // PRIORIDADE 3: Detecção por hostname (apenas em produção/staging)
   const hostname = window.location.hostname;
   
-  // Em produção (app.niochat.com.br ou qualquer subdomínio que não seja api/front)
-  if (hostname.endsWith('niochat.com.br')) {
+  // Em produção (chat.niohub.com.br ou qualquer subdomínio que não seja api/front)
+  if (hostname.endsWith('niohub.com.br')) {
     if (hostname.startsWith('api')) {
       return ''; // Já está na API
     }
-    if (hostname.startsWith('front-local')) {
-      return 'https://api-local.niochat.com.br';
+    if (hostname.startsWith('chat-local')) {
+      return 'https://api-local.niohub.com.br';
     }
-    if (hostname.startsWith('front')) {
-      return ''; // Usar proxy em front.niochat.com.br
+    if (hostname.startsWith('chat')) {
+      return ''; // Usar proxy em chat.niohub.com.br
     }
-    // Para app.niochat.com.br ou qualquer outro (ex: cliente.niochat.com.br)
-    return 'https://api.niochat.com.br';
+    // Para chat.niohub.com.br ou qualquer outro (ex: cliente.niohub.com.br)
+    return 'https://api.niohub.com.br';
   }
 
   // FALLBACK SEGURO: Em desenvolvimento, usar proxy (nunca produção)

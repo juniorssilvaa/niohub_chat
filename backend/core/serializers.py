@@ -317,6 +317,8 @@ class SystemConfigSerializer(serializers.ModelSerializer):
     max_users_per_company = serializers.IntegerField(required=False, default=10)
     google_api_key = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     openai_transcription_api_key = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    asaas_access_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    asaas_sandbox = serializers.BooleanField(required=False, default=True)
     
     class Meta:
         model = SystemConfig
@@ -324,9 +326,11 @@ class SystemConfigSerializer(serializers.ModelSerializer):
             'id', 'key', 'value', 'description', 'is_active', 
             'created_at', 'updated_at', 'sgp_app', 'sgp_token', 
             'sgp_url', 'google_api_key', 'openai_transcription_api_key',
+            'asaas_access_token', 'asaas_sandbox',
             # Campos do frontend
             'site_name', 'contact_email', 'default_language', 'timezone',
-            'allow_public_signup', 'max_users_per_company', 'google_api_key', 'openai_transcription_api_key'
+            'allow_public_signup', 'max_users_per_company', 'google_api_key', 'openai_transcription_api_key',
+            'asaas_access_token', 'asaas_sandbox'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
@@ -352,6 +356,8 @@ class SystemConfigSerializer(serializers.ModelSerializer):
                     'sgp_app': '',
                     'sgp_token': '',
                     'sgp_url': '',
+                    'asaas_access_token': '',
+                    'asaas_sandbox': True,
                     'created_at': None,
                     'updated_at': None
                 }
@@ -402,6 +408,17 @@ class SystemConfigSerializer(serializers.ModelSerializer):
                 data['openai_transcription_api_key'] = instance.openai_transcription_api_key or ''
             else:
                 data.setdefault('openai_transcription_api_key', '')
+            
+            # IMPORTANTE: asaas_access_token e asaas_sandbox devem vir do modelo
+            if instance and hasattr(instance, 'asaas_access_token'):
+                data['asaas_access_token'] = instance.asaas_access_token or ''
+            else:
+                data.setdefault('asaas_access_token', '')
+                
+            if instance and hasattr(instance, 'asaas_sandbox'):
+                data['asaas_sandbox'] = instance.asaas_sandbox
+            else:
+                data.setdefault('asaas_sandbox', True)
             
             # Garantir que campos obrigatórios existam
             data.setdefault('sgp_app', getattr(instance, 'sgp_app', '') or '')
@@ -478,7 +495,19 @@ class SystemConfigSerializer(serializers.ModelSerializer):
         
         logger.info(f"[SERIALIZER] openai_transcription_api_key final: {openai_transcription_api_key[:30] if openai_transcription_api_key else None}... (tamanho: {len(openai_transcription_api_key) if openai_transcription_api_key else 0})")
         
-        # Extrair campos do frontend (exceto google_api_key que já foi extraído)
+        # Extrair asaas_access_token e asaas_sandbox
+        asaas_access_token = validated_data.pop('asaas_access_token', None)
+        asaas_sandbox = validated_data.pop('asaas_sandbox', None)
+        
+        # Se asaas_access_token não está em validated_data, tentar buscar de initial_data
+        if asaas_access_token is None and hasattr(self, 'initial_data'):
+            asaas_access_token = self.initial_data.get('asaas_access_token')
+            
+        # Tratar string vazia como None
+        if asaas_access_token == '':
+            asaas_access_token = None
+            
+        # Extrair campos do frontend
         frontend_fields = {
             'site_name': validated_data.pop('site_name', None),
             'contact_email': validated_data.pop('contact_email', None),
@@ -513,6 +542,15 @@ class SystemConfigSerializer(serializers.ModelSerializer):
             instance.google_api_key = google_api_key
         else:
             logger.warning("[SERIALIZER] google_api_key é None - não será atualizado")
+
+        # Salvar asaas_access_token e asaas_sandbox no modelo
+        if asaas_access_token is not None:
+            validated_data['asaas_access_token'] = asaas_access_token
+            instance.asaas_access_token = asaas_access_token
+            
+        if asaas_sandbox is not None:
+            validated_data['asaas_sandbox'] = asaas_sandbox
+            instance.asaas_sandbox = asaas_sandbox
         
         # Salvar openai_transcription_api_key DIRETAMENTE no campo do modelo (CRÍTICO)
         # IMPORTANTE: Sempre tentar salvar, mesmo se for None (para permitir limpar o campo)
@@ -558,6 +596,7 @@ class CompanySerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     provedor_id = serializers.SerializerMethodField()
+    write_provedor_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     provedores_admin = serializers.SerializerMethodField()
     password = serializers.CharField(write_only=True, required=False)
     
@@ -567,7 +606,7 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'first_name', 'last_name', 'user_type',
             'avatar', 'phone', 'is_online', 'last_seen', 'created_at', 'updated_at',
             'is_active', 'last_login', 'password', 'permissions',
-            'provedor_id', 'provedores_admin', 'session_timeout', 'language',
+            'provedor_id', 'write_provedor_id', 'provedores_admin', 'session_timeout', 'language',
             'assignment_message', 'sound_notifications_enabled',
             'new_message_sound', 'new_message_sound_volume',
             'new_conversation_sound', 'new_conversation_sound_volume',
@@ -608,10 +647,28 @@ class UserSerializer(serializers.ModelSerializer):
     
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
+        provedor_id = validated_data.pop('write_provedor_id', None)
+        
+        # Atualizar campos básicos
         user = super().update(instance, validated_data)
+
+        # Atualização de senha se fornecida
         if password:
             user.set_password(password)
             user.save()
+
+        # Reatribuição de provedor (ManyToMany)
+        if provedor_id is not None:
+            try:
+                provedor_id_int = int(provedor_id)
+                provedor = Provedor.objects.get(id=provedor_id_int)
+                user.provedores_admin.clear()
+                user.provedores_admin.add(provedor)
+            except (Provedor.DoesNotExist, ValueError, TypeError) as e:
+                logger.error(f"Erro ao associar provedor {provedor_id} ao usuário {instance.id}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Erro inesperado ao associar provedor ao usuário {instance.id}: {str(e)}")
+        
         return user
 
 

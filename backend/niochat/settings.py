@@ -43,11 +43,11 @@ import logging
 # BASE
 # ============================================
 
-__version__ = "2.32.0"
-__version_info__ = (2, 32, 0)
+__version__ = "2.33.0"
+__version_info__ = (2, 33, 0)
 
 # Compatibilidade legado
-VERSION = "2.32.0"
+VERSION = "2.33.0"
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Sempre usar config que prioriza variáveis de ambiente sobre arquivo .env
@@ -64,7 +64,7 @@ ENVIRONMENT = config('ENVIRONMENT', default='development')
 
 ALLOWED_HOSTS = list(config(
     'ALLOWED_HOSTS',
-    default='127.0.0.1,localhost,api.niochat.com.br,api-local.niochat.com.br,front.niochat.com.br,front-local.niochat.com.br,app.niochat.com.br',
+    default='127.0.0.1,localhost,api.niohub.com.br,api-local.niohub.com.br,chat.niohub.com.br,chat-local.niohub.com.br,docs.niohub.com.br',
     cast=Csv()
 ))
 
@@ -208,17 +208,16 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Origem fixa da produção
 REQUIRED_CORS_ORIGINS = [
-    'https://app.niochat.com.br',
-    'https://api.niochat.com.br',
-    'https://docs.niochat.com.br',
-    'https://api-local.niochat.com.br',
-    'https://front.niochat.com.br',
-    'https://front-local.niochat.com.br',
+    'https://chat.niohub.com.br',
+    'https://api.niohub.com.br',
+    'https://docs.niohub.com.br',
+    'https://api-local.niohub.com.br',
+    'https://chat-local.niohub.com.br',
 ]
 
 cors_from_env = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:8010,http://localhost:8012,http://localhost:3000,https://app.niochat.com.br,https://api.niochat.com.br,https://api-local.niochat.com.br,https://front-local.niochat.com.br',
+    default='http://localhost:8010,http://localhost:8012,http://localhost:3000,https://chat.niohub.com.br,https://api.niohub.com.br,https://api-local.niohub.com.br,https://chat-local.niohub.com.br',
     cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
 )
 
@@ -226,7 +225,7 @@ CORS_ALLOWED_ORIGINS = list(set(cors_from_env + REQUIRED_CORS_ORIGINS))
 
 csrf_from_env = config(
     'CSRF_TRUSTED_ORIGINS',
-    default='http://localhost:8010,http://localhost:8012,http://localhost:3000,https://app.niochat.com.br,https://api.niochat.com.br,https://api-local.niochat.com.br,https://front-local.niochat.com.br',
+    default='http://localhost:8010,http://localhost:8012,http://localhost:3000,https://chat.niohub.com.br,https://api.niohub.com.br,https://api-local.niohub.com.br,https://chat-local.niohub.com.br',
     cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
 )
 
@@ -374,11 +373,11 @@ WHATSAPP_SYSTEM_USER_TOKEN = config('WHATSAPP_SYSTEM_USER_TOKEN', default='')
 # - NUNCA usar localhost em produção (a função get_backend_url() valida isso)
 #
 # Configuração no .env:
-# BACKEND_URL=https://api.niochat.com.br
-# FRONTEND_URL=https://front.niochat.com.br
+# BACKEND_URL=https://api.niohub.com.br
+# FRONTEND_URL=https://chat.niohub.com.br
 # ============================================
-BACKEND_URL = config('BACKEND_URL', default='https://api.niochat.com.br')
-FRONTEND_URL = config('FRONTEND_URL', default='https://app.niochat.com.br')
+BACKEND_URL = config('BACKEND_URL', default='https://api.niohub.com.br')
+FRONTEND_URL = config('FRONTEND_URL', default='https://chat.niohub.com.br')
 
 # ============================================
 # EMAIL
@@ -434,9 +433,6 @@ try:
 except (ImportError, AttributeError):
     pass
 
-# Desabilitar DEFAULT_LOGGING para evitar erro com stdout fechado
-# Isso força o Django a usar apenas nosso LOGGING customizado
-LOGGING_CONFIG = None  # Desabilita configuração automática de logging pelo Django
 
 LOGGING = {
     'version': 1,
@@ -488,19 +484,20 @@ LOGGING = {
         'core': {
             'handlers': ['console'],
             'level': 'INFO',
-            'propagate': True,
+            'propagate': False,  # CORRIGIDO: False evita duplicação de logs
+        },
+        'conversations': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'integrations': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
 }
-
-# Configurar logging manualmente se LOGGING_CONFIG estiver desabilitado
-if LOGGING_CONFIG is None:
-    import logging.config
-    try:
-        logging.config.dictConfig(LOGGING)
-    except Exception:
-        # Se falhar, usar configuração básica
-        logging.basicConfig(level=logging.INFO)
 
 # ============================================
 # SENTRY (monitoramento de erros e performance)

@@ -181,6 +181,33 @@ class Provedor(models.Model):
         verbose_name='Modo de Atendimento',
         help_text='Define se o provedor usa IA ou um fluxo de chatbot pré-definido'
     )
+    
+    # Campos para Integração Asaas
+    cpf_cnpj = models.CharField(max_length=20, null=True, blank=True, verbose_name='CPF/CNPJ')
+    phone = models.CharField(max_length=20, null=True, blank=True, verbose_name='Telefone Fixo')
+    mobile_phone = models.CharField(max_length=20, null=True, blank=True, verbose_name='Celular')
+    address_number = models.CharField(max_length=20, null=True, blank=True, verbose_name='Número')
+    complement = models.CharField(max_length=255, null=True, blank=True, verbose_name='Complemento')
+    province = models.CharField(max_length=100, null=True, blank=True, verbose_name='Bairro')
+    postal_code = models.CharField(max_length=20, null=True, blank=True, verbose_name='CEP')
+    group_name = models.CharField(max_length=100, null=True, blank=True, verbose_name='Grupo')
+    company = models.CharField(max_length=200, null=True, blank=True, verbose_name='Nome da Empresa (Asaas)')
+    municipal_inscription = models.CharField(max_length=30, null=True, blank=True, verbose_name='Inscrição Municipal')
+    state_inscription = models.CharField(max_length=30, null=True, blank=True, verbose_name='Inscrição Estadual')
+    observations = models.TextField(null=True, blank=True, verbose_name='Observações')
+    additional_emails = models.TextField(null=True, blank=True, verbose_name='E-mails Adicionais', help_text='Separados por vírgula')
+    notification_disabled = models.BooleanField(default=False, verbose_name='Notificações Desativadas')
+    foreign_customer = models.BooleanField(default=False, verbose_name='Cliente Estrangeiro')
+    asaas_customer_id = models.CharField(max_length=50, null=True, blank=True, verbose_name='Asaas Customer ID')
+    
+    # Assinaturas Asaas
+    asaas_subscription_id = models.CharField(max_length=50, null=True, blank=True, verbose_name='Asaas Subscription ID')
+    subscription_value = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name='Valor da Mensalidade')
+    subscription_cycle = models.CharField(max_length=20, null=True, blank=True, verbose_name='Ciclo de Faturamento')
+    subscription_billing_type = models.CharField(max_length=20, null=True, blank=True, verbose_name='Forma de Pagamento')
+    subscription_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='Status da Assinatura')
+    subscription_next_due_date = models.DateField(null=True, blank=True, verbose_name='Próximo Vencimento')
+    block_reason = models.TextField(null=True, blank=True, verbose_name='Motivo do Bloqueio')
 
     class Meta:
         verbose_name = 'Provedor'
@@ -221,6 +248,10 @@ class SystemConfig(models.Model):
     sgp_url = models.URLField(null=True, blank=True, verbose_name='SGP URL')
     google_api_key = models.CharField(max_length=255, null=True, blank=True, verbose_name='Google API Key')
     openai_transcription_api_key = models.CharField(max_length=255, null=True, blank=True, verbose_name='OpenAI Transcription API Key', help_text='Chave da API OpenAI exclusivamente para transcrição de áudio. Não será usada para geração de respostas.')
+    
+    # Asaas Global Config
+    asaas_access_token = models.CharField(max_length=255, null=True, blank=True, verbose_name='Asaas Access Token')
+    asaas_sandbox = models.BooleanField(default=True, verbose_name='Asaas Sandbox Mode')
 
     class Meta:
         verbose_name = 'Configuração do Sistema'
