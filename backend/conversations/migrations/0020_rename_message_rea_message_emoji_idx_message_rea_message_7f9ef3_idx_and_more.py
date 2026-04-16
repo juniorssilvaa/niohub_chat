@@ -10,10 +10,48 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='messagereaction',
-            new_name='message_rea_message_7f9ef3_idx',
-            old_name='message_rea_message_emoji_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1
+                            FROM pg_indexes
+                            WHERE schemaname = ANY (current_schemas(false))
+                              AND indexname = 'message_rea_message_emoji_idx'
+                        ) THEN
+                            ALTER INDEX message_rea_message_emoji_idx
+                            RENAME TO message_rea_message_7f9ef3_idx;
+                        END IF;
+                    END
+                    $$;
+                    """,
+                    reverse_sql="""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1
+                            FROM pg_indexes
+                            WHERE schemaname = ANY (current_schemas(false))
+                              AND indexname = 'message_rea_message_7f9ef3_idx'
+                        ) THEN
+                            ALTER INDEX message_rea_message_7f9ef3_idx
+                            RENAME TO message_rea_message_emoji_idx;
+                        END IF;
+                    END
+                    $$;
+                    """,
+                ),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='messagereaction',
+                    new_name='message_rea_message_7f9ef3_idx',
+                    old_name='message_rea_message_emoji_idx',
+                ),
+            ],
         ),
         migrations.AddField(
             model_name='conversation',
