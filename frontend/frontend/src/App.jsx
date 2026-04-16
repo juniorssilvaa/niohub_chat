@@ -7,6 +7,7 @@ import { AlertTriangle } from 'lucide-react';
 import LoadingBar from './components/ui/LoadingBar';
 import Login from './components/Login';
 import Topbar from './components/Topbar';
+import BlockedScreen from './components/BlockedScreen';
 import { useAuth } from './contexts/AuthContext';
 import useSessionTimeout from './hooks/useSessionTimeout.jsx';
 import { APP_VERSION } from './config/version';
@@ -18,9 +19,11 @@ const SuperadminSidebar = lazy(() => import('./components/SuperadminSidebar'));
 const SuperadminDashboard = lazy(() => import('./components/SuperadminDashboard'));
 const ProvedorAppWrapper = lazy(() => import('./components/ProvedorAppWrapper'));
 const MetaFinalizing = lazy(() => import('./components/MetaFinalizing'));
+const MetaFinalizingSuperadmin = lazy(() => import('./components/MetaFinalizingSuperadmin'));
 const OAuthCallback = lazy(() => import('./components/OAuthCallback'));
 const Changelog = lazy(() => import('./components/Changelog'));
 const UserStatusManager = lazy(() => import('./components/UserStatusManager'));
+const ConversationsPage = lazy(() => import('./components/ConversationsPage'));
 
 /* =====================================================
    HELPERS
@@ -197,6 +200,7 @@ export default function App() {
       <Suspense fallback={<LoadingBar />}>
         <Routes>
           <Route path="/app/meta/finalizando" element={<MetaFinalizing />} />
+          <Route path="/app/meta/finalizando-superadmin" element={<MetaFinalizingSuperadmin />} />
           <Route path="/oauth/callback" element={<OAuthCallback />} />
 
           {userRole === 'superadmin' && (
@@ -211,6 +215,10 @@ export default function App() {
             } />
           )}
 
+          <Route path="/:provedorId/chat" element={
+            <ConversationsPage user={user} />
+          } />
+
           <Route path="/app/accounts/:provedorId/*" element={
             <ProvedorAppWrapper
               user={user}
@@ -224,7 +232,7 @@ export default function App() {
             userRole === 'superadmin'
               ? <Navigate to="/superadmin" replace />
               : (userRole === 'agent' 
-                  ? <Navigate to={`/app/accounts/${user.provedor_id}/conversations`} replace />
+                  ? <Navigate to={`/${user.provedor_id}/chat`} replace />
                   : <Navigate to={`/app/accounts/${user.provedor_id}/dashboard`} replace />
                 )
           } />

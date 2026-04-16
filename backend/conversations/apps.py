@@ -15,6 +15,13 @@ class ConversationsConfig(AppConfig):
         except ImportError:
             pass
         
+        # Iniciar o serviço de monitoramento de timeout nativo (back mesmo)
+        try:
+            from conversations.chatbot_timeout_service import chatbot_timeout_service
+            chatbot_timeout_service.start()
+        except Exception as e:
+            logger.error(f"[ConversationsConfig] Falha ao iniciar ChatbotTimeoutService: {e}")
+        
         # Importar tarefas Dramatiq para garantir que os atores sejam registrados
         # Isso é necessário para que o worker do Dramatiq encontre os atores
         try:

@@ -2,7 +2,7 @@ import requests
 import logging
 from django.conf import settings
 from rest_framework import serializers
-from .models import Canal, Provedor, Label, User, AuditLog, SystemConfig, Company, CompanyUser, MensagemSistema, ChatbotFlow, RespostaRapida, UserReminder
+from .models import Canal, Provedor, Label, User, AuditLog, SystemConfig, Company, CompanyUser, MensagemSistema, ChatbotFlow, RespostaRapida, UserReminder, ProviderGalleryImage
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +318,30 @@ class SystemConfigSerializer(serializers.ModelSerializer):
     google_api_key = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     openai_transcription_api_key = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     asaas_access_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    asaas_webhook_auth_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     asaas_sandbox = serializers.BooleanField(required=False, default=True)
+    billing_channel_enabled = serializers.BooleanField(required=False, default=False)
+    billing_whatsapp_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    billing_whatsapp_phone_number_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    billing_whatsapp_waba_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    billing_days_before_due = serializers.IntegerField(required=False, default=3)
+    billing_reminder_due_offsets = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=120
+    )
+    billing_run_window_minutes = serializers.IntegerField(
+        required=False, default=0, min_value=0, max_value=45
+    )
+    billing_provedor_auto_block_enabled = serializers.BooleanField(required=False, default=True)
+    billing_provedor_block_min_days_late = serializers.IntegerField(
+        required=False, default=4, min_value=0, max_value=365
+    )
+    billing_run_time = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    billing_run_days = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    billing_template_due_soon = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    billing_template_overdue = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    billing_whatsapp_use_template = serializers.BooleanField(required=False, default=True)
+    billing_whatsapp_template_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    billing_whatsapp_template_language = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     
     class Meta:
         model = SystemConfig
@@ -326,11 +349,27 @@ class SystemConfigSerializer(serializers.ModelSerializer):
             'id', 'key', 'value', 'description', 'is_active', 
             'created_at', 'updated_at', 'sgp_app', 'sgp_token', 
             'sgp_url', 'google_api_key', 'openai_transcription_api_key',
-            'asaas_access_token', 'asaas_sandbox',
+            'asaas_access_token', 'asaas_webhook_auth_token', 'asaas_sandbox',
+            'billing_channel_enabled', 'billing_whatsapp_token', 'billing_whatsapp_phone_number_id',
+            'billing_whatsapp_waba_id', 'billing_days_before_due',             'billing_reminder_due_offsets',
+            'billing_run_window_minutes',
+            'billing_provedor_auto_block_enabled',
+            'billing_provedor_block_min_days_late',
+            'billing_run_time',
+            'billing_run_days', 'billing_template_due_soon', 'billing_template_overdue',
+            'billing_whatsapp_use_template', 'billing_whatsapp_template_name', 'billing_whatsapp_template_language',
             # Campos do frontend
             'site_name', 'contact_email', 'default_language', 'timezone',
             'allow_public_signup', 'max_users_per_company', 'google_api_key', 'openai_transcription_api_key',
-            'asaas_access_token', 'asaas_sandbox'
+            'asaas_access_token', 'asaas_webhook_auth_token', 'asaas_sandbox',
+            'billing_channel_enabled', 'billing_whatsapp_token', 'billing_whatsapp_phone_number_id',
+            'billing_whatsapp_waba_id', 'billing_days_before_due', 'billing_reminder_due_offsets',
+            'billing_run_window_minutes',
+            'billing_provedor_auto_block_enabled',
+            'billing_provedor_block_min_days_late',
+            'billing_run_time',
+            'billing_run_days', 'billing_template_due_soon', 'billing_template_overdue',
+            'billing_whatsapp_use_template', 'billing_whatsapp_template_name', 'billing_whatsapp_template_language',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
@@ -357,7 +396,24 @@ class SystemConfigSerializer(serializers.ModelSerializer):
                     'sgp_token': '',
                     'sgp_url': '',
                     'asaas_access_token': '',
+                    'asaas_webhook_auth_token': '',
                     'asaas_sandbox': True,
+                    'billing_channel_enabled': False,
+                    'billing_whatsapp_token': '',
+                    'billing_whatsapp_phone_number_id': '',
+                    'billing_whatsapp_waba_id': '',
+                    'billing_days_before_due': 3,
+                    'billing_reminder_due_offsets': '',
+                    'billing_run_window_minutes': 0,
+                    'billing_provedor_auto_block_enabled': True,
+                    'billing_provedor_block_min_days_late': 4,
+                    'billing_run_time': '09:00',
+                    'billing_run_days': '0,1,2,3,4,5,6',
+                    'billing_template_due_soon': 'Olá {{nome}}, sua fatura de {{valor}} vence em {{vencimento}} (ID: {{fatura_id}}).',
+                    'billing_template_overdue': 'Olá {{nome}}, sua fatura {{fatura_id}} de {{valor}} venceu em {{vencimento}}. Evite bloqueio realizando o pagamento.',
+                    'billing_whatsapp_use_template': True,
+                    'billing_whatsapp_template_name': 'cobranca_order',
+                    'billing_whatsapp_template_language': 'pt_BR',
                     'created_at': None,
                     'updated_at': None
                 }
@@ -414,11 +470,46 @@ class SystemConfigSerializer(serializers.ModelSerializer):
                 data['asaas_access_token'] = instance.asaas_access_token or ''
             else:
                 data.setdefault('asaas_access_token', '')
+
+            if instance and hasattr(instance, 'asaas_webhook_auth_token'):
+                data['asaas_webhook_auth_token'] = instance.asaas_webhook_auth_token or ''
+            else:
+                data.setdefault('asaas_webhook_auth_token', '')
                 
             if instance and hasattr(instance, 'asaas_sandbox'):
                 data['asaas_sandbox'] = instance.asaas_sandbox
             else:
                 data.setdefault('asaas_sandbox', True)
+
+            # Configuracoes do canal de cobranca exclusivo do superadmin
+            data.setdefault('billing_channel_enabled', getattr(instance, 'billing_channel_enabled', False))
+            data.setdefault('billing_whatsapp_token', getattr(instance, 'billing_whatsapp_token', '') or '')
+            data.setdefault('billing_whatsapp_phone_number_id', getattr(instance, 'billing_whatsapp_phone_number_id', '') or '')
+            data.setdefault('billing_whatsapp_waba_id', getattr(instance, 'billing_whatsapp_waba_id', '') or '')
+            data.setdefault('billing_days_before_due', getattr(instance, 'billing_days_before_due', 3))
+            data.setdefault(
+                'billing_reminder_due_offsets',
+                getattr(instance, 'billing_reminder_due_offsets', '') or '',
+            )
+            data.setdefault(
+                'billing_run_window_minutes',
+                getattr(instance, 'billing_run_window_minutes', 0),
+            )
+            data.setdefault(
+                'billing_provedor_auto_block_enabled',
+                getattr(instance, 'billing_provedor_auto_block_enabled', True),
+            )
+            data.setdefault(
+                'billing_provedor_block_min_days_late',
+                getattr(instance, 'billing_provedor_block_min_days_late', 4),
+            )
+            data.setdefault('billing_run_time', getattr(instance, 'billing_run_time', '09:00') or '09:00')
+            data.setdefault('billing_run_days', getattr(instance, 'billing_run_days', '0,1,2,3,4,5,6') or '0,1,2,3,4,5,6')
+            data.setdefault('billing_template_due_soon', getattr(instance, 'billing_template_due_soon', '') or '')
+            data.setdefault('billing_template_overdue', getattr(instance, 'billing_template_overdue', '') or '')
+            data.setdefault('billing_whatsapp_use_template', getattr(instance, 'billing_whatsapp_use_template', True))
+            data.setdefault('billing_whatsapp_template_name', getattr(instance, 'billing_whatsapp_template_name', '') or 'cobranca_order')
+            data.setdefault('billing_whatsapp_template_language', getattr(instance, 'billing_whatsapp_template_language', '') or 'pt_BR')
             
             # Garantir que campos obrigatórios existam
             data.setdefault('sgp_app', getattr(instance, 'sgp_app', '') or '')
@@ -497,15 +588,22 @@ class SystemConfigSerializer(serializers.ModelSerializer):
         
         # Extrair asaas_access_token e asaas_sandbox
         asaas_access_token = validated_data.pop('asaas_access_token', None)
+        asaas_webhook_auth_token = validated_data.pop('asaas_webhook_auth_token', None)
         asaas_sandbox = validated_data.pop('asaas_sandbox', None)
         
         # Se asaas_access_token não está em validated_data, tentar buscar de initial_data
         if asaas_access_token is None and hasattr(self, 'initial_data'):
             asaas_access_token = self.initial_data.get('asaas_access_token')
+
+        if asaas_webhook_auth_token is None and hasattr(self, 'initial_data'):
+            asaas_webhook_auth_token = self.initial_data.get('asaas_webhook_auth_token')
             
         # Tratar string vazia como None
         if asaas_access_token == '':
             asaas_access_token = None
+
+        if asaas_webhook_auth_token == '':
+            asaas_webhook_auth_token = None
             
         # Extrair campos do frontend
         frontend_fields = {
@@ -547,10 +645,36 @@ class SystemConfigSerializer(serializers.ModelSerializer):
         if asaas_access_token is not None:
             validated_data['asaas_access_token'] = asaas_access_token
             instance.asaas_access_token = asaas_access_token
+
+        if asaas_webhook_auth_token is not None:
+            validated_data['asaas_webhook_auth_token'] = asaas_webhook_auth_token
+            instance.asaas_webhook_auth_token = asaas_webhook_auth_token
             
         if asaas_sandbox is not None:
             validated_data['asaas_sandbox'] = asaas_sandbox
             instance.asaas_sandbox = asaas_sandbox
+
+        billing_fields = [
+            'billing_channel_enabled',
+            'billing_whatsapp_token',
+            'billing_whatsapp_phone_number_id',
+            'billing_whatsapp_waba_id',
+            'billing_days_before_due',
+            'billing_reminder_due_offsets',
+            'billing_run_window_minutes',
+            'billing_provedor_auto_block_enabled',
+            'billing_provedor_block_min_days_late',
+            'billing_run_time',
+            'billing_run_days',
+            'billing_template_due_soon',
+            'billing_template_overdue',
+            'billing_whatsapp_use_template',
+            'billing_whatsapp_template_name',
+            'billing_whatsapp_template_language',
+        ]
+        for field in billing_fields:
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
         
         # Salvar openai_transcription_api_key DIRETAMENTE no campo do modelo (CRÍTICO)
         # IMPORTANTE: Sempre tentar salvar, mesmo se for None (para permitir limpar o campo)
@@ -614,12 +738,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at', 'last_login']
     
     def get_provedor_id(self, obj):
-        try:
-            provedor = obj.provedores_admin.first() if hasattr(obj, 'provedores_admin') else None
-            return provedor.id if provedor else None
-        except Exception as e:
-            # Tratamento de erro caso haja problema com o relacionamento ou colunas faltantes
-            return None
+        return obj.provedor_id
     
     def get_provedores_admin(self, obj):
         """Retorna informações completas sobre os provedores do usuário"""
@@ -657,13 +776,19 @@ class UserSerializer(serializers.ModelSerializer):
             user.set_password(password)
             user.save()
 
-        # Reatribuição de provedor (ManyToMany)
+        # Reatribuição de provedor (ForeignKey)
         if provedor_id is not None:
             try:
                 provedor_id_int = int(provedor_id)
                 provedor = Provedor.objects.get(id=provedor_id_int)
-                user.provedores_admin.clear()
-                user.provedores_admin.add(provedor)
+                # Atualizar o campo ForeignKey direto
+                user.provedor = provedor
+                user.save(update_fields=['provedor'])
+                
+                # Manter o ManyToMany para compatibilidade se necessário (legado)
+                if hasattr(user, 'provedores_admin'):
+                    user.provedores_admin.clear()
+                    user.provedores_admin.add(provedor)
             except (Provedor.DoesNotExist, ValueError, TypeError) as e:
                 logger.error(f"Erro ao associar provedor {provedor_id} ao usuário {instance.id}: {str(e)}")
             except Exception as e:
@@ -700,6 +825,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
         if provedor_id:
             try:
                 provedor = Provedor.objects.get(id=provedor_id)
+                user.provedor = provedor
+                user.save(update_fields=['provedor'])
+                
+                # Manter ManyToMany para compatibilidade legada
                 provedor.admins.add(user)
             except Provedor.DoesNotExist:
                 pass  # Silenciosamente ignora se o provedor não existir
@@ -1347,6 +1476,29 @@ class RespostaRapidaSerializer(serializers.ModelSerializer):
     def get_criado_por_nome(self, obj):
         if obj.criado_por:
             return f"{obj.criado_por.first_name} {obj.criado_por.last_name}".strip() or obj.criado_por.username
+        return None
+
+
+class ProviderGalleryImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProviderGalleryImage
+        fields = [
+            'id', 'provedor', 'nome', 'imagem', 'image_url',
+            'criado_por', 'created_by_name', 'ativo',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'criado_por', 'created_at', 'updated_at']
+        extra_kwargs = {'provedor': {'required': False}}
+
+    def get_image_url(self, obj):
+        return f"/api/media/provider-gallery/{obj.id}/"
+
+    def get_created_by_name(self, obj):
+        if obj.criado_por:
+            return obj.criado_por.get_full_name() or obj.criado_por.username
         return None
 
 

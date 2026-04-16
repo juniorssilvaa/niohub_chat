@@ -371,6 +371,12 @@ class TelegramService:
             provedor = await sync_to_async(lambda: self.canal.provedor)()
             if not provedor:
                 return
+            if not getattr(provedor, 'is_active', True):
+                logger.info(
+                    f"[Telegram] IA ignorada: provedor {provedor.id} inativo. "
+                    f"Motivo: {getattr(provedor, 'block_reason', '')}"
+                )
+                return
             
             # Verificar se a IA está ativa no canal
             canal_ia_ativa = await sync_to_async(lambda: self.canal.ia_ativa)()

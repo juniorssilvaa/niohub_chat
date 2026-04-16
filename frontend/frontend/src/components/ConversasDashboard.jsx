@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Users, AlertTriangle, Flame, HelpCircle, Clock, MoreVertical, Bot, MessageCircle, User, X, Volume2, BrainCircuit, Timer, FileText, Image as ImageIcon, Film, UserCheck, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
+import { Users, AlertTriangle, Flame, HelpCircle, Clock, MoreVertical, Bot, MessageCircle, User, X, Volume2, Timer, FileText, Image as ImageIcon, Film, UserCheck, ArrowRightLeft, CheckCircle2, Inbox, Headset, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
@@ -178,34 +178,64 @@ export default function ConversasDashboard() {
   }, [authReady]);
 
   // Funções auxiliares para filtrar conversas (sem sobreposição)
-  const isComIA = (conv) => {
-    // Conversas NÃO atribuídas a um agente (automatização/IA)
-    // EXCLUIR conversas fechadas
-    if (conv.status === 'closed' || conv.status === 'encerrada' || conv.status === 'resolved' || conv.status === 'finalizada') {
-      return false;
+  const hasHumanAssignee = (conv) => {
+    if (!conv?.assignee) return false;
+    // Alguns payloads trazem assignee como objeto vazio; considerar atribuído só com identificador real.
+    return Boolean(
+      conv.assignee.id ||
+      conv.assignee.username ||
+      conv.assignee.email
+    );
+  };
+
+  const isClosedStatus = (status) => {
+    return ['closed', 'encerrada', 'resolved', 'finalizada'].includes(status);
+  };
+
+  const getConversationStatus = (conv) => {
+    return conv?.status || conv?.additional_attributes?.status || '';
+  };
+
+  const getWaitingForAgent = (conv) => {
+    if (typeof conv?.waiting_for_agent === 'boolean') return conv.waiting_for_agent;
+    if (typeof conv?.additional_attributes?.waiting_for_agent === 'boolean') {
+      return conv.additional_attributes.waiting_for_agent;
     }
-    // Com IA se status for snoozed E não tiver atendente humano
-    return conv.status === 'snoozed' && !conv.assignee;
+    return null;
+  };
+
+  const isComIA = (conv) => {
+    // Com IA: sem atendente humano e fora da fila humana.
+    const status = getConversationStatus(conv);
+    if (isClosedStatus(status)) return false;
+    if (hasHumanAssignee(conv)) return false;
+
+    const waitingForAgent = getWaitingForAgent(conv);
+    if (waitingForAgent === false) return true;
+    // Fallback para payloads sem a flag explícita.
+    return status === 'snoozed' || status === 'chatbot';
   };
 
   const isEmEspera = (conv) => {
-    // Conversas aguardando atendimento humano
-    // EXCLUIR conversas fechadas
-    if (conv.status === 'closed' || conv.status === 'encerrada' || conv.status === 'resolved' || conv.status === 'finalizada') {
-      return false;
-    }
-    // Em espera se status for pending OU se tiver equipe mas sem atendente individual
-    return conv.status === 'pending' || (!conv.assignee && !!conv.additional_attributes?.assigned_team);
+    const status = getConversationStatus(conv);
+    if (isClosedStatus(status)) return false;
+    if (hasHumanAssignee(conv)) return false;
+
+    const waitingForAgent = getWaitingForAgent(conv);
+    if (waitingForAgent === true) return true;
+    // Fallback para payloads legados.
+    return status === 'pending';
   };
 
   const isEmAtendimento = (conv) => {
     // Conversas que têm atendente individual atribuído
     // EXCLUIR conversas fechadas
-    if (conv.status === 'closed' || conv.status === 'encerrada' || conv.status === 'resolved' || conv.status === 'finalizada') {
+    const status = conv.status || conv.additional_attributes?.status;
+    if (isClosedStatus(status)) {
       return false;
     }
     // Se tem assignee humano, está em atendimento (independente de equipe ou status open/in_progress)
-    return !!conv.assignee;
+    return hasHumanAssignee(conv);
   };
 
   // Função para verificar autenticação (mesma lógica do ConversationList)
@@ -548,7 +578,7 @@ export default function ConversasDashboard() {
     if (!conversa?.id) return;
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     try {
-      const response = await axios.post(`/api/conversations/${conversa.id}/assign/`, {}, {
+      const response = await axios.post(`/api/conversations/${conversa.id}/assign/?include_bot=true`, {}, {
         headers: { Authorization: `Token ${token}` }
       });
       alert('Conversa atribuída para você!');
@@ -627,7 +657,7 @@ export default function ConversasDashboard() {
 
     try {
       // Usar a API de encerramento por agente
-      const response = await axios.post(`/api/conversations/${conversa.id}/close_conversation_agent/`, {
+      const response = await axios.post(`/api/conversations/${conversa.id}/close_conversation_agent/?include_bot=true`, {
         resolution_type: resolutionType,
         resolution_notes: resolutionNotes
       }, {
@@ -664,7 +694,7 @@ export default function ConversasDashboard() {
 
   const fetchTimeoutRef = useRef(null);
 
-  async function fetchCounts() {
+  async function fetchCounts(showLoading = false) {
     if (!authReady) return;
 
     // Se já houver um agendamento, cancelar para evitar múltiplas chamadas
@@ -674,39 +704,40 @@ export default function ConversasDashboard() {
 
     // Debounce de 300ms para evitar tempestade de requisições
     fetchTimeoutRef.current = setTimeout(async () => {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       try {
         const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
         const headers = token ? { Authorization: `Token ${token}` } : {};
         // Adicionar timestamp para evitar cache e garantir ordenação correta
         const timestamp = new Date().getTime();
-        const res = await axios.get(`/api/conversations/?page_size=500&ordering=-last_message_at&_t=${timestamp}`, { headers });
+        const res = await axios.get(`/api/conversations/?page_size=500&ordering=-last_message_at&include_bot=true&_t=${timestamp}`, { headers });
         const conversasData = res.data.results || res.data;
         
-        // CORREÇÃO: Administradores da empresa (admin) também devem ver tudo do seu provedor
-        const hasFullAccess = user?.user_type === 'superadmin' || user?.user_type === 'admin';
-        const userPermissions = user?.permissions || [];
-        let filteredConversas = conversasData;
+        // Manter a lista de conversas conforme retornada pelo servidor (que já aplica filtros de segurança)
+        setConversas(conversasData);
 
-        // Se não tiver acesso total, aplicar filtros de permissão específicos
-        if (!hasFullAccess) {
-          if (!userPermissions.includes('view_ai_conversations')) {
-            filteredConversas = filteredConversas.filter(conv => !isComIA(conv));
+        // BUSCAR ESTATÍSTICAS REAIS DO BACKEND (Aggregation)
+        // Isso resolve o problema de contagens erradas por filtros locais
+        try {
+          const statsRes = await axios.get('/api/conversations/dashboard_stats/', { headers });
+          if (statsRes.data && statsRes.data.stats) {
+            const s = statsRes.data.stats;
+            setCounts({
+              ia: s.conversas_ia || 0,
+              fila: s.conversas_pendentes || 0,
+              atendimento: s.conversas_abertas || 0
+            });
           }
-
-          if (!userPermissions.includes('view_team_unassigned')) {
-            filteredConversas = filteredConversas.filter(conv => !isEmEspera(conv));
-          }
+        } catch (statsErr) {
+          console.error('Erro ao buscar estatísticas do dashboard:', statsErr);
+          // Fallback para contagem local se a API falhar
+          const ia = filteredConversas.filter(isComIA).length;
+          const fila = filteredConversas.filter(isEmEspera).length;
+          const atendimento = filteredConversas.filter(isEmAtendimento).length;
+          setCounts({ ia, fila, atendimento });
         }
-
-        // Armazenar apenas as conversas que o usuário tem permissão de ver
-        setConversas(filteredConversas);
-
-        const ia = filteredConversas.filter(isComIA).length;
-        const fila = filteredConversas.filter(isEmEspera).length;
-        const atendimento = filteredConversas.filter(isEmAtendimento).length;
-
-        setCounts({ ia, fila, atendimento });
       } catch (e) {
         if (e.response?.status === 401) {
           setAuthReady(false);
@@ -724,7 +755,7 @@ export default function ConversasDashboard() {
 
   useEffect(() => {
     if (authReady && hasInitialized) {
-      fetchCounts();
+      fetchCounts(true);
     }
   }, [authReady, hasInitialized]);
 
@@ -750,6 +781,7 @@ export default function ConversasDashboard() {
             data.action === 'new_message' ||
             data.type === 'dashboard_event' ||
             data.type === 'conversation_event' ||
+            data.type === 'dashboard_stats_update' || // Novo evento de estatísticas
             data.event_type === 'new_message' ||
             data.event_type === 'message_received') {
 
@@ -763,21 +795,8 @@ export default function ConversasDashboard() {
                 // Adicionar a nova no topo (Ordenação em Tempo Real)
                 let novaLista = [convAtualizada, ...listaSemAntiga];
 
-                // Aplicar filtros de permissão na lista atualizada (WebSocket)
-                // CORREÇÃO: Administradores da empresa (admin) também devem ver tudo
-                const hasFullAccess = user?.user_type === 'superadmin' || user?.user_type === 'admin';
-                const userPermissions = user?.permissions || [];
-                
-                if (!hasFullAccess) {
-                  if (!userPermissions.includes('view_ai_conversations')) {
-                    novaLista = novaLista.filter(conv => !isComIA(conv));
-                  }
-                  if (!userPermissions.includes('view_team_unassigned')) {
-                    novaLista = novaLista.filter(conv => !isEmEspera(conv));
-                  }
-                }
-
-                // Recalcular contagens baseadas na lista filtrada
+                // A lista atualizada (novaLista) já contém os dados sincronizados do servidor
+                // Aplicar recálculo de contagens baseado em toda a lista autorizada
                 let ia = 0, fila = 0, atendimento = 0;
                 novaLista.forEach(conv => {
                   if (isComIA(conv)) ia++;
@@ -790,7 +809,7 @@ export default function ConversasDashboard() {
               });
             } else {
               // Caso não tenha os dados completos, recarregar via API debounced
-              fetchCounts();
+              fetchCounts(false);
             }
           }
 
@@ -827,7 +846,7 @@ export default function ConversasDashboard() {
       // Recarregar contagens para aplicar as novas permissões
       setTimeout(() => {
         if (authReady && hasInitialized) {
-          fetchCounts();
+          fetchCounts(false);
         }
       }, 500);
     };
@@ -891,7 +910,7 @@ export default function ConversasDashboard() {
     // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     try {
-      await axios.post(`/api/conversations/${modalTransferir.id}/transfer/`, { user_id: usuario.id }, {
+      await axios.post(`/api/conversations/${modalTransferir.id}/transfer/?include_bot=true`, { user_id: usuario.id }, {
         headers: { Authorization: `Token ${token}` }
       });
       alert('Transferido com sucesso!');
@@ -908,7 +927,7 @@ export default function ConversasDashboard() {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     try {
       // Usar endpoint de transferência padrão que aceita team_id
-      const response = await axios.post(`/api/conversations/${modalTransferirEquipe.id}/transfer/`, {
+      const response = await axios.post(`/api/conversations/${modalTransferirEquipe.id}/transfer/?include_bot=true`, {
         team_id: equipe.id,
         team_name: equipe.name
       }, {
@@ -947,9 +966,9 @@ export default function ConversasDashboard() {
       return ''; // Campo atendente vazio quando transferido para equipe
     }
 
-    // Se não tem atendente mas está "Com IA", mostrar "IA"
+    // Se não tem atendente mas está na automação, mostrar "Bot"
     if (conversa.status === 'snoozed') {
-      return 'IA';
+      return 'Bot';
     }
 
     // Se não tem atendente e está em espera: deixar vazio
@@ -1329,70 +1348,57 @@ export default function ConversasDashboard() {
         </div>
       ) : (
         <>
-          {/* Dashboard de Métricas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {/* Inteligência Artificial */}
-            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-6 shadow-lg shadow-indigo-500/20 relative overflow-hidden transition-all hover:-translate-y-1 hover:shadow-xl">
-              <div className="relative z-10">
-                <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-3 font-mono">
-                  {providerConfig?.chatbot_mode ? 'Automação' : 'Inteligência Artificial'}
-                </p>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-5xl font-bold text-white tracking-tight">
-                    {counts.ia}
-                  </h3>
-                  <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
-                    {providerConfig?.chatbot_mode ? (
-                      <Bot className="w-8 h-8 text-white" strokeWidth={1.5} />
-                    ) : (
-                      <BrainCircuit className="w-8 h-8 text-white" strokeWidth={1.5} />
-                    )}
-                  </div>
+          {/* Dashboard de Métricas — cards sóbrios com acento */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-700/70 bg-zinc-900/95 p-6 shadow-xl shadow-black/25 ring-1 ring-white/[0.04] transition-all duration-300 hover:border-zinc-600 hover:ring-white/[0.07]">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-500/[0.08] via-transparent to-violet-600/[0.06]" />
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-1 rounded-l-2xl bg-gradient-to-b from-cyan-400 to-violet-500 opacity-90" />
+              <div className="relative flex items-start justify-between gap-4 pl-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                    {providerConfig?.chatbot_mode ? 'Automação' : 'Inteligência Artificial'}
+                  </p>
+                  <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-white">{counts.ia}</p>
+                  <p className="mt-1.5 text-xs text-zinc-500">Fluxo automático sem atendente</p>
+                </div>
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-cyan-300">
+                  {providerConfig?.chatbot_mode ? (
+                    <Bot className="h-7 w-7" strokeWidth={1.75} />
+                  ) : (
+                    <Sparkles className="h-7 w-7" strokeWidth={1.75} />
+                  )}
                 </div>
               </div>
-              {/* Decorative elements */}
-              <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-              <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-indigo-400/20 rounded-full blur-xl pointer-events-none"></div>
             </div>
 
-            {/* Fila de Espera */}
-            <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-6 shadow-lg shadow-orange-500/20 relative overflow-hidden transition-all hover:-translate-y-1 hover:shadow-xl">
-              <div className="relative z-10">
-                <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-3 font-mono">
-                  Fila de Espera
-                </p>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-5xl font-bold text-white tracking-tight">
-                    {counts.fila}
-                  </h3>
-                  <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
-                    <Clock className="w-8 h-8 text-white" strokeWidth={1.5} />
-                  </div>
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-700/70 bg-zinc-900/95 p-6 shadow-xl shadow-black/25 ring-1 ring-white/[0.04] transition-all duration-300 hover:border-zinc-600 hover:ring-white/[0.07]">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-500/[0.07] via-transparent to-orange-600/[0.05]" />
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-1 rounded-l-2xl bg-gradient-to-b from-amber-400 to-orange-500 opacity-90" />
+              <div className="relative flex items-start justify-between gap-4 pl-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Fila de espera</p>
+                  <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-white">{counts.fila}</p>
+                  <p className="mt-1.5 text-xs text-zinc-500">Aguardando atendente humano</p>
+                </div>
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-amber-300">
+                  <Inbox className="h-7 w-7" strokeWidth={1.75} />
                 </div>
               </div>
-              {/* Decorative elements */}
-              <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-              <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-orange-300/20 rounded-full blur-xl pointer-events-none"></div>
             </div>
 
-            {/* Em Atendimento */}
-            <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl p-6 shadow-lg shadow-emerald-500/20 relative overflow-hidden transition-all hover:-translate-y-1 hover:shadow-xl">
-              <div className="relative z-10">
-                <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-3 font-mono">
-                  Em Atendimento
-                </p>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-5xl font-bold text-white tracking-tight">
-                    {counts.atendimento}
-                  </h3>
-                  <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
-                    <Users className="w-8 h-8 text-white" strokeWidth={1.5} />
-                  </div>
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-700/70 bg-zinc-900/95 p-6 shadow-xl shadow-black/25 ring-1 ring-white/[0.04] transition-all duration-300 hover:border-zinc-600 hover:ring-white/[0.07]">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/[0.07] via-transparent to-teal-700/[0.05]" />
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-1 rounded-l-2xl bg-gradient-to-b from-emerald-400 to-teal-600 opacity-90" />
+              <div className="relative flex items-start justify-between gap-4 pl-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Em atendimento</p>
+                  <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-white">{counts.atendimento}</p>
+                  <p className="mt-1.5 text-xs text-zinc-500">Com agente atribuído</p>
+                </div>
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-emerald-300">
+                  <Headset className="h-7 w-7" strokeWidth={1.75} />
                 </div>
               </div>
-              {/* Decorative elements */}
-              <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-              <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-emerald-300/20 rounded-full blur-xl pointer-events-none"></div>
             </div>
           </div>
 
@@ -1406,38 +1412,61 @@ export default function ConversasDashboard() {
               <div className="flex-1 overflow-y-auto pr-2">
                 <div className="space-y-3">
                   {conversas.filter(isComIA).map((conv) => (
-                    <div key={conv.id} className="bg-background rounded-lg p-3 relative status-border-ia shadow-sm transition-all hover:shadow-md hover:bg-muted/20">
+                    <div key={conv.id} className="bg-background rounded-xl p-4 relative status-border-ia shadow-sm border border-border/50 transition-all hover:shadow-lg hover:bg-muted/10 group">
                       <div className="flex items-start gap-3">
-                        <img
-                          src={getAvatar(conv.contact)}
-                          alt="avatar"
-                          className="w-10 h-10 rounded-full object-cover border-2 border-purple-500/30"
-                        />
+                        <div className="relative">
+                          <img
+                            src={getAvatar(conv.contact)}
+                            alt="avatar"
+                            className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/20 shadow-sm"
+                          />
+                          <div className="absolute -bottom-1 -right-1 p-1 bg-background rounded-full border border-border">
+                            <Bot className="w-3 h-3 text-indigo-500" />
+                          </div>
+                        </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold text-card-foreground truncate">
+                          <div className="flex items-start justify-between mb-1">
+                            <h4 className="font-bold text-base text-card-foreground truncate pr-2">
                               {conv.contact?.name || 'Contato'}
                             </h4>
-                            <span className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+                            <span className="bg-white/10 text-white px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap border border-white/20">
                               {formatTimestamp(conv.updated_at || conv.created_at)}
                             </span>
                           </div>
-                          <div className="space-y-1 text-xs text-muted-foreground mt-2">
-                            <div><strong>Contato:</strong> {formatPhone(conv.contact?.phone)}</div>
-                            <div><strong>Atendente:</strong> {getAtendente(conv)}</div>
-                            <div><strong>Grupo:</strong> {getEquipe(conv) || '-'}</div>
-                            <div><strong>Status:</strong> {getStatusText(conv.status, conv)}</div>
-                            <div><strong>Canal:</strong> {getChannelDisplayName(conv.inbox)}</div>
+                          
+                          <div className="grid grid-cols-1 gap-1 text-[11px] leading-tight">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Contato:</span>
+                              <span className="text-card-foreground truncate">{formatPhone(conv.contact?.phone)}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Atendente:</span>
+                              <span className="text-card-foreground truncate italic">{getAtendente(conv) || 'Bot'}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Grupo:</span>
+                              <span className="text-card-foreground truncate">{getEquipe(conv) || '-'}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Status:</span>
+                              <span className="text-white font-medium">{getStatusText(conv.status, conv)}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Canal:</span>
+                              <span className="text-card-foreground uppercase tracking-wider text-[9px]">{getChannelDisplayName(conv.inbox)}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
                       <button
                         ref={el => (menuBtnRefs.current[conv.id] = el)}
-                        className="absolute bottom-2 right-2 p-1 text-muted-foreground hover:text-card-foreground"
+                        type="button"
+                        className="absolute bottom-2 right-2 rounded-lg p-1.5 text-white hover:bg-white/10 hover:text-white"
                         onClick={e => handleMenuOpen(conv.id, e)}
                         data-menu-trigger
+                        aria-label="Opções da conversa"
                       >
-                        <MoreVertical className="w-3 h-3" />
+                        <MoreVertical className="h-4 w-4" strokeWidth={2.25} />
                       </button>
                       {/* Menu contextual */}
                       {menuOpenId === conv.id && (
@@ -1471,38 +1500,61 @@ export default function ConversasDashboard() {
               <div className="flex-1 overflow-y-auto pr-2">
                 <div className="space-y-3">
                   {conversas.filter(isEmEspera).map((conv) => (
-                    <div key={conv.id} className="bg-background rounded-lg p-3 relative status-border-espera shadow-sm transition-all hover:shadow-md hover:bg-muted/20">
+                    <div key={conv.id} className="bg-background rounded-xl p-4 relative status-border-espera shadow-sm border border-border/50 transition-all hover:shadow-lg hover:bg-muted/10 group">
                       <div className="flex items-start gap-3">
-                        <img
-                          src={getAvatar(conv.contact)}
-                          alt="avatar"
-                          className="w-10 h-10 rounded-full object-cover border-2 border-orange-500/30"
-                        />
+                        <div className="relative">
+                          <img
+                            src={getAvatar(conv.contact)}
+                            alt="avatar"
+                            className="w-12 h-12 rounded-full object-cover border-2 border-orange-500/20 shadow-sm"
+                          />
+                          <div className="absolute -bottom-1 -right-1 p-1 bg-background rounded-full border border-border">
+                            <Clock className="w-3 h-3 text-orange-500" />
+                          </div>
+                        </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold text-card-foreground truncate">
+                          <div className="flex items-start justify-between mb-1">
+                            <h4 className="font-bold text-base text-card-foreground truncate pr-2">
                               {conv.contact?.name || 'Contato'}
                             </h4>
-                            <span className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+                            <span className="bg-white/10 text-white px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap border border-white/20">
                               {formatTimestamp(conv.updated_at || conv.created_at)}
                             </span>
                           </div>
-                          <div className="space-y-1 text-xs text-muted-foreground mt-2">
-                            <div><strong>Contato:</strong> {formatPhone(conv.contact?.phone)}</div>
-                            <div><strong>Atendente:</strong> {getAtendente(conv)}</div>
-                            <div><strong>Grupo:</strong> {getEquipe(conv) || '-'}</div>
-                            <div><strong>Status:</strong> {getStatusText(conv.status, conv)}</div>
-                            <div><strong>Canal:</strong> {getChannelDisplayName(conv.inbox)}</div>
+                          
+                          <div className="grid grid-cols-1 gap-1 text-[11px] leading-tight">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Contato:</span>
+                              <span className="text-card-foreground truncate">{formatPhone(conv.contact?.phone)}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Atendente:</span>
+                              <span className="text-card-foreground truncate">{getAtendente(conv) || '-'}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Grupo:</span>
+                              <span className="text-card-foreground truncate">{getEquipe(conv) || '-'}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Status:</span>
+                              <span className="text-white font-medium">{getStatusText(conv.status, conv)}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Canal:</span>
+                              <span className="text-card-foreground uppercase tracking-wider text-[9px]">{getChannelDisplayName(conv.inbox)}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
                       <button
                         ref={el => (menuBtnRefs.current[conv.id] = el)}
-                        className="absolute bottom-2 right-2 p-1 text-muted-foreground hover:text-card-foreground"
+                        type="button"
+                        className="absolute bottom-2 right-2 rounded-lg p-1.5 text-white hover:bg-white/10 hover:text-white"
                         onClick={e => handleMenuOpen(conv.id, e)}
                         data-menu-trigger
+                        aria-label="Opções da conversa"
                       >
-                        <MoreVertical className="w-3 h-3" />
+                        <MoreVertical className="h-4 w-4" strokeWidth={2.25} />
                       </button>
                       {/* Menu contextual */}
                       {menuOpenId === conv.id && (
@@ -1536,38 +1588,61 @@ export default function ConversasDashboard() {
               <div className="flex-1 overflow-y-auto pr-2">
                 <div className="space-y-3">
                   {conversas.filter(isEmAtendimento).map((conv) => (
-                    <div key={conv.id} className="bg-background rounded-lg p-3 relative status-border-atendimento shadow-sm transition-all hover:shadow-md hover:bg-muted/20">
+                    <div key={conv.id} className="bg-background rounded-xl p-4 relative status-border-atendimento shadow-sm border border-border/50 transition-all hover:shadow-lg hover:bg-muted/10 group">
                       <div className="flex items-start gap-3">
-                        <img
-                          src={getAvatar(conv.contact)}
-                          alt="avatar"
-                          className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500/30"
-                        />
+                        <div className="relative">
+                          <img
+                            src={getAvatar(conv.contact)}
+                            alt="avatar"
+                            className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500/20 shadow-sm"
+                          />
+                          <div className="absolute -bottom-1 -right-1 p-1 bg-background rounded-full border border-border">
+                            <Users className="w-3 h-3 text-emerald-500" />
+                          </div>
+                        </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold text-card-foreground truncate">
+                          <div className="flex items-start justify-between mb-1">
+                            <h4 className="font-bold text-base text-card-foreground truncate pr-2">
                               {conv.contact?.name || 'Contato'}
                             </h4>
-                            <span className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+                            <span className="bg-white/10 text-white px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap border border-white/20">
                               {formatTimestamp(conv.updated_at || conv.created_at)}
                             </span>
                           </div>
-                          <div className="space-y-1 text-xs text-muted-foreground mt-2">
-                            <div><strong>Contato:</strong> {formatPhone(conv.contact?.phone)}</div>
-                            <div><strong>Atendente:</strong> {getAtendente(conv)}</div>
-                            <div><strong>Grupo:</strong> {getEquipe(conv) || '-'}</div>
-                            <div><strong>Status:</strong> {getStatusText(conv.status, conv)}</div>
-                            <div><strong>Canal:</strong> {getChannelDisplayName(conv.inbox)}</div>
+                          
+                          <div className="grid grid-cols-1 gap-1 text-[11px] leading-tight">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Contato:</span>
+                              <span className="text-card-foreground truncate">{formatPhone(conv.contact?.phone)}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Atendente:</span>
+                              <span className="text-card-foreground truncate">{getAtendente(conv)}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Grupo:</span>
+                              <span className="text-card-foreground truncate">{getEquipe(conv) || '-'}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Status:</span>
+                              <span className="text-white font-medium">{getStatusText(conv.status, conv)}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-muted-foreground font-semibold min-w-[55px]">Canal:</span>
+                              <span className="text-card-foreground uppercase tracking-wider text-[9px]">{getChannelDisplayName(conv.inbox)}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
                       <button
                         ref={el => (menuBtnRefs.current[conv.id] = el)}
-                        className="absolute bottom-2 right-2 p-1 text-muted-foreground hover:text-card-foreground"
+                        type="button"
+                        className="absolute bottom-2 right-2 rounded-lg p-1.5 text-white hover:bg-white/10 hover:text-white"
                         onClick={e => handleMenuOpen(conv.id, e)}
                         data-menu-trigger
+                        aria-label="Opções da conversa"
                       >
-                        <MoreVertical className="w-3 h-3" />
+                        <MoreVertical className="h-4 w-4" strokeWidth={2.25} />
                       </button>
                       {/* Menu contextual */}
                       {menuOpenId === conv.id && (
@@ -1821,9 +1896,8 @@ export default function ConversasDashboard() {
               </div>
             </DialogContent>
           </Dialog>
-
         </>
       )}
     </div>
   );
-} 
+}

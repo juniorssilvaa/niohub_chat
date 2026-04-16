@@ -2,6 +2,15 @@
 
 Todas as mudanças notáveis do projeto NioChat serão documentadas neste arquivo.
 
+## [2.34.0] - 2026-04-16
+
+### 🎉 Adicionado
+- **Imagem na mensagem inicial do chatbot**: fluxo do chatbot passa a suportar envio de imagem (bloco Galeria / mídia) como parte da automação e da primeira interação com o cliente.
+- **Inatividade do cliente na automação**: sistema de detecção e tratamento de inatividade do cliente integrado ao motor de automação, permitindo encerramentos ou ações programadas conforme regras do provedor.
+
+### 🔧 Melhorado
+- **Dashboard e tela de atendimento**: painel de conversas renovado com nova experiência de atendimento, organização visual e fluxo mais claro para equipes.
+
 ## [2.25.0] - 2026-01-12
 
 ### 🎉 Adicionado
@@ -237,9 +246,9 @@ Esta versão estabeleceu a base sólida do NioChat com:
 ## 🔗 Links Úteis
 
 - **GitHub**: [github.com/juniorssilvaa/niochat](https://github.com/juniorssilvaa/niochat)
-- **Documentação**: [docs.niochat.com.br](https://docs.niochat.com.br)
-- **Demo**: [demo.niochat.com.br](https://demo.niochat.com.br)
-- **Suporte**: [suporte@niochat.com.br](mailto:suporte@niochat.com.br)
+- **Documentação**: [docs.niohub.com.br](https://docs.niohub.com.br)
+- **Demo**: [demo.niohub.com.br](https://demo.niohub.com.br)
+- **Suporte**: [suporte@niohub.com.br](mailto:suporte@niohub.com.br)
 
 ## 📄 Licença
 

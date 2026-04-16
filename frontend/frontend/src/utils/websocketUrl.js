@@ -28,15 +28,15 @@ export const getWebSocketHost = () => {
     
     // Se estiver em qualquer subdomínio niohub.com.br
     if (hostname.endsWith('niohub.com.br')) {
-      if (hostname.startsWith('api-local') || hostname.startsWith('front-local')) {
+      if (hostname.startsWith('api-local') || hostname.startsWith('chat-local')) {
         return 'api-local.niohub.com.br';
       }
       // Padrão: api.niohub.com.br
       return 'api.niohub.com.br';
     }
 
-    // Compatibilidade temporária com niochat.com.br
-    if (hostname.endsWith('niochat.com.br')) {
+    // Compatibilidade temporária com niohub.com.br
+    if (hostname.endsWith('niohub.com.br')) {
       return 'api.niohub.com.br';
     }
     

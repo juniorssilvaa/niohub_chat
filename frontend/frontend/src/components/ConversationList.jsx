@@ -13,12 +13,19 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   });
 
   const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem('conversationListActiveTab') || 'mine';
+    const savedTab = localStorage.getItem('conversationListActiveTab');
+    // Compatibilidade com aba antiga "ai"
+    if (savedTab === 'ai') return 'automation';
+    return savedTab || 'mine';
   });
 
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(false);
   const userPermissions = useMemo(() => user?.permissions || [], [user]);
+  const userRole = useMemo(() => user?.role || user?.user_type || '', [user]);
+  const isProviderAdmin = useMemo(() => {
+    return ['admin', 'company_admin', 'provedor_admin'].includes(userRole);
+  }, [userRole]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [newMessageNotification, setNewMessageNotification] = useState(false);
@@ -567,7 +574,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
     // Debounce de 300ms para evitar tempestade de requisições
     fetchTimeoutRef.current = setTimeout(async () => {
-      if (forceRefresh) {
+      if (forceRefresh && (!hasInitialized || conversations.length === 0)) {
         setLoading(true);
       }
 
@@ -581,6 +588,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         const params = new URLSearchParams({
           page_size: '500', // Aumentado para garantir que novos atendimentos apareçam
           ordering: '-last_message_at',
+          include_bot: 'true',
           _t: new Date().getTime().toString() // Cache bust
         });
 
@@ -743,8 +751,8 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               localStorage.removeItem('selectedConversation');
             }
 
-            // Recarregar lista para garantir sincronização
-            setTimeout(() => fetchConversations(true), 300);
+            // Recarregar lista silenciosamente para evitar piscar "Carregando..."
+            setTimeout(() => fetchConversations(false), 300);
             return;
           }
 
@@ -783,9 +791,23 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               const convAtualizada = data.conversation || (data.data && data.data.conversation) || data.payload || data.conversation_data;
               if (convAtualizada && convAtualizada.id) {
                 setConversations(prev => {
+                  const previousConversation = prev.find(c => c.id === convAtualizada.id);
+                  const mergedConversation = previousConversation
+                    ? {
+                      ...previousConversation,
+                      ...convAtualizada,
+                      contact: convAtualizada.contact ?? previousConversation.contact,
+                      inbox: convAtualizada.inbox ?? previousConversation.inbox,
+                      assignee: convAtualizada.assignee ?? previousConversation.assignee,
+                      additional_attributes: {
+                        ...(previousConversation.additional_attributes || {}),
+                        ...(convAtualizada.additional_attributes || {}),
+                      },
+                    }
+                    : convAtualizada;
                   const listaSemAntiga = prev.filter(c => c.id !== convAtualizada.id);
                   // Adicionar no início da lista e ordenar por última mensagem
-                  const novaLista = [convAtualizada, ...listaSemAntiga];
+                  const novaLista = [mergedConversation, ...listaSemAntiga];
                   return novaLista.sort((a, b) => {
                     const timeA = a.last_message?.created_at || a.updated_at || a.created_at || 0;
                     const timeB = b.last_message?.created_at || b.updated_at || b.created_at || 0;
@@ -809,7 +831,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               // Mas garantir que sempre execute
               fetchTimeoutRef.current = setTimeout(() => {
                 if (isMounted.current) {
-                  fetchConversations(true);
+                  fetchConversations(false);
                   fetchTimeoutRef.current = null;
                 }
               }, 200);
@@ -875,12 +897,55 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   // Conversas são atualizadas via WebSocket do painel (tempo real)
   // Não é necessário polling - o WebSocket já envia conversation_event quando há mudanças
 
+  const hasHumanAssignee = (conversation) => {
+    if (!conversation?.assignee) return false;
+    return Boolean(
+      conversation.assignee.id ||
+      conversation.assignee.username ||
+      conversation.assignee.email
+    );
+  };
+
+  const isClosedStatus = (status) => {
+    return ['closed', 'encerrada', 'resolved', 'finalizada'].includes(status);
+  };
+
+  const getConversationStatus = (conversation) => {
+    return conversation?.status || conversation?.additional_attributes?.status || '';
+  };
+
+  const getWaitingForAgent = (conversation) => {
+    if (typeof conversation?.waiting_for_agent === 'boolean') return conversation.waiting_for_agent;
+    if (typeof conversation?.additional_attributes?.waiting_for_agent === 'boolean') {
+      return conversation.additional_attributes.waiting_for_agent;
+    }
+    return null;
+  };
+
+  const isWaitingConversation = (conversation) => {
+    const status = getConversationStatus(conversation);
+    if (isClosedStatus(status)) return false;
+    if (hasHumanAssignee(conversation)) return false;
+
+    const waitingForAgent = getWaitingForAgent(conversation);
+    return status === 'pending' || waitingForAgent === true;
+  };
+
+  const isAutomationConversation = (conversation) => {
+    const status = getConversationStatus(conversation);
+    if (isClosedStatus(status)) return false;
+    if (hasHumanAssignee(conversation)) return false;
+
+    const waitingForAgent = getWaitingForAgent(conversation);
+    // Permitir fallback por status quando a flag não vier no payload.
+    return waitingForAgent === false || status === 'snoozed' || status === 'chatbot';
+  };
+
   // Definir abas baseado nas permissões
   const getAvailableTabs = () => {
     const activeConversations = conversations.filter(c => {
-      const status = c.status || c.additional_attributes?.status;
-      const closedStatuses = ['closed', 'encerrada', 'resolved', 'finalizada'];
-      return !closedStatuses.includes(status);
+      const status = getConversationStatus(c);
+      return !isClosedStatus(status);
     });
 
     const tabs = [];
@@ -888,7 +953,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     // Abas padrão - Minhas sempre primeiro
     tabs.push({
       id: 'mine',
-      label: 'Minhas',
+      label: 'Atendimento',
       count: activeConversations.filter(c => {
         const a = c.assignee;
         if (!a || !user) return false;
@@ -896,44 +961,29 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       }).length,
     });
 
-    // Aba Não atribuídas - conversas em espera (pending) OU com IA (snoozed) OU transferidas
+    // Aba Não atribuídas - fila de espera + transferências sem atendente
     tabs.push({
       id: 'unassigned',
-      label: 'Não atribuídas',
+      label: 'Espera',
       count: activeConversations.filter(c => {
-        const status = c.status || c.additional_attributes?.status;
         const assignedUser = c.additional_attributes?.assigned_user;
         const assignedTeam = c.additional_attributes?.assigned_team;
 
-        if (!c.assignee) {
-          // Conversas com IA ou em espera geral
-          if (status === 'pending' || status === 'snoozed') {
-            return true;
-          }
-
-          // Conversas transferidas para este usuário específico
-          if (assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString())) {
-            return true;
-          }
-
-          // Conversas transferidas para equipe do usuário
-          if (assignedTeam && user && user.team && assignedTeam.id === user.team.id) {
-            return true;
-          }
-        }
+        if (isWaitingConversation(c)) return true;
+        if (!hasHumanAssignee(c) && assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString())) return true;
+        if (!hasHumanAssignee(c) && assignedTeam && user && user.team && assignedTeam.id === user.team.id) return true;
 
         return false;
       }).length,
     });
 
-    // Aba Com IA se o usuário tiver a permissão específica - depois de Não atribuídas
-    if (userPermissions.includes('view_ai_conversations')) {
+    // Aba Na Automação para admin do provedor (ou com permissão explícita).
+    if (isProviderAdmin || userPermissions.includes('view_ai_conversations')) {
       tabs.push({
-        id: 'ai',
-        label: 'Com IA',
+        id: 'automation',
+        label: 'Automação',
         count: activeConversations.filter(c => {
-          const status = c.status || c.additional_attributes?.status;
-          return status === 'snoozed' && !c.assignee;
+          return isAutomationConversation(c);
         }).length,
       });
     }
@@ -943,20 +993,25 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
 
   const tabs = getAvailableTabs();
 
+  useEffect(() => {
+    // Evita ficar preso em uma aba indisponível para o perfil atual.
+    if (!tabs.some(tab => tab.id === activeTab)) {
+      setActiveTab('mine');
+    }
+  }, [tabs, activeTab]);
+
   // Filtrar conversas baseado na aba ativa e termo de busca
   const filteredConversations = useMemo(() => {
     let filtered = conversations.filter(c => {
-      const status = c.status || c.additional_attributes?.status;
-      const closedStatuses = ['closed', 'encerrada', 'resolved', 'finalizada'];
-      return !closedStatuses.includes(status);
+      const status = getConversationStatus(c);
+      return !isClosedStatus(status);
     });
 
     // Filtrar por aba
-    if (activeTab === 'ai') {
-      // Mostrar conversas com IA: status 'snoozed' e não atribuídas
+    if (activeTab === 'automation') {
+      // Mostrar conversas em automação/IA (tempo real)
       filtered = filtered.filter(c => {
-        const status = c.status || c.additional_attributes?.status;
-        return status === 'snoozed' && !c.assignee;
+        return isAutomationConversation(c);
       });
     } else if (activeTab === 'mine') {
       // Mostrar conversas atribuídas ao usuário atual (qualquer status)
@@ -966,32 +1021,14 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         return (a.id?.toString() === user.id?.toString()) || (a.username && a.username === user.username);
       });
     } else if (activeTab === 'unassigned') {
-      // Mostrar conversas não atribuídas em espera (pending) OU com IA (snoozed)
-      // OU transferidas para o usuário atual (assigned_user)
+      // Mostrar fila de espera + transferências sem atendente para usuário/equipe
       filtered = filtered.filter(c => {
-        const status = c.status || c.additional_attributes?.status;
         const assignedUser = c.additional_attributes?.assigned_user;
         const assignedTeam = c.additional_attributes?.assigned_team;
 
-        // Debug removido
-
-        // Conversas sem assignee OU transferidas para este usuário/equipe
-        if (!c.assignee || (assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString()))) {
-          // Conversas com IA ou em espera geral
-          if (status === 'pending' || status === 'snoozed') {
-            return true;
-          }
-
-          // Conversas transferidas para este usuário específico
-          if (assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString())) {
-            return true;
-          }
-
-          // Conversas transferidas para equipe do usuário (se ele pertence à equipe)
-          if (assignedTeam && user && user.team && assignedTeam.id === user.team.id) {
-            return true;
-          }
-        }
+        if (isWaitingConversation(c)) return true;
+        if (!hasHumanAssignee(c) && assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString())) return true;
+        if (!hasHumanAssignee(c) && assignedTeam && user && user.team && assignedTeam.id === user.team.id) return true;
 
         return false;
       });
@@ -1040,7 +1077,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
       {/* Header */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Conversas</h2>
+          <h2 className="text-lg font-semibold text-zinc-100">Conversas</h2>
           <div className="flex items-center space-x-2">
             {/* Botão de ativar sons removido */}
 
@@ -1118,18 +1155,20 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-secondary/80 border border-white/40 rounded-lg p-1">
+        <div className="flex gap-1 rounded-full bg-[#2f3238] p-1">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
-            let activeClass = 'bg-background text-primary shadow-sm';
+            let activeClass = 'bg-[#2ca7ff] text-white shadow-sm';
 
             if (isActive) {
               if (tab.id === 'mine') {
-                activeClass = 'bg-gradient-premium-blue shadow-md scale-[1.02]';
+                activeClass = 'bg-[#2ca7ff] text-white shadow-md';
               } else if (tab.id === 'unassigned') {
-                activeClass = 'bg-gradient-premium-orange shadow-md scale-[1.02]';
+                activeClass = 'bg-[#2ca7ff] text-white shadow-md';
+              } else if (tab.id === 'automation') {
+                activeClass = 'bg-[#2ca7ff] text-white shadow-md';
               } else if (tab.id === 'all') {
-                activeClass = 'bg-gradient-premium-purple shadow-md scale-[1.02]';
+                activeClass = 'bg-[#2ca7ff] text-white shadow-md';
               }
             }
 
@@ -1137,14 +1176,16 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${isActive
+                className={`relative flex-1 min-w-0 px-2 py-1.5 text-[11px] font-medium rounded-full transition-all duration-200 ${isActive
                   ? activeClass
-                  : 'text-muted-foreground hover:text-primary hover:bg-accent-foreground/10'
+                  : 'text-white/90 hover:text-white hover:bg-white/10'
                   }`}
               >
-                {tab.label}
+                <span className="flex items-center justify-center gap-1 min-w-0">
+                  <span className="whitespace-nowrap">{tab.label}</span>
+                </span>
                 {tab.count > 0 && (
-                  <span className={`ml-1 text-xs px-1 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-primary text-primary-foreground'}`}>
+                  <span className={`absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] leading-4 font-bold text-white text-center ${isActive ? 'bg-[#ef4444]' : 'bg-[#ef4444]/90'}`}>
                     {tab.count}
                   </span>
                 )}
@@ -1200,25 +1241,19 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           </div>
         ) : filteredConversations.length === 0 ? (
           <div className="p-6 text-center">
-            {conversations.length === 0 ? (
+            {activeTab === 'mine' ? (
               <div className="py-8 flex flex-col items-center">
-                {/* Texto principal */}
-                <h3 className="text-lg font-semibold text-primary mb-2">
-                  Nenhuma conversa ativa
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  Nenhum atendimento ativo
                 </h3>
-
-                {/* Texto explicativo */}
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Suas conversas aparecerão aqui assim que novos clientes entrarem em contato
+                  As conversas atribuídas para você aparecerão aqui.
                 </p>
               </div>
             ) : (
               <div className="py-4">
                 <p className="text-sm text-muted-foreground">
                   Nenhuma conversa na aba "{tabs.find(t => t.id === activeTab)?.label}"
-                </p>
-                <p className="text-xs text-muted-foreground/70 mt-1">
-                  Total: {conversations.length}
                 </p>
               </div>
             )}
@@ -1243,8 +1278,8 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                 className={`p-3 border-b border-border border-l-4 cursor-pointer transition-all duration-200 hover:bg-accent/50 ${statusBorder} ${selectedConversation?.id === conversation.id ? 'bg-topbar text-topbar-foreground shadow-inner' : ''
                   }`}
               >
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0">
+                <div className="flex items-start space-x-3 pb-8">
+                  <div className="flex-shrink-0 relative w-10">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${selectedConversation?.id === conversation.id ? 'bg-white/20' : 'bg-primary/10'}`}>
                       {conversation.contact?.avatar ? (
                         <img
@@ -1255,6 +1290,27 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                       ) : (
                         <User size={20} className={selectedConversation?.id === conversation.id ? 'text-white' : 'text-primary'} />
                       )}
+                    </div>
+                    <div className="absolute left-0 top-11">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs whitespace-nowrap ${selectedConversation?.id === conversation.id ? 'bg-white/20 text-white' : 'bg-gray-600 text-white'}`}>
+                        <Clock size={12} className="mr-1" />
+                        Há {(() => {
+                          const agora = new Date();
+                          const inicio = new Date(conversation.created_at);
+                          const diffMs = agora - inicio;
+                          const diffMinutos = Math.floor(diffMs / (1000 * 60));
+                          const diffHoras = Math.floor(diffMinutos / 60);
+                          const diffDias = Math.floor(diffHoras / 24);
+
+                          if (diffDias > 0) {
+                            return `${diffDias} dia${diffDias > 1 ? 's' : ''}`;
+                          } else if (diffHoras > 0) {
+                            return `${diffHoras}h ${diffMinutos % 60}min`;
+                          } else {
+                            return `${diffMinutos} min`;
+                          }
+                        })()}
+                      </span>
                     </div>
                   </div>
 
@@ -1302,28 +1358,6 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                       })()}
                     </p>
 
-                    {/*  Tempo de atendimento em aberto */}
-                    <div className="mt-2">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${selectedConversation?.id === conversation.id ? 'bg-white/20 text-white' : 'bg-gray-600 text-white'}`}>
-                        <Clock size={12} className="mr-1" />
-                        Há {(() => {
-                          const agora = new Date();
-                          const inicio = new Date(conversation.created_at);
-                          const diffMs = agora - inicio;
-                          const diffMinutos = Math.floor(diffMs / (1000 * 60));
-                          const diffHoras = Math.floor(diffMinutos / 60);
-                          const diffDias = Math.floor(diffHoras / 24);
-
-                          if (diffDias > 0) {
-                            return `${diffDias} dia${diffDias > 1 ? 's' : ''}`;
-                          } else if (diffHoras > 0) {
-                            return `${diffHoras}h ${diffMinutos % 60}min`;
-                          } else {
-                            return `${diffMinutos} min`;
-                          }
-                        })()}
-                      </span>
-                    </div>
                   </div>
                 </div>
               </div>

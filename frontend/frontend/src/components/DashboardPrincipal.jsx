@@ -39,8 +39,12 @@ const DashboardPrincipal = ({ provedorId }) => {
     satisfacao_media: '0.0',
     midias_30_dias: 0,
     autoatendimentos_30_dias: 0,
-    status_presenca: ''
+    status_presenca: '',
+    resolvidas_automacao_ia: 0,
+    resolvidas_demais_encerramentos: 0,
+    bot_mode: 'ia'
   });
+  const [providerBotMode, setProviderBotMode] = useState(null);
   const [canais, setCanais] = useState([]);
   const [responseTimeData, setResponseTimeData] = useState([]);
   const [ws, setWs] = useState(null);
@@ -121,6 +125,27 @@ const DashboardPrincipal = ({ provedorId }) => {
     fetchDashboardData();
   }, [provedorId]);
 
+  // Buscar modo do provedor diretamente para evitar fallback incorreto no card
+  useEffect(() => {
+    const fetchProviderMode = async () => {
+      if (!provedorId) return;
+      try {
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+        if (!token) return;
+        const res = await axios.get(buildApiPath(`/api/provedores/${provedorId}/`), {
+          headers: { Authorization: `Token ${token}` }
+        });
+        const mode = res.data?.bot_mode;
+        if (mode === 'chatbot' || mode === 'ia') {
+          setProviderBotMode(mode);
+        }
+      } catch (err) {
+        console.warn('Erro ao buscar bot_mode do provedor:', err);
+      }
+    };
+    fetchProviderMode();
+  }, [provedorId]);
+
   // WebSocket para atualizações em tempo real
   useEffect(() => {
     if (!provedorId) return;
@@ -180,7 +205,10 @@ const DashboardPrincipal = ({ provedorId }) => {
       try {
         // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
         const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-        const response = await axios.get(buildApiPath('/api/dashboard/stats/'), {
+        const statsUrl = provedorId
+          ? buildApiPath(`/api/dashboard/stats/?provedor_id=${provedorId}`)
+          : buildApiPath('/api/dashboard/stats/');
+        const response = await axios.get(statsUrl, {
           headers: {
             'Authorization': `Token ${token}`
           }
@@ -188,7 +216,7 @@ const DashboardPrincipal = ({ provedorId }) => {
 
         if (response.status === 200) {
           const data = response.data;
-          setStats(data);
+          setStats(data.stats || data);
         }
       } catch (error) {
         console.error('Erro ao atualizar estatísticas:', error);
@@ -296,6 +324,11 @@ const DashboardPrincipal = ({ provedorId }) => {
   // Remover channelData mockado - usar apenas dados reais da API
 
   // Dados reais do banco de dados
+  const effectiveBotMode = providerBotMode || stats.bot_mode || 'ia';
+  const isChatbotMode = effectiveBotMode === 'chatbot';
+  const automacaoTitulo = isChatbotMode ? 'Resolvidas pelo Chatbot' : 'Resolvidas pela IA';
+  const automacaoLegenda = isChatbotMode ? 'Chatbot' : 'IA';
+
   const metrics = React.useMemo(() => {
     return {
       conversasAtivas: {
@@ -344,7 +377,7 @@ const DashboardPrincipal = ({ provedorId }) => {
   }
 
   return (
-    <div className="w-full space-y-6 p-6 bg-background">
+    <div className="w-full min-h-full space-y-6 p-6 bg-zinc-800/35">
       {/* Métricas principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
@@ -378,7 +411,7 @@ const DashboardPrincipal = ({ provedorId }) => {
       </div>
 
       {/* Gráficos principais */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="bg-card border-border">
           <CardContent className="p-6">
             <h3 className="text-lg font-semibold text-foreground mb-4">Status das Conversas</h3>
@@ -424,10 +457,29 @@ const DashboardPrincipal = ({ provedorId }) => {
             />
           </CardContent>
         </Card>
+
+        <Card className="bg-card border-border">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">{automacaoTitulo}</h3>
+            <ConversationsPieChart
+              data={(() => {
+                const porAutomacao = Number(stats.resolvidas_automacao_ia) || 0;
+                const demais =
+                  stats.resolvidas_demais_encerramentos != null
+                    ? Number(stats.resolvidas_demais_encerramentos)
+                    : Math.max(0, (Number(stats.conversas_resolvidas) || 0) - porAutomacao);
+                return [
+                  { name: automacaoLegenda, value: porAutomacao },
+                  { name: 'Demais encerramentos', value: demais }
+                ];
+              })()}
+            />
+          </CardContent>
+        </Card>
       </div>
 
       {/* Análise de Conversas */}
-      <ConversationAnalysis />
+      <ConversationAnalysis provedorId={provedorId} />
 
       {/* Tabelas e atividades */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -435,7 +487,7 @@ const DashboardPrincipal = ({ provedorId }) => {
           <AgentPerformanceTable />
         </div>
         <div>
-          <RecentActivity />
+          <RecentActivity provedorId={provedorId} />
         </div>
       </div>
 

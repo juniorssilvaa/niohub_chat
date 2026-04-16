@@ -386,7 +386,7 @@ journalctl -u niochat-celery -f
 Se você não conseguir resolver o problema:
 
 1. **GitHub Issues**: [Reportar problema](https://github.com/juniorssilvaa/niochat/issues)
-2. **Email**: suporte@niochat.com.br
+2. **Email**: suporte@niohub.com.br
 3. **Documentação**: Navegue pelas seções da documentação
 
 ## Próximos Passos

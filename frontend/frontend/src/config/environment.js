@@ -4,8 +4,8 @@
 
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 const isProduction = hostname === 'chat.niohub.com.br' || hostname === 'app.niohub.com.br';
-const isStaging = hostname === 'front.niohub.com.br' || hostname === 'front.niochat.com.br';
-const isStagingLocal = hostname === 'front-local.niohub.com.br' || hostname === 'front-local.niochat.com.br';
+const isStaging = hostname === 'front.niohub.com.br';
+const isStagingLocal = hostname === 'chat-local.niohub.com.br';
 const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
 const isDev = import.meta.env.DEV; // Modo de desenvolvimento do Vite
 
@@ -95,7 +95,7 @@ export const config = {
   baseUrl: isProduction 
     ? 'https://chat.niohub.com.br'   // PRODUÇÃO
     : isStagingLocal
-    ? 'https://front-local.niohub.com.br'  // STAGING LOCAL (Cloudflare Tunnel)
+    ? 'https://chat-local.niohub.com.br'  // STAGING LOCAL (Cloudflare Tunnel)
     : isStaging
     ? 'https://front.niohub.com.br'  // STAGING/DESENVOLVIMENTO
     : 'http://localhost:8012',        // LOCAL

@@ -9,6 +9,21 @@ from .models import Conversation
 logger = logging.getLogger(__name__)
 
 
+def stamp_automation_closure_trace(conversation, source: str = 'unknown') -> None:
+    """
+    Marca conversa como encerramento iniciado por IA/chatbot antes do estado 'closing',
+    para dashboards e migração identificarem resolução automática.
+    """
+    try:
+        attrs = dict(conversation.additional_attributes or {})
+        attrs['resolucao_automacao'] = True
+        attrs['closure_source'] = source
+        conversation.additional_attributes = attrs
+        conversation.save(update_fields=['additional_attributes'])
+    except Exception as e:
+        logger.warning("stamp_automation_closure_trace falhou (conv=%s): %s", getattr(conversation, "id", None), e)
+
+
 class ClosingService:
     """
     Serviço para gerenciar o estado intermediário 'closing' e encerramento definitivo.

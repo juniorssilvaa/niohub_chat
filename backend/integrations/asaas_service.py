@@ -89,17 +89,30 @@ class AsaasService:
             logger.error(f"[AsaasService] Erro de conexão ao criar cliente: {str(e)}")
             return {"success": False, "error": str(e)}
 
-    def list_payments(self, customer: str = None, status: str = None, due_date_ge: str = None, due_date_le: str = None) -> Dict[str, Any]:
+    def list_payments(
+        self,
+        customer: str = None,
+        status: str = None,
+        due_date_ge: str = None,
+        due_date_le: str = None,
+        subscription_id: str = None
+    ) -> Dict[str, Any]:
         """
         Lista cobranças com filtros (cliente, status, data de vencimento)
         """
         url = f"{self.base_url}/payments"
         params = {}
         
-        if customer: params["customer"] = customer
-        if status: params["status"] = status
-        if due_date_ge: params["dueDate[ge]"] = due_date_ge
-        if due_date_le: params["dueDate[le]"] = due_date_le
+        if customer:
+            params["customer"] = customer
+        if status:
+            params["status"] = status
+        if due_date_ge:
+            params["dueDate[ge]"] = due_date_ge
+        if due_date_le:
+            params["dueDate[le]"] = due_date_le
+        if subscription_id:
+            params["subscription"] = subscription_id
             
         try:
             response = requests.get(url, params=params, headers=self._get_headers(), timeout=30)
@@ -146,21 +159,35 @@ class AsaasService:
             logger.error(f"[AsaasService] Erro de conexão ao criar assinatura: {str(e)}")
             return {"success": False, "error": str(e)}
 
+    def get_subscription(self, subscription_id: str) -> Dict[str, Any]:
+        """
+        Busca detalhes de uma assinatura específica
+        """
+        url = f"{self.base_url}/subscriptions/{subscription_id}"
+        try:
+            response = requests.get(url, headers=self._get_headers(), timeout=30)
+            if response.status_code == 200:
+                return {"success": True, "data": response.json()}
+            return {"success": False, "status_code": response.status_code, "error": response.text}
+        except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def list_payments(self, subscription_id: str) -> Dict[str, Any]:
+    def list_payment_documents(self, payment_id: str) -> Dict[str, Any]:
         """
-        Lista as cobranças de uma assinatura específica
+        Lista documentos anexados à cobrança (ex.: PDF da nota).
+        GET /v3/payments/{id}/documents
         """
-        url = f"{self.base_url}/payments"
-        params = {"subscription": subscription_id, "limit": 10}
+        url = f"{self.base_url}/payments/{payment_id}/documents"
         try:
-            response = requests.get(url, params=params, headers=self._get_headers(), timeout=30)
-            if response.status_code == 200:
-                data = response.json()
-                return {"success": True, "data": data.get("data", [])}
-            return {"success": False, "error": response.text}
+            response = requests.get(url, headers=self._get_headers(), timeout=30)
+            if response.status_code != 200:
+                return {"success": False, "error": response.text, "status_code": response.status_code}
+            body = response.json()
+            if isinstance(body, list):
+                return {"success": True, "data": body}
+            return {"success": True, "data": body.get("data", []) if isinstance(body, dict) else []}
         except Exception as e:
+            logger.error(f"[AsaasService] Erro ao listar documentos do pagamento {payment_id}: {e}")
             return {"success": False, "error": str(e)}
 
     def get_payment_pix_qr_code(self, payment_id: str) -> Dict[str, Any]:

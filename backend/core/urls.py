@@ -22,6 +22,7 @@ router.register(r'integrations/webchat', views.WebchatIntegrationViewSet, basena
 router.register(r'chatbot-flows', views.ChatbotFlowViewSet, basename='chatbot-flows')
 router.register(r'planos', views.PlanoViewSet, basename='planos')
 router.register(r'respostas-rapidas', views.RespostaRapidaViewSet, basename='respostas-rapidas')
+router.register(r'provider-gallery', views.ProviderGalleryImageViewSet, basename='provider-gallery')
 router.register(r'reminders', views.UserReminderViewSet, basename='reminders')
 router.register(r'sgp', SGPIntegrationViewSet, basename='sgp')
 
@@ -40,7 +41,11 @@ urlpatterns = [
     path('supabase-config/', views.supabase_config_view, name='supabase-config'),
     path('system-config/', views.SystemConfigView.as_view(), name='system-config'),
     path('system-config/<int:pk>/', views.SystemConfigView.as_view(), name='system-config-detail'),
+    path('system-config/billing-whatsapp/embedded-signup-finish/', views.BillingWhatsAppEmbeddedSignupFinishView.as_view(), name='billing-whatsapp-embedded-signup-finish'),
+    path('system-config/billing-whatsapp/templates/', views.BillingWhatsAppTemplatesView.as_view(), name='billing-whatsapp-templates'),
+    path('system-config/billing-whatsapp/templates/<path:template_id>/', views.BillingWhatsAppTemplateDeleteView.as_view(), name='billing-whatsapp-template-delete'),
     path('provider/config/', ProviderConfigView.as_view(), name='provider-config'),
+    path('media/provider-gallery/<int:image_id>/', views.serve_provider_gallery_media, name='provider-gallery-media'),
 
     # Router com viewsets (deve vir depois das rotas específicas)
     path('', include(router.urls)),

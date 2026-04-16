@@ -57,7 +57,7 @@ Com `DEBUG=False`, use a chave no endpoint:
 GET /api/sentry-test/?key=<valor de SENTRY_TEST_KEY>
 ```
 
-Exemplo: `https://api.niochat.com.br/api/sentry-test/?key=sua_chave_secreta_para_testar`
+Exemplo: `https://api.niohub.com.br/api/sentry-test/?key=sua_chave_secreta_para_testar`
 
 Resposta esperada: **500** (erro intencional) e o evento aparece no Sentry com **environment: production**.
 

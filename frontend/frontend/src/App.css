@@ -56,42 +56,42 @@
 
 :root {
   --radius: 0.5rem;
-  /* Light Theme Colors - NIO HUB Rebranding */
-  --background: #f8f9fa;
-  --foreground: #0f172a;
+  /* SGP Theme Colors (aplicado globalmente) */
+  --background: #f4f6f8;
+  --foreground: #1f2937;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #1f2937;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #3b82f6;
+  --popover-foreground: #1f2937;
+  --primary: #0d70b3;
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #1e293b;
-  --muted: #f1f5f9;
-  --muted-foreground: #334155; /* Darker Slate for visibility */
-  --accent: rgba(59, 130, 246, 0.1);
-  --accent-foreground: #3b82f6;
+  --secondary: #e9edf2;
+  --secondary-foreground: #1f2937;
+  --muted: #eef2f5;
+  --muted-foreground: #5f6b7a;
+  --accent: rgba(13, 112, 179, 0.12);
+  --accent-foreground: #1f2937;
   --destructive: #ef4444;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #3b82f6;
-  --chart-1: #3b82f6;
+  --border: #d5dbe3;
+  --input: #d5dbe3;
+  --ring: #0d70b3;
+  --chart-1: #0d70b3;
   --chart-2: #10b981;
   --chart-3: #f59e0b;
   --chart-4: #ef4444;
   --chart-5: #8b5cf6;
-  --sidebar: #f8f9fa;
-  --sidebar-foreground: #1e293b;
-  --sidebar-primary: #3b82f6;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1f2937;
+  --sidebar-primary: #0d70b3;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f1f5f9;
-  --sidebar-accent-foreground: #3b82f6;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #3b82f6;
+  --sidebar-accent: #e9edf2;
+  --sidebar-accent-foreground: #1f2937;
+  --sidebar-border: #d5dbe3;
+  --sidebar-ring: #0d70b3;
 
   /* Topbar Colors */
-  --topbar-background: #0f172a;
-  --topbar-foreground: #ffffff;
+  --topbar-background: #ffffff;
+  --topbar-foreground: #1f2937;
 
   /* Custom NioChat Colors */
   --niochat-primary: #3b82f6;
@@ -112,44 +112,43 @@
 }
 
 .dark {
-  --background: #222831;
-  /* Deep Blue/Grey NIO HUB */
-  --foreground: #F8FAFC;
-  --card: #27303D;
-  --card-foreground: #F8FAFC;
-  --popover: #27303D;
-  --popover-foreground: #F8FAFC;
-  --primary: #3B82F6;
+  --background: #212121;
+  --foreground: #F5F7FA;
+  --card: #2F3238;
+  --card-foreground: #F5F7FA;
+  --popover: #2F3238;
+  --popover-foreground: #F5F7FA;
+  --primary: #0D70B3;
   --primary-foreground: #ffffff;
-  --secondary: #1f2630;
-  --secondary-foreground: #F8FAFC;
-  --muted: #313B4A;
-  --muted-foreground: #94A3B8;
-  --accent: rgba(59, 130, 246, 0.15);
-  --accent-foreground: #F8FAFC;
+  --secondary: #353A40;
+  --secondary-foreground: #F5F7FA;
+  --muted: #2A2A2A;
+  --muted-foreground: #AEB6C2;
+  --accent: rgba(13, 112, 179, 0.2);
+  --accent-foreground: #F5F7FA;
   --destructive: #EF4444;
-  --border: #3A4352;
-  --input: #3A4352;
-  --ring: rgba(59, 130, 246, 0.5);
-  --chart-1: #3B82F6;
+  --border: #454B53;
+  --input: #454B53;
+  --ring: rgba(13, 112, 179, 0.5);
+  --chart-1: #0D70B3;
   --chart-2: #22C55E;
   --chart-3: #F59E0B;
   --chart-4: #EF4444;
   --chart-5: #8B5CF6;
-  --sidebar: #192533;
-  --sidebar-foreground: #94A3B8;
-  --sidebar-primary: #3B82F6;
+  --sidebar: #353A40;
+  --sidebar-foreground: #F5F7FA;
+  --sidebar-primary: #0D70B3;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(59, 130, 246, 0.15);
-  --sidebar-accent-foreground: #F8FAFC;
-  --sidebar-border: #3A4352;
-  --sidebar-ring: rgba(59, 130, 246, 0.5);
-  --nc-bg: #222831;
-  --nc-panel: #27303D;
+  --sidebar-accent: #4B535E;
+  --sidebar-accent-foreground: #F5F7FA;
+  --sidebar-border: #454B53;
+  --sidebar-ring: rgba(13, 112, 179, 0.5);
+  --nc-bg: #212121;
+  --nc-panel: #2F3238;
   --nc-success: #22C55E;
   --nc-danger: #EF4444;
 
-  --topbar-background: #192533;
+  --topbar-background: #353A40;
   --topbar-foreground: #ffffff;
   
   /* Yellow Accent from Logo */
@@ -508,7 +507,7 @@
 .dark aside,
 .dark .card,
 .dark .bg-popover {
-  background-color: #27303D !important;
+  background-color: #2F3238 !important;
 }
 
 /* Background Principal Escuro */
@@ -516,7 +515,7 @@
 .dark #root,
 .dark .bg-background,
 .dark .niochat-main {
-  background-color: #222831 !important;
+  background-color: #212121 !important;
 }
 
 .dark .border-border,
@@ -525,13 +524,13 @@
 .dark .border-r,
 .dark .border-b,
 .dark .border-t {
-  border-color: #3A4352 !important;
+  border-color: #454B53 !important;
 }
 
 .dark .text-foreground,
 .dark .text-card-foreground,
 .dark .text-sidebar-foreground {
-  color: #F8FAFC !important;
+  color: #F5F7FA !important;
 }
 
 /* ACENTOS AMARELOS (LOGO HARMONY) */
@@ -686,4 +685,4 @@
 :root:not(.dark) .recharts-legend-item-text,
 :root:not(.dark) .recharts-cartesian-axis-tick-value {
   fill: #0f172a !important;
-}
+}

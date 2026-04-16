@@ -33,6 +33,8 @@ class ConversationNotificationService:
 
             group_name = f'painel_{provedor_id}'
             
+            # Notificar o painel geral do provedor (usado pelo Dashboard e monitoramento)
+            # Nota: Transmitimos mesmo se for chatbot para manter o monitoramento atualizado
             event_data = {
                 'type': 'conversation_event',
                 'event_type': event_type,

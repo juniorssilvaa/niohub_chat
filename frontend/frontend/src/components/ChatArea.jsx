@@ -573,6 +573,19 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           }
         }
       } catch (error) {
+        // Após encerrar, a conversa pode ser migrada/removida da base ativa.
+        // Nesses casos, 404 significa que ela já não está mais disponível para atendimento.
+        if (error.response?.status === 404) {
+          localStorage.removeItem('selectedConversation');
+          if (onConversationUpdate) {
+            onConversationUpdate(null);
+          }
+          if (onConversationClose) {
+            onConversationClose();
+          }
+          return;
+        }
+
         console.error('Erro ao buscar status da conversa:', error);
         // Em caso de erro, usar dados da conversa que já temos como último recurso
         // Mas sempre priorizar o valor calculado pelo backend
@@ -1922,7 +1935,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       // Fallback: navegar de volta para a lista de conversas
       if (!onConversationClose) {
         const provedorId = conversation.inbox?.provedor?.id || '';
-        navigate(`/app/accounts/${provedorId}/conversations`);
+        navigate(`/${provedorId}/chat`);
       }
     } catch (error) {
       console.error('Erro ao encerrar conversa:', error);
@@ -2805,6 +2818,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             </div>
           ) : (
             filteredMessages.map((msg) => {
+              const attachmentList = Array.isArray(msg.attachments) ? msg.attachments : [];
+              const hasRenderableAttachments = attachmentList.length > 0;
               const content = msg.content || '';
               const isCustomer = msg.is_from_customer;
               // CORREÇÃO: Identificar mensagens da IA corretamente - verificação mais robusta
@@ -2821,17 +2836,17 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               const isLarge = isLargeMessage(content);
 
               // Determinar se a mensagem tem mídia
-              const hasImage = (msg.attachments && msg.attachments.some(att => att.file_type === 'image')) ||
+              const hasImage = attachmentList.some(att => att.file_type === 'image') ||
                 (msg.message_type === 'image' && msg.file_url);
-              const hasVideo = (msg.attachments && msg.attachments.some(att => att.file_type === 'video')) ||
+              const hasVideo = attachmentList.some(att => att.file_type === 'video') ||
                 (msg.message_type === 'video' && msg.file_url);
-              const hasAudio = (msg.attachments && msg.attachments.some(att => att.file_type === 'audio')) ||
+              const hasAudio = attachmentList.some(att => att.file_type === 'audio') ||
                 ((msg.message_type === 'audio' || msg.message_type === 'ptt') && msg.file_url);
-              const hasDocument = (msg.attachments && msg.attachments.some(att => att.file_type === 'file')) ||
+              const hasDocument = attachmentList.some(att => att.file_type === 'file') ||
                 (msg.message_type === 'document' && msg.file_url);
 
               // Debug: logar dados da mensagem
-              if (msg.message_type === 'image' || (msg.attachments && msg.attachments.some(att => att.file_type === 'image'))) {
+              if (msg.message_type === 'image' || attachmentList.some(att => att.file_type === 'image')) {
                 // Debug removido
               }
 
@@ -2860,7 +2875,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       )}
 
                       {/* Anexos de imagem */}
-                      {hasImage && msg.attachments && msg.attachments.filter(att => att.file_type === 'image').map((attachment, index) => (
+                      {hasImage && hasRenderableAttachments && attachmentList.filter(att => att.file_type === 'image').map((attachment, index) => (
                         <div key={index} className="mb-2">
                           <img
                             src={attachment.data_url}
@@ -2874,7 +2889,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       ))}
 
                       {/* Imagens via file_url (WhatsApp/Telegram etc) - só se não tiver attachments */}
-                      {hasImage && msg.message_type === 'image' && msg.file_url && !msg.attachments && (
+                      {hasImage && msg.message_type === 'image' && msg.file_url && !hasRenderableAttachments && (
                         <div className="mb-2">
                           <img
                             src={buildMediaUrl(msg.file_url)}
@@ -2892,7 +2907,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       )}
 
                       {/* Anexos de vídeo */}
-                      {hasVideo && msg.attachments && msg.attachments.filter(att => att.file_type === 'video').map((attachment, index) => (
+                      {hasVideo && hasRenderableAttachments && attachmentList.filter(att => att.file_type === 'video').map((attachment, index) => (
                         <div key={index} className="mb-2">
                           <video
                             controls
@@ -2907,7 +2922,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       ))}
 
                       {/* Vídeos via file_url - só se não tiver attachments */}
-                      {hasVideo && msg.message_type === 'video' && msg.file_url && !msg.attachments && (
+                      {hasVideo && msg.message_type === 'video' && msg.file_url && !hasRenderableAttachments && (
                         <div className="mb-2">
                           <video
                             controls
@@ -2925,7 +2940,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       )}
 
                       {/* Anexos de áudio */}
-                      {hasAudio && msg.attachments && msg.attachments.filter(att => att.file_type === 'audio').map((attachment, index) => (
+                      {hasAudio && hasRenderableAttachments && attachmentList.filter(att => att.file_type === 'audio').map((attachment, index) => (
                         <div key={index} className="mb-2">
                           <CustomAudioPlayer
                             src={attachment.data_url}
@@ -2937,7 +2952,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       ))}
 
                       {/* Áudios via file_url (só se não tiver attachments) */}
-                      {hasAudio && (msg.message_type === 'audio' || msg.message_type === 'ptt') && msg.file_url && !msg.attachments && (
+                      {hasAudio && (msg.message_type === 'audio' || msg.message_type === 'ptt') && msg.file_url && !hasRenderableAttachments && (
                         <div className="mb-2">
                           <CustomAudioPlayer
                             src={buildMediaUrl(msg.file_url)}
@@ -2949,7 +2964,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       )}
 
                       {/* Anexos de documento */}
-                      {hasDocument && msg.attachments && msg.attachments.filter(att => att.file_type === 'file').map((attachment, index) => (
+                      {hasDocument && hasRenderableAttachments && attachmentList.filter(att => att.file_type === 'file').map((attachment, index) => (
                         <div key={index} className="mb-2">
                           <a
                             href={attachment.data_url}
@@ -2965,7 +2980,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                       ))}
 
                       {/* Documentos via file_url - só se não tiver attachments */}
-                      {hasDocument && msg.message_type === 'document' && msg.file_url && !msg.attachments && (
+                      {hasDocument && msg.message_type === 'document' && msg.file_url && !hasRenderableAttachments && (
                         <div className="mb-2">
                           <FilePreview
                             file={{

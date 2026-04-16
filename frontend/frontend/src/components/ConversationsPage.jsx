@@ -1,15 +1,68 @@
 import React, { useState, useRef, useEffect, useCallback, Suspense, lazy } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
+import { ArrowLeft, LogOut, Sun, Moon, ClipboardList, User } from 'lucide-react';
 import ConversationList from './ConversationList';
+import InternalChatButton from './InternalChatButton';
+import NotificationBell from './NotificationBell';
+import StatusDot from './StatusDot';
+import Sidebar from './Sidebar';
+import RemindersModal from './RemindersModal';
+import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import logoImage from '../assets/logo.png';
+import logoMini from '../assets/logo.png'; // Usar o mesmo logo por enquanto
 
 const ChatArea = lazy(() => import('./ChatArea'));
+const Contacts = lazy(() => import('./Contacts2'));
+const Changelog = lazy(() => import('./Changelog'));
+const UserStatusManager = lazy(() => import('./UserStatusManager'));
 
-const ConversationsPage = ({ selectedConversation, setSelectedConversation, provedorId, user: propUser }) => {
+const ConversationsPage = ({ selectedConversation: propSelectedConversation, setSelectedConversation: propSetSelectedConversation, provedorId: propProvedorId, user: propUser }) => {
+  const { provedorId: urlProvedorId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { logout } = useAuth();
+  const { t } = useLanguage();
+  const provedorId = propProvedorId || urlProvedorId || propUser?.provedor_id || null;
+  const isContactsView = React.useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    return searchParams.get('view') === 'contacts';
+  }, [location.search]);
+
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [showReminders, setShowReminders] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === 'true');
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const [internalSelectedConversation, setInternalSelectedConversation] = useState(null);
+  
+  // Usar props se existirem, senão usar estado interno
+  const selectedConversation = propSelectedConversation !== undefined ? propSelectedConversation : internalSelectedConversation;
+  const setSelectedConversation = propSetSelectedConversation || setInternalSelectedConversation;
+
   const refreshConversationsRef = useRef(null);
   const [localUser, setLocalUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(!propUser);
-  const isInitialLoadRef = useRef(true); // Ref para controlar a restauração inicial do localStorage
+  const isInitialLoadRef = useRef(true);
   
   // Usar o usuário da prop se disponível, senão usar o local
   const user = propUser || localUser;
@@ -153,53 +206,128 @@ const ConversationsPage = ({ selectedConversation, setSelectedConversation, prov
   }
 
   return (
-    <div className="flex h-full overflow-x-hidden min-w-0">
-      <ConversationList
-        onConversationSelect={(conversation) => {
-          setSelectedConversation(conversation);
-          // Salvar no localStorage
-          localStorage.setItem('selectedConversation', JSON.stringify(conversation));
-        }}
-        selectedConversation={selectedConversation}
+    <div className="flex h-screen w-screen overflow-hidden bg-background">
+      {/* Sidebar dedicada para Agente */}
+      <Sidebar 
+        userRole={user?.user_type || 'agent'} 
+        userPermissions={user?.permissions || []}
         provedorId={provedorId}
-        onConversationUpdate={handleConversationUpdate}
-        user={user}
+        onCollapseChange={(collapsed) => setIsSidebarCollapsed(collapsed)}
+        onRemindersClick={() => setShowReminders(true)}
+        isChatPage={true}
       />
-      {selectedConversation ? (
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-background h-screen"><div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
-          <ChatArea
-            conversation={selectedConversation}
-            onConversationClose={handleConversationClose}
-            onConversationUpdate={handleConversationUpdate}
-            user={user}
-          />
-        </Suspense>
-      ) : (
-        <div className="flex-1 flex items-center justify-center bg-background">
-          <div className="text-center max-w-md mx-auto px-4">
-            {/* Logo do NioChat */}
-            <div className="mb-6">
-              <img 
-                src={logoImage}
-                alt="NioChat Logo"
-                className="w-32 h-32 mx-auto object-contain"
-              />
-            </div>
-            
-            {/* Texto principal */}
-            <p className="text-base text-primary mb-2">
-              Selecione uma conversa para iniciar o atendimento
-            </p>
-            
-            {/* Texto explicativo */}
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Os atendimentos em andamento aparecerão aqui.
-            </p>
+
+      <div className="flex flex-col flex-1 min-w-0 transition-all duration-300">
+        {/* Barra de Topo Padronizada (Igual ao Dashboard) */}
+        <div className="w-full flex items-center justify-between bg-topbar text-topbar-foreground px-6 py-2 border-b border-border relative z-10">
+          <div className="flex items-center gap-4">
+            {/* Espaço reservado à esquerda */}
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <StatusDot className="flex-shrink-0" />
+
+            <button
+              className="p-2 rounded-lg transition-colors text-topbar-foreground hover:bg-sidebar-accent"
+              title={t('alternar_tema')}
+              onClick={toggleTheme}
+            >
+              {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+            </button>
+
+            <InternalChatButton />
+
+            <button
+              className="p-2 rounded-lg transition-colors text-topbar-foreground hover:bg-sidebar-accent"
+              title={t('changelog')}
+              onClick={() => setShowChangelog(true)}
+            >
+              <ClipboardList className="w-5 h-5" />
+            </button>
+
+            <NotificationBell />
+
+            <button
+            className="p-2 rounded-lg transition-colors text-topbar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            title={t('sair')}
+            onClick={handleLogout}
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
           </div>
         </div>
-      )}
+
+        <div className="flex h-full overflow-hidden min-w-0">
+          {isContactsView ? (
+            <div className="flex-1 min-w-0 h-full overflow-y-auto">
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-background h-screen"><div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+                <Contacts provedorId={provedorId} />
+              </Suspense>
+            </div>
+          ) : (
+            <>
+              <ConversationList
+                onConversationSelect={(conversation) => {
+                  setSelectedConversation(conversation);
+                  // Salvar no localStorage
+                  localStorage.setItem('selectedConversation', JSON.stringify(conversation));
+                }}
+                selectedConversation={selectedConversation}
+                provedorId={provedorId}
+                onConversationUpdate={handleConversationUpdate}
+                user={user}
+              />
+              {selectedConversation ? (
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-background h-screen"><div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+                  <ChatArea
+                    conversation={selectedConversation}
+                    onConversationClose={handleConversationClose}
+                    onConversationUpdate={handleConversationUpdate}
+                    user={user}
+                  />
+                </Suspense>
+              ) : (
+                <div className="flex-1 flex items-center justify-center bg-background">
+                  <div className="text-center max-w-md mx-auto px-4">
+                    {/* Logo do NioChat */}
+                    <div className="mb-6">
+                      <img 
+                        src={logoImage}
+                        alt="NioChat Logo"
+                        className="w-32 h-32 mx-auto object-contain"
+                      />
+                    </div>
+                    
+                    {/* Texto principal */}
+                    <p className="text-base text-foreground mb-2">
+                      Selecione uma conversa para iniciar o atendimento
+                    </p>
+                    
+                    {/* Texto explicativo */}
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      Os atendimentos em andamento aparecerão aqui.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+      <Suspense fallback={null}>
+        <Changelog isOpen={showChangelog} onClose={() => setShowChangelog(false)} />
+      </Suspense>
+      <RemindersModal isOpen={showReminders} onClose={() => setShowReminders(false)} provedorId={provedorId} />
     </div>
   );
 };
 
-export default ConversationsPage;
+const ConversationsPageWrapper = (props) => {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center bg-background"><div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+      <ConversationsPage {...props} />
+    </Suspense>
+  );
+};
+
+export default ConversationsPageWrapper;

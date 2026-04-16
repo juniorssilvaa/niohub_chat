@@ -5,7 +5,27 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, 
 import axios from 'axios';
 import { buildApiPath } from '@/utils/apiBaseUrl';
 
-export default function ConversationAnalysis() {
+const CHANNEL_LABELS = {
+  whatsapp: 'WhatsApp',
+  whatsapp_session: 'WhatsApp QR',
+  whatsapp_oficial: 'WhatsApp Oficial',
+  telegram: 'Telegram',
+  email: 'Email',
+  webchat: 'Chat Web',
+  instagram: 'Instagram',
+  facebook: 'Facebook'
+};
+
+const prettifyChannelName = (name) => {
+  if (!name) return 'Canal';
+  const normalized = String(name).toLowerCase().trim();
+  if (CHANNEL_LABELS[normalized]) return CHANNEL_LABELS[normalized];
+  if (normalized.includes('whatsapp') && normalized.includes('oficial')) return 'WhatsApp Oficial';
+  if (normalized.includes('whatsapp') && normalized.includes('session')) return 'WhatsApp QR';
+  return String(name).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
+export default function ConversationAnalysis({ provedorId }) {
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [analysisData, setAnalysisData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -29,7 +49,8 @@ export default function ConversationAnalysis() {
         throw new Error('Token não encontrado. Faça login novamente.');
       }
       
-      const response = await axios.get(buildApiPath(`/api/analysis/?period=${period}`), {
+      const query = provedorId ? `?period=${period}&provedor_id=${provedorId}` : `?period=${period}`;
+      const response = await axios.get(buildApiPath(`/api/analysis/${query}`), {
         headers: {
           'Authorization': `Token ${token}`
         }
@@ -46,7 +67,7 @@ export default function ConversationAnalysis() {
         const transformedData = {
           totalConversations: apiData.summary?.totalConversations || 0,
           channels: apiData.channelDistribution?.map(channel => ({
-            name: channel.name,
+            name: prettifyChannelName(channel.name),
             count: channel.value,
             percentage: `${Math.round((channel.value / (apiData.summary?.totalConversations || 1)) * 100)}%`,
             color: channel.color
@@ -84,7 +105,7 @@ export default function ConversationAnalysis() {
 
   useEffect(() => {
     fetchAnalysisData(selectedPeriod);
-  }, [selectedPeriod]);
+  }, [selectedPeriod, provedorId]);
 
   const data = analysisData || {
     totalConversations: 0,
@@ -96,7 +117,7 @@ export default function ConversationAnalysis() {
     <Card className="bg-card border-border">
       <CardContent className="p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/60">
           <h2 className="text-xl font-semibold text-foreground">Análise de Conversas</h2>
           <div className="flex items-center gap-4">
             <span className="text-muted-foreground text-sm">Total de Conversas</span>
@@ -147,7 +168,7 @@ export default function ConversationAnalysis() {
                 </div>
               ) : (
                 /* Container com Pizza e Lista */
-                <div className="flex items-start gap-4">
+                <div className="flex items-start gap-4 rounded-lg border border-border/60 bg-background/40 p-3">
                   {/* Gráfico de Pizza Pequeno */}
                   <div className="flex-shrink-0">
                     <PieChart width={120} height={120}>
@@ -181,15 +202,15 @@ export default function ConversationAnalysis() {
                   </div>
 
                   {/* Lista de Canais */}
-                  <div className="flex-1 space-y-3">
+                  <div className="flex-1 space-y-2">
                     {data.channels.map((channel, index) => (
-                      <div key={index} className="flex items-center justify-between">
+                      <div key={index} className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/40 transition-colors">
                         <div className="flex items-center gap-3">
                           <div 
                             className="w-3 h-3 rounded-full" 
                             style={{ backgroundColor: channel.color }}
                           />
-                          <span className="text-muted-foreground">{channel.name}</span>
+                          <span className="text-foreground/90">{channel.name}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-foreground font-medium">{channel.count}</span>

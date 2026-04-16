@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     TelegramIntegrationViewSet, EmailIntegrationViewSet,
     WhatsAppIntegrationViewSet, WebchatIntegrationViewSet,
+    asaas_webhook,
     # evolution_webhook  # Desabilitado para evitar duplicação
 )
 from .meta_oauth import meta_callback
@@ -35,6 +36,7 @@ urlpatterns = [
     # URL: /api/webhook/whatsapp-cloud/
     # ===================================================================
     path('webhook/whatsapp-cloud/', whatsapp_cloud_webhook, name='whatsapp_cloud_webhook'),
+    path('webhook/asaas/', asaas_webhook, name='asaas_webhook'),
     
     # path('webhook/evolution/', evolution_webhook, name='evolution_webhook'),  # Desabilitado para evitar duplicação
 ]

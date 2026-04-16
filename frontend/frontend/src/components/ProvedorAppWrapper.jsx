@@ -22,6 +22,7 @@ const ChatbotManager = lazy(() => import('./ChatbotManager'));
 const ChatbotBuilder = lazy(() => import('./ChatbotBuilder'));
 const PlanosPage = lazy(() => import('./PlanosPage'));
 const RespostasRapidas = lazy(() => import('./RespostasRapidas'));
+const GaleriaPage = lazy(() => import('./GaleriaPage'));
 const Integrations = lazy(() => import('./Integrations'));
 const ProfilePage = lazy(() => import('./ProfilePage'));
 const AppearancePage = lazy(() => import('./AppearancePage'));
@@ -91,7 +92,7 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
   };
 
   if (userRole === 'agent' && isAdminRoute(location.pathname)) {
-    return <Navigate to={`/app/accounts/${provedorId}/conversations`} replace />;
+    return <Navigate to={`/${provedorId}/chat`} replace />;
   }
 
   const handleChangelog = () => {
@@ -128,14 +129,6 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
                 <Route path="conversas" element={<ConversasDashboard provedorId={provedorId} />} />
                 <Route path="conversas-dashboard" element={<ConversasDashboard provedorId={provedorId} />} />
                 <Route path="contacts" element={<Contacts provedorId={provedorId} />} />
-                <Route path="conversations" element={
-                  <ConversationsPage
-                    selectedConversation={selectedConversation}
-                    setSelectedConversation={setSelectedConversation}
-                    provedorId={provedorId}
-                    user={user}
-                  />
-                } />
                 <Route path="reports" element={<DashboardPrincipal provedorId={provedorId} />} />
                 <Route path="settings" element={<Settings provedorId={provedorId} />} />
                 <Route path="users" element={<UserManagement provedorId={provedorId} />} />
@@ -149,11 +142,13 @@ export default function ProvedorAppWrapper({ user, userRole, handleLogout, setWh
                 <Route path="chatbot-builder/:flowId" element={<ChatbotBuilder />} />
                 <Route path="planos" element={<PlanosPage provedorId={provedorId} />} />
                 <Route path="respostas-rapidas" element={<RespostasRapidas provedorId={provedorId} />} />
+                <Route path="galeria" element={<GaleriaPage provedorId={provedorId} />} />
                 <Route path="integracoes" element={<Integrations provedorId={provedorId} />} />
                 <Route path="perfil" element={<ProfilePage provedorId={provedorId} />} />
                 <Route path="aparencia" element={<AppearancePage provedorId={provedorId} />} />
                 <Route path="dados-provedor" element={<ProviderDataForm provedorId={provedorId} />} />
                 <Route path="horario-provedor" element={<ProviderScheduleForm provedorId={provedorId} />} />
+                <Route path="conversations" element={<Navigate to={`/${provedorId}/chat`} replace />} />
                 <Route path="*" element={<Navigate to={`/app/accounts/${provedorId}/dashboard`} replace />} />
               </Routes>
             </Suspense>

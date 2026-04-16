@@ -219,6 +219,16 @@ try:
             await base_application(scope, receive, send)
     
     application = asgi_app_with_lifecycle
+
+    # Cobrança superadmin + finalize closing no mesmo processo do Daphne (sem worker Dramatiq obrigatório)
+    try:
+        from niochat.asgi_periodic import start_inline_periodic_tasks
+
+        start_inline_periodic_tasks()
+    except Exception as periodic_err:
+        logging.getLogger(__name__).warning(
+            "[ASGI periodic] não iniciado: %s", periodic_err, exc_info=True
+        )
 except Exception as e:
     # Não fazer raise - permitir que o servidor continue
     import sys
@@ -226,3 +236,9 @@ except Exception as e:
         raise
     # Criar aplicação básica sem lifecycle
     application = base_application if 'base_application' in locals() else django_asgi_app
+    try:
+        from niochat.asgi_periodic import start_inline_periodic_tasks
+
+        start_inline_periodic_tasks()
+    except Exception:
+        pass

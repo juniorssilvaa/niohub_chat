@@ -22,6 +22,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Zap, // Ícone para Respostas Rápidas
+  Image as ImageIcon,
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -34,10 +35,23 @@ const SidebarContext = createContext({
 
 export const useSidebarContext = () => useContext(SidebarContext);
 
-const Sidebar = React.memo(({ userRole = 'agent', userPermissions = [], mobileOpen, onClose, provedorId, onCollapseChange, onRemindersClick }) => {
+const Sidebar = React.memo(({ userRole = 'agent', userPermissions = [], mobileOpen, onClose, provedorId, onCollapseChange, onRemindersClick, isChatPage = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
+  const currentSearch = location.search;
+  const resolvedProvedorId = React.useMemo(() => {
+    if (provedorId) return provedorId;
+
+    // Suporta rotas /app/accounts/:provedorId/* e /:provedorId/chat
+    const accountMatch = currentPath.match(/^\/app\/accounts\/([^/]+)/);
+    if (accountMatch?.[1]) return accountMatch[1];
+
+    const chatMatch = currentPath.match(/^\/([^/]+)\/chat/);
+    if (chatMatch?.[1]) return chatMatch[1];
+
+    return null;
+  }, [provedorId, currentPath]);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
     return saved === 'true';
@@ -53,25 +67,40 @@ const Sidebar = React.memo(({ userRole = 'agent', userPermissions = [], mobileOp
   }, [isCollapsed, onCollapseChange]);
 
   // Função para verificar se um item do menu está ativo
-  const isActive = (path) => {
-    return currentPath.includes(path);
+  const isActive = (item) => {
+    if (isChatPage && item.id === 'contacts') {
+      const searchParams = new URLSearchParams(currentSearch);
+      return searchParams.get('view') === 'contacts';
+    }
+
+    if (isChatPage && item.id === 'atendimento') {
+      const searchParams = new URLSearchParams(currentSearch);
+      return currentPath === `/${resolvedProvedorId}/chat` && !searchParams.get('view');
+    }
+
+    return currentPath === item.path;
   };
 
   // Menu base com todos os itens - Memoizado para evitar recalculação
   const menuItems = React.useMemo(() => {
+    const contactsPath = isChatPage
+      ? `/${resolvedProvedorId}/chat?view=contacts`
+      : `/app/accounts/${resolvedProvedorId}/contacts`;
+
     const allMenuItems = [
-      { id: 'dashboard', icon: LayoutGrid, label: t('dashboard'), path: `/app/accounts/${provedorId}/dashboard` },
-      { id: 'conversations', icon: Headphones, label: t('conversations'), path: `/app/accounts/${provedorId}/conversations` },
-      { id: 'conversas', icon: MessagesSquare, label: t('conversas'), path: `/app/accounts/${provedorId}/conversas` },
+      { id: 'dashboard', icon: LayoutGrid, label: t('dashboard'), path: `/app/accounts/${resolvedProvedorId}/dashboard` },
+      { id: 'atendimento', icon: Headphones, label: 'Atendimento', path: `/${resolvedProvedorId}/chat` },
+      { id: 'conversas', icon: MessagesSquare, label: 'Conversas', path: `/app/accounts/${resolvedProvedorId}/conversas` },
       { id: 'reminders', icon: Clock, label: 'Lembretes', path: '#', onClick: onRemindersClick },
-      { id: 'contacts', icon: Notebook, label: t('contacts'), path: `/app/accounts/${provedorId}/contacts`, permission: 'manage_contacts' },
-      { id: 'users', icon: Users, label: t('users'), path: `/app/accounts/${provedorId}/users` },
-      { id: 'teams', icon: UserCog, label: t('equipes'), path: `/app/accounts/${provedorId}/equipes` },
-      { id: 'audit', icon: ScrollText, label: t('audit'), path: `/app/accounts/${provedorId}/audit` },
-      { id: 'chatbot-builder', icon: Bot, label: t('chatbot_builder'), path: `/app/accounts/${provedorId}/chatbot-manager` },
-      { id: 'planos', icon: Wifi, label: t('planos'), path: `/app/accounts/${provedorId}/planos` },
-      { id: 'csat', icon: Smile, label: t('csat'), path: `/app/accounts/${provedorId}/csat` },
-      { id: 'respostas-rapidas', icon: Zap, label: 'Respostas Rápidas', path: `/app/accounts/${provedorId}/respostas-rapidas` },
+      { id: 'contacts', icon: Notebook, label: t('contacts'), path: contactsPath, permission: 'manage_contacts' },
+      { id: 'users', icon: Users, label: t('users'), path: `/app/accounts/${resolvedProvedorId}/users` },
+      { id: 'teams', icon: UserCog, label: t('equipes'), path: `/app/accounts/${resolvedProvedorId}/equipes` },
+      { id: 'audit', icon: ScrollText, label: t('audit'), path: `/app/accounts/${resolvedProvedorId}/audit` },
+      { id: 'chatbot-builder', icon: Bot, label: t('chatbot_builder'), path: `/app/accounts/${resolvedProvedorId}/chatbot-manager` },
+      { id: 'planos', icon: Wifi, label: t('planos'), path: `/app/accounts/${resolvedProvedorId}/planos` },
+      { id: 'csat', icon: Smile, label: t('csat'), path: `/app/accounts/${resolvedProvedorId}/csat` },
+      { id: 'respostas-rapidas', icon: Zap, label: 'Respostas Rápidas', path: `/app/accounts/${resolvedProvedorId}/respostas-rapidas` },
+      { id: 'galeria', icon: ImageIcon, label: 'Galeria', path: `/app/accounts/${resolvedProvedorId}/galeria` },
     ];
 
     let items = [];
@@ -81,35 +110,41 @@ const Sidebar = React.memo(({ userRole = 'agent', userPermissions = [], mobileOp
         ...allMenuItems
       ];
     } else if (userRole === 'admin') {
-      items = allMenuItems;
+      if (isChatPage) {
+        items = allMenuItems.filter(item => ['dashboard', 'atendimento', 'reminders', 'contacts'].includes(item.id));
+      } else {
+        items = allMenuItems;
+      }
     } else if (userRole === 'agent') {
       items = allMenuItems.filter(item => {
-        if (!item.permission) {
-          return ['conversations', 'reminders'].includes(item.id);
-        }
-        return userPermissions.includes(item.permission);
+        return ['atendimento', 'reminders', 'contacts'].includes(item.id);
       });
     } else {
       items = allMenuItems.filter(item => item.id === 'dashboard');
     }
     return items;
-  }, [userRole, userPermissions, provedorId, t, onRemindersClick]);
+  }, [userRole, userPermissions, resolvedProvedorId, t, onRemindersClick, isChatPage]);
 
   // Itens fixos - Memoizado
   const fixedItems = React.useMemo(() => {
     const allFixedItems = [
-      { id: 'horario', icon: Clock, label: t('horario'), path: `/app/accounts/${provedorId}/horario-provedor` },
-      { id: 'integracoes', icon: PlugZap, label: t('integracoes'), path: `/app/accounts/${provedorId}/integracoes` },
-      { id: 'dados-provedor', icon: Settings, label: t('dados_provedor'), path: `/app/accounts/${provedorId}/dados-provedor` },
-      { id: 'recovery', icon: RefreshCw, label: t('recovery'), path: `/app/accounts/${provedorId}/recovery` },
-      { id: 'perfil', icon: User, label: t('perfil'), path: `/app/accounts/${provedorId}/perfil` },
+      { id: 'horario', icon: Clock, label: t('horario'), path: `/app/accounts/${resolvedProvedorId}/horario-provedor` },
+      { id: 'integracoes', icon: PlugZap, label: t('integracoes'), path: `/app/accounts/${resolvedProvedorId}/integracoes` },
+      { id: 'dados-provedor', icon: Settings, label: t('dados_provedor'), path: `/app/accounts/${resolvedProvedorId}/dados-provedor` },
+      { id: 'recovery', icon: RefreshCw, label: t('recovery'), path: `/app/accounts/${resolvedProvedorId}/recovery` },
+      { id: 'perfil', icon: User, label: t('perfil'), path: `/app/accounts/${resolvedProvedorId}/perfil` },
     ];
 
     if (userRole === 'agent') {
-      return [{ id: 'perfil', icon: User, label: t('perfil'), path: `/app/accounts/${provedorId}/perfil` }];
+      return [{ id: 'perfil', icon: User, label: t('perfil'), path: `/app/accounts/${resolvedProvedorId}/perfil` }];
     }
+    
+    if (userRole === 'admin' && isChatPage) {
+      return []; // Ocultar no modo chat conforme pedido: "não precisar mostra o botão perfil"
+    }
+    
     return allFixedItems;
-  }, [userRole, provedorId, t]);
+  }, [userRole, resolvedProvedorId, t, isChatPage]);
 
   // Detectar se está em mobile
   const [isMobile, setIsMobile] = useState(false);
@@ -123,7 +158,7 @@ const Sidebar = React.memo(({ userRole = 'agent', userPermissions = [], mobileOp
   // Componente de item do menu
   const MenuItem = ({ item, onClick }) => {
     const Icon = item.icon;
-    const active = currentPath === item.path;
+    const active = isActive(item);
     return (
       <li>
         <button
@@ -202,7 +237,7 @@ const Sidebar = React.memo(({ userRole = 'agent', userPermissions = [], mobileOp
   // Desktop: sidebar fixo
   return (
     <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
-      <aside className={`h-full ${isCollapsed ? 'w-16' : 'w-64'} z-30 flex-shrink-0 flex flex-col transition-all duration-300`}>
+      <aside className={`h-full ${isCollapsed ? 'w-14' : 'w-56'} z-30 flex-shrink-0 flex flex-col transition-all duration-300`}>
         <div className={`bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-full flex flex-col ${mobileOpen ? 'mobile-open' : ''}`}>
           {/* TOPO FIXO - Logo e Botão */}
           <div className={`p-4 border-b border-border flex items-center flex-shrink-0 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
@@ -236,7 +271,7 @@ const Sidebar = React.memo(({ userRole = 'agent', userPermissions = [], mobileOp
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item.path)
+                      className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item)
                         ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                         }`}
@@ -260,7 +295,7 @@ const Sidebar = React.memo(({ userRole = 'agent', userPermissions = [], mobileOp
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item.path)
+                      className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} gap-3 ${isCollapsed ? 'px-2' : 'px-4'} ${isCollapsed ? 'py-3' : 'py-2'} rounded-lg transition-colors ${isActive(item)
                         ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                         }`}

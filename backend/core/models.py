@@ -3,6 +3,10 @@ from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
+def provider_gallery_upload_to(instance, filename):
+    provedor_id = instance.provedor_id or 'unknown'
+    return f"provider_gallery/{provedor_id}/{filename}"
+
 # Modelo User personalizado
 class User(AbstractUser):
     USER_TYPES = [
@@ -89,6 +93,16 @@ class User(AbstractUser):
         help_text='Mensagem enviada automaticamente ao atribuir um atendimento a este usuário',
         verbose_name='Mensagem de Atribuição'
     )
+    # Relacionamento direto com o provedor (Multi-tenant)
+    provedor = models.ForeignKey(
+        'Provedor',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='utilizadores',
+        verbose_name='Provedor Associado'
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -251,7 +265,65 @@ class SystemConfig(models.Model):
     
     # Asaas Global Config
     asaas_access_token = models.CharField(max_length=255, null=True, blank=True, verbose_name='Asaas Access Token')
+    asaas_webhook_auth_token = models.CharField(max_length=255, null=True, blank=True, verbose_name='Asaas Webhook Auth Token')
     asaas_sandbox = models.BooleanField(default=True, verbose_name='Asaas Sandbox Mode')
+
+    # Canal de cobranca exclusivo do superadmin (WhatsApp Oficial)
+    billing_channel_enabled = models.BooleanField(default=False, verbose_name='Canal de Cobranca Ativo')
+    billing_whatsapp_token = models.TextField(null=True, blank=True, verbose_name='Billing WhatsApp Access Token')
+    billing_whatsapp_phone_number_id = models.CharField(max_length=100, null=True, blank=True, verbose_name='Billing Phone Number ID')
+    billing_whatsapp_waba_id = models.CharField(max_length=100, null=True, blank=True, verbose_name='Billing WABA ID')
+    billing_days_before_due = models.IntegerField(default=3, verbose_name='Dias Antes do Vencimento')
+    billing_reminder_due_offsets = models.CharField(
+        max_length=120,
+        blank=True,
+        default='',
+        verbose_name='Dias de cobrança em relação ao vencimento',
+        help_text='Lista separada por vírgula. Negativos/zero = antes ou no vencimento; positivos = dias após vencido. Vazio = usa só o campo legado “dias antes”.',
+    )
+    billing_run_window_minutes = models.SmallIntegerField(
+        default=0,
+        verbose_name='Margem em minutos após o horário (0 = minuto exato)',
+        help_text='0 = roda só no minuto escolhido (ex.: 08:30). Maior que 0 = aceita até N minutos depois, se a tarefa atrasar.',
+    )
+    billing_provedor_auto_block_enabled = models.BooleanField(
+        default=True,
+        verbose_name='Bloquear provedor automaticamente (Asaas)',
+        help_text='Consulta cobranças OVERDUE da assinatura no Asaas e suspende o acesso do provedor após o número de dias configurado.',
+    )
+    billing_provedor_block_min_days_late = models.PositiveSmallIntegerField(
+        default=4,
+        verbose_name='Dias após o vencimento para bloquear o provedor',
+        help_text='0 = com qualquer atraso em relação ao vencimento. 4 = igual à regra antiga (só bloqueava com “mais de 3 dias” de atraso).',
+    )
+    billing_run_time = models.CharField(max_length=5, default='09:00', verbose_name='Horario da Rotina (HH:MM)')
+    billing_run_days = models.CharField(max_length=20, default='0,1,2,3,4,5,6', verbose_name='Dias da Semana da Rotina')
+    billing_template_due_soon = models.TextField(
+        default='Olá {{nome}}, sua fatura de {{valor}} vence em {{vencimento}} (ID: {{fatura_id}}).',
+        blank=True,
+        verbose_name='Mensagem para Fatura a Vencer'
+    )
+    billing_template_overdue = models.TextField(
+        default='Olá {{nome}}, sua fatura {{fatura_id}} de {{valor}} venceu em {{vencimento}}. Evite bloqueio realizando o pagamento.',
+        blank=True,
+        verbose_name='Mensagem para Fatura Vencida'
+    )
+    billing_whatsapp_use_template = models.BooleanField(
+        default=True,
+        verbose_name='Usar template Meta na automação de cobrança',
+    )
+    billing_whatsapp_template_name = models.CharField(
+        max_length=120,
+        default='cobranca_order',
+        blank=True,
+        verbose_name='Nome do template Meta (cobrança)',
+    )
+    billing_whatsapp_template_language = models.CharField(
+        max_length=20,
+        default='pt_BR',
+        blank=True,
+        verbose_name='Idioma do template (cobrança)',
+    )
 
     class Meta:
         verbose_name = 'Configuração do Sistema'
@@ -466,6 +538,37 @@ class RespostaRapida(models.Model):
 
     def __str__(self):
         return f"{self.titulo} ({self.provedor.nome})"
+
+
+class ProviderGalleryImage(models.Model):
+    """Imagens da galeria do provedor para uso em fluxos do chatbot."""
+    provedor = models.ForeignKey(
+        Provedor,
+        on_delete=models.CASCADE,
+        related_name='gallery_images',
+        verbose_name='Provedor'
+    )
+    nome = models.CharField(max_length=120, verbose_name='Nome do arquivo')
+    imagem = models.ImageField(upload_to=provider_gallery_upload_to, verbose_name='Imagem')
+    criado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='gallery_images_created',
+        verbose_name='Criado por'
+    )
+    ativo = models.BooleanField(default=True, verbose_name='Ativo')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Imagem da Galeria'
+        verbose_name_plural = 'Galeria de Imagens'
+        ordering = ['nome', '-created_at']
+
+    def __str__(self):
+        return f"{self.nome} ({self.provedor.nome})"
 
 
 class UserReminder(models.Model):

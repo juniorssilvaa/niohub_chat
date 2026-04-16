@@ -95,6 +95,7 @@ class Conversation(models.Model):
     last_message_at = models.DateTimeField(null=True, blank=True)
     last_user_message_at = models.DateTimeField(null=True, blank=True, help_text='Timestamp da última mensagem recebida do cliente (para cálculo da janela de 24 horas)')
     closing_requested_at = models.DateTimeField(null=True, blank=True, help_text='Data/hora em que o encerramento foi solicitado (para janela de tolerância)')
+    waiting_for_agent = models.BooleanField(default=False, help_text='Se True, a conversa aparecerá nas filas dos atendentes humanos. Se False, está sob controle do chatbot e oculta.')
     additional_attributes = models.JSONField(default=dict, blank=True)
 
     def __str__(self):

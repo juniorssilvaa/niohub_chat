@@ -325,7 +325,7 @@ test('renders conversation list', () => {
 ## Contato
 
 - **GitHub**: [juniorssilvaa/niochat](https://github.com/juniorssilvaa/niochat)
-- **Email**: suporte@niochat.com.br
+- **Email**: suporte@niohub.com.br
 - **Discord**: [Link do servidor](https://discord.gg/niochat)
 - **Twitter**: [@niochat](https://twitter.com/niochat)
 

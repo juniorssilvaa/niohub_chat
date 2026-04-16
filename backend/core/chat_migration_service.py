@@ -265,6 +265,27 @@ class ChatMigrationService:
         
         return result
     
+    def _merge_closure_metadata_into_conversation(
+        self, conversation, metadata: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Mescla metadata de encerramento em conversation.additional_attributes para que
+        o registro migrado (Supabase) e consultas locais identifiquem resolução por IA/chatbot vs agente.
+        """
+        metadata = metadata or {}
+        attrs = dict(conversation.additional_attributes or {})
+        for key, value in metadata.items():
+            if value is not None:
+                attrs[key] = value
+        if metadata.get('encerrado_por') == 'agent':
+            attrs['resolucao_automacao'] = False
+        elif metadata.get('encerrado_por') == 'ai' or metadata.get('resolucao_automacao') is True:
+            attrs['resolucao_automacao'] = True
+        elif metadata.get('resolucao_automacao') is False:
+            attrs['resolucao_automacao'] = False
+        conversation.additional_attributes = attrs
+        conversation.save(update_fields=['additional_attributes'])
+    
     def remover_do_local(self, conversation_id: int) -> bool:
         """
         Remove dados da conversa do PostgreSQL local APENAS após confirmação de migração
@@ -341,6 +362,9 @@ class ChatMigrationService:
                 result['warnings'].append(f'Conversa {conversation_id} não está fechada (status: {conversation.status})')
                 # Não migrar se não estiver fechada (incluindo 'closing')
                 return result
+            
+            # 2b. Persistir metadados de encerramento em additional_attributes (histórico no Supabase / dashboards)
+            self._merge_closure_metadata_into_conversation(conversation, metadata)
             
             # 3. Migrar para Supabase
             migration_result = self.migrar_para_supabase(conversation_data)

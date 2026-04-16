@@ -44,6 +44,7 @@ if not settings.configured:
 
 from core.models import Canal
 from .meta_token_service import check_and_renew_canal_token, token_needs_renewal
+from .billing_reminder_service import run_billing_reminder_cycle
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -170,4 +171,20 @@ def renew_all_whatsapp_cloud_tokens():
         logger.error(f"Erro crítico no job de renovação de tokens: {str(e)}", exc_info=True)
         # Não re-raise - job deve falhar graciosamente
         # Tentará novamente no próximo ciclo
+
+
+@dramatiq.actor(
+    actor_name="send_superadmin_billing_reminders",
+    queue_name="niochat_integrations_queue",
+    time_limit=180000
+)
+def send_superadmin_billing_reminders():
+    """
+    Roda o ciclo de cobrança automática do canal exclusivo do superadmin.
+    """
+    try:
+        result = run_billing_reminder_cycle()
+        logger.info(f"[BillingReminder] Resultado do ciclo: {result}")
+    except Exception as e:
+        logger.error(f"[BillingReminder] Erro no ciclo de cobrança: {e}", exc_info=True)
 

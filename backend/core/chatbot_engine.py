@@ -6,13 +6,64 @@ import uuid
 from datetime import datetime, date
 from typing import Any, Dict, Optional, List, Tuple
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from .models import ChatbotFlow, Provedor
 from .redis_memory_service import redis_memory_service
 from integrations.whatsapp_cloud_send import send_via_whatsapp_cloud_api
-from conversations.closing_service import closing_service
+from conversations.closing_service import closing_service, stamp_automation_closure_trace
 from .horario_utils import verificar_horario_atendimento
 
 logger = logging.getLogger(__name__)
+
+
+def _copy_provider_gallery_to_conversation_media(conv, gallery_image) -> str:
+    """
+    Copia o arquivo da galeria para media/messages/<conversation_id>/ para o painel
+    usar a mesma rota /api/media/messages/... (CORS + mesmo fluxo do WhatsApp).
+    """
+    import os
+    import shutil
+
+    fallback = f"/api/media/provider-gallery/{gallery_image.id}/"
+    try:
+        src_path = gallery_image.imagem.path
+    except Exception:
+        return fallback
+    if not src_path or not os.path.isfile(src_path):
+        return fallback
+    raw_name = os.path.basename(gallery_image.imagem.name or "image.jpg")
+    safe_name = raw_name.replace("/", "_").replace("\\", "_")
+    dest_name = f"gallery_{gallery_image.id}_{safe_name}"
+    dest_dir = os.path.join(settings.MEDIA_ROOT, "messages", str(conv.id))
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        dest_path = os.path.join(dest_dir, dest_name)
+        shutil.copyfile(src_path, dest_path)
+    except Exception as copy_err:
+        logger.warning(f"[ChatbotEngine][Galeria] Falha ao copiar mídia para pasta da conversa: {copy_err}")
+        return fallback
+    return f"/api/media/messages/{conv.id}/{dest_name}"
+
+
+def _sgp_contrato_id_from_fatura2via_response(faturas_res, fallback_digits: str) -> str:
+    """
+    A API /api/ura/fatura2via/ pode retornar contratoId na raiz com links=[].
+    Antes só lia links[0].contrato — com links vazio caía no CPF e o chamado falhava.
+    """
+    if not faturas_res or not isinstance(faturas_res, dict):
+        return fallback_digits
+    links = faturas_res.get('links') or []
+    if isinstance(links, list) and len(links) > 0 and isinstance(links[0], dict):
+        first = links[0]
+        cid = first.get('contrato') or first.get('contratoId') or first.get('contrato_id')
+        if cid is not None and str(cid).strip() != '':
+            return str(cid).strip()
+    for key in ('contratoId', 'contrato_id'):
+        val = faturas_res.get(key)
+        if val is not None and str(val).strip() != '':
+            return str(val).strip()
+    return fallback_digits
+
 
 def _formatar_endereco(contrato: dict) -> str:
     """Monta o endereço completo a partir de um dict de contrato SGP."""
@@ -75,11 +126,59 @@ class ChatbotEngine:
         return data
 
     @staticmethod
+    def _normalize_option_text(value: Any) -> str:
+        return re.sub(r"\s+", " ", str(value or "").strip()).lower()
+
+    @staticmethod
+    def _resolve_interactive_selection(node: Dict[str, Any], message_content: str) -> Optional[str]:
+        """
+        Resolve seleção digitada em nós interativos (menu/botões) para o ID da opção.
+        Aceita:
+        - índice numérico (1, 2, 3...)
+        - título exato da opção (case-insensitive)
+        """
+        data = node.get('data', {}) if isinstance(node, dict) else {}
+        rows = data.get('rows', []) if isinstance(data.get('rows', []), list) else []
+        buttons = data.get('buttons', []) if isinstance(data.get('buttons', []), list) else []
+        options = rows if rows else buttons
+        if not options:
+            return None
+
+        text = str(message_content or "").strip()
+        if not text:
+            return None
+
+        if text.isdigit():
+            idx = int(text) - 1
+            if 0 <= idx < len(options):
+                selected = options[idx]
+                return selected.get('id')
+
+        normalized = ChatbotEngine._normalize_option_text(text)
+        for option in options:
+            title = ChatbotEngine._normalize_option_text(option.get('title'))
+            if title and title == normalized:
+                return option.get('id')
+
+        return None
+
+    @staticmethod
     async def process_message(provedor_id: int, conversation_id: int, message_content: str, button_id: Optional[str] = None, canal_id: Optional[int] = None):
         """
         Processa uma mensagem recebida e avança o fluxo.
         """
         logger.info(f"[ChatbotEngine][TRACE] Iniciando process_message | conv={conversation_id} | texto='{message_content}' | button='{button_id}' | canal={canal_id}")
+        provedor = await Provedor.objects.filter(id=provedor_id).afirst()
+        if not provedor:
+            logger.warning(f"[ChatbotEngine] Provedor {provedor_id} não encontrado.")
+            return False, "Provedor não encontrado"
+        if not provedor.is_active:
+            logger.info(
+                f"[ChatbotEngine] Execução bloqueada para provedor {provedor_id}: "
+                f"provedor inativo. Motivo: {provedor.block_reason}"
+            )
+            return False, "Provedor inativo"
+
         # 1. Obter o fluxo ativo para o provedor (priorizando o canal se informado)
         query = ChatbotFlow.objects.filter(provedor_id=provedor_id)
         
@@ -155,6 +254,8 @@ class ChatbotEngine:
                     logger.warning(f"[ChatbotEngine][SGP] Contrato selecionado: {num_contrato_sel} | contratoId={selected_contrato.get('contratoId')}")
                     # Salva o contrato escolhido no contexto
                     flow_context['contrato'] = num_contrato_sel
+                    flow_context['contrato_id'] = num_contrato_sel
+                    flow_context['sgp_contrato_id'] = num_contrato_sel
                     flow_context['cliente_id'] = str(selected_contrato.get('cliente_id', ''))
                     flow_context['cidade'] = selected_contrato.get('popNome', '') or selected_contrato.get('endereco_cidade', '')
                     flow_context['endereco'] = _formatar_endereco(selected_contrato)
@@ -206,6 +307,7 @@ class ChatbotEngine:
                     conv.status = 'pending'
                     conv.team = team
                     conv.assignee = None # Limpa atribuição individual se houver
+                    conv.waiting_for_agent = True # Libera para visualização humana
                     await sync_to_async(conv.save)() # Salva tudo para garantir que equipe e status persistam
                     
                     # Verificar horário de atendimento
@@ -237,6 +339,95 @@ class ChatbotEngine:
                     await ChatbotEngine.send_message_agnostic(conv=conv, text="Desculpe, não reconheci essa opção. Por favor, selecione um dos setores da lista.")
                     return True, "Aguardando seleção válida de equipe"
             # === FIM da seleção de equipe ===
+
+            current_node = next((n for n in nodes if n.get('id') == current_node_id), None)
+            current_node_data = current_node.get('data', {}) if current_node else {}
+
+            # Se o nó atual é interativo, só deve avançar com opção válida.
+            is_interactive_node = bool(
+                current_node and (
+                    current_node.get('type') in ('menu', 'planos') or
+                    (
+                        current_node.get('type') == 'message' and
+                        (current_node_data.get('buttons') or current_node_data.get('rows'))
+                    )
+                )
+            )
+
+            if is_interactive_node and not button_id and message_content:
+                resolved_button_id = ChatbotEngine._resolve_interactive_selection(current_node, message_content)
+                if resolved_button_id:
+                    button_id = resolved_button_id
+                    logger.info(f"[ChatbotEngine] Seleção textual mapeada para botão/row id: {button_id}")
+                else:
+                    from conversations.models import Conversation
+                    conv = await sync_to_async(Conversation.objects.select_related('inbox', 'inbox__provedor', 'contact').get)(id=conversation_id)
+
+                    max_attempts = int(current_node_data.get('maxInvalidAttempts') or 3)
+                    invalid_msg = current_node_data.get('invalidOptionMessage') or "Opção inválida. Por favor, selecione uma opção do menu."
+                    limit_msg = current_node_data.get('maxInvalidAttemptsMessage') or "Não consegui identificar a opção informada. Vou reenviar o menu para você."
+
+                    attempts = dict(current_state.get('invalid_option_attempts') or {})
+                    node_attempts = int(attempts.get(current_node_id, 0)) + 1
+                    attempts[current_node_id] = node_attempts
+                    current_state['invalid_option_attempts'] = attempts
+                    await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
+
+                    if node_attempts >= max_attempts:
+                        attempts[current_node_id] = 0
+                        current_state['invalid_option_attempts'] = attempts
+                        await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
+                        await ChatbotEngine.send_message_agnostic(conv=conv, text=limit_msg)
+
+                        after_action = (current_node_data.get('maxInvalidAction') or 'repeat_menu').strip()
+                        after_team_id = current_node_data.get('maxInvalidActionTeamId')
+
+                        if after_action == 'transfer_direct' and after_team_id:
+                            from conversations.models import Team
+                            team = await sync_to_async(Team.objects.filter(
+                                id=after_team_id,
+                                provedor=conv.inbox.provedor,
+                                is_active=True
+                            ).first)()
+                            if team:
+                                conv.status = 'pending'
+                                conv.team = team
+                                conv.assignee = None
+                                conv.waiting_for_agent = True
+                                await sync_to_async(conv.save)()
+                                await redis_memory_service.clear_memory(provedor_id, conversation_id, "whatsapp", "unknown")
+                                return True, f"Tentativas esgotadas; transferido para {team.name}"
+
+                        if after_action == 'transfer_choice':
+                            from conversations.models import Team
+                            teams = await sync_to_async(list)(
+                                Team.objects.filter(provedor=conv.inbox.provedor, is_active=True).exclude(name="IA")
+                            )
+                            if teams:
+                                rows = [{
+                                    'id': f'team_{t.id}',
+                                    'title': t.name[:24],
+                                    'description': (t.description or 'Falar com atendente')[:72]
+                                } for t in teams[:10]]
+                                await ChatbotEngine.send_message_agnostic(
+                                    conv=conv,
+                                    text="Nao consegui identificar sua opcao. Selecione o setor desejado:",
+                                    msg_rows=rows,
+                                    msg_btn_text="Ver Setores",
+                                    msg_sec_title="Setores Disponiveis"
+                                )
+                                current_state['chatbot_node_id'] = f'transfer_select_{current_node_id}'
+                                await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
+                                return True, "Tentativas esgotadas; aguardando escolha de equipe"
+
+                        await ChatbotEngine.execute_node(provedor_id, conversation_id, current_node, flow)
+                        return True, "Tentativas inválidas atingidas; menu reenviado"
+
+                    await ChatbotEngine.send_message_agnostic(
+                        conv=conv,
+                        text=f"{invalid_msg} (Tentativa {node_attempts}/{max_attempts})"
+                    )
+                    return True, "Aguardando opção válida do menu"
 
             # Tentar encontrar o próximo nó
             # 1. Se for clique em botão (button_id), tentar achar aresta que combine com o handle
@@ -273,7 +464,6 @@ class ChatbotEngine:
             
             if edge:
                 # === NOVO: Capturar título da opção selecionada (botão ou menu) ===
-                current_node = next((n for n in nodes if n.get('id') == current_node_id), None)
                 if current_node:
                     data = current_node.get('data', {})
                     if button_id and current_node.get('type') == 'message':
@@ -300,6 +490,9 @@ class ChatbotEngine:
                             logger.info(f"[ChatbotEngine] OPÇÃO ESCOLHIDA (Menu): {row.get('title')} | tipo_pagamento mapped: {flow_context.get('tipo_pagamento')}")
                     
                     current_state['flow_context'] = flow_context
+                    attempts = dict(current_state.get('invalid_option_attempts') or {})
+                    attempts[current_node_id] = 0
+                    current_state['invalid_option_attempts'] = attempts
                     await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
                 # === FIM da captura ===
 
@@ -431,6 +624,7 @@ class ChatbotEngine:
                             await ChatbotEngine.send_message_agnostic(conv=conversation, text=closing_msg_processed)
                             logger.info(f"[ChatbotEngine] Mensagem de encerramento enviada para conv {conversation_id}")
                         
+                        await sync_to_async(stamp_automation_closure_trace)(conversation, 'chatbot_autoclose_message')
                         await sync_to_async(closing_service.request_closing)(conversation)
                         logger.info(f"[ChatbotEngine] Encerramento solicitado para conv {conversation_id} (nó {node_id})")
                     else:
@@ -534,9 +728,13 @@ class ChatbotEngine:
                 flow_context = current_state.get('flow_context', {})
                 input_value = flow_context.get(input_var) if input_var and input_var != 'None' else None
 
-                # Fallback Inteligente: Apenas se não houver NADA, buscar do contexto
+                # Fallback Inteligente: apenas para ações que aceitam contrato.
+                # Para consultar_cliente, jamais usar contrato como fallback.
                 if not input_value:
-                    input_value = flow_context.get('contrato') or flow_context.get('cpf') or flow_context.get('cpfcnpj')
+                    if sgp_action == 'consultar_cliente':
+                        input_value = flow_context.get('cpf') or flow_context.get('cpfcnpj')
+                    else:
+                        input_value = flow_context.get('contrato') or flow_context.get('cpf') or flow_context.get('cpfcnpj')
                 
                 # Removido fallback de last_user_message aqui para evitar que 
                 # seleções de menu (ex: "1", "2") sejam interpretadas como input do SGP acidentalmente.
@@ -572,7 +770,24 @@ class ChatbotEngine:
 
                 # Despachar para o endpoint correto
                 if sgp_action == 'consultar_cliente':
-                    result = await sync_to_async(sgp.consultar_cliente)(input_value)
+                    input_digits = re.sub(r'[^\d]', '', str(input_value or ''))
+                    if len(input_digits) not in (11, 14):
+                        logger.warning(
+                            f"[ChatbotEngine][SGP] consultar_cliente bloqueado: CPF/CNPJ inválido ou ausente "
+                            f"(input='{input_value}') na conversa {conversation_id}"
+                        )
+                        await ChatbotEngine.send_message_agnostic(
+                            conv=conversation,
+                            text="Para continuar, informe um CPF ou CNPJ valido (somente numeros)."
+                        )
+                        return
+
+                    flow_context['cpf'] = input_digits
+                    flow_context['cpfcnpj'] = input_digits
+                    current_state['flow_context'] = flow_context
+                    await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
+
+                    result = await sync_to_async(sgp.consultar_cliente)(input_digits)
                     if result:
                         contratos = result.get('contratos', [])
                         primeiro = contratos[0] if contratos else {}
@@ -591,8 +806,23 @@ class ChatbotEngine:
                         elif len(contratos) == 1:
                             c = contratos[0]
                             num = c.get('contratoId') or c.get('contrato_id') or c.get('contrato', '')
+                            num_str = str(num).strip() if num is not None else ''
                             status = str(c.get('contratoStatusDisplay', '') or c.get('contratoStatus', '')).upper()
                             end = _formatar_endereco(c)
+                            # Persistir ID do contrato no Redis já neste passo (antes do envio WA),
+                            # para criar_chamado e outros nós SGP sempre encontrarem o contrato correto.
+                            if num_str:
+                                flow_context['contrato'] = num_str
+                                flow_context['contrato_id'] = num_str
+                                flow_context['sgp_contrato_id'] = num_str
+                                current_state['flow_context'] = flow_context
+                                await redis_memory_service.update_ai_state(
+                                    provedor_id, conversation_id, current_state, "whatsapp", "unknown"
+                                )
+                                logger.info(
+                                    f"[ChatbotEngine][SGP] consultar_cliente: contrato_id={num_str} "
+                                    f"gravado no contexto antes da mensagem ao cliente."
+                                )
                             texto = f"*{nome_upper}*, contrato localizado:\n\n1 - Contrato ({num}) - *{status}*\nEndereço: {end}"
                             await ChatbotEngine.send_message_agnostic(conv=conversation, text=texto)
 
@@ -640,6 +870,8 @@ class ChatbotEngine:
                             'contratos': contratos,
                             'sgp_cliente': result,
                             'contrato': str(num_contrato),
+                            'contrato_id': str(num_contrato),
+                            'sgp_contrato_id': str(num_contrato),
                             'cliente_id': str(primeiro.get('cliente_id', '') or primeiro.get('clienteId', '')),
                             'status_contrato': str(primeiro.get('contratoStatus', '')),
                             'cidade': primeiro.get('popNome', '') or primeiro.get('endereco_cidade', ''),
@@ -755,6 +987,7 @@ class ChatbotEngine:
                             if closing_msg and str(closing_msg).strip():
                                 await ChatbotEngine.send_message_agnostic(conv=conversation, text=str(closing_msg))
                                 logger.info(f"[ChatbotEngine][SGP] Mensagem de encerramento enviada para conv {conversation_id}")
+                            await sync_to_async(stamp_automation_closure_trace)(conversation, 'chatbot_sgp_autoclose')
                             await sync_to_async(closing_service.request_closing)(conversation)
                             logger.info(f"[ChatbotEngine][SGP] Encerramento solicitado para conv {conversation_id}")
 
@@ -782,9 +1015,10 @@ class ChatbotEngine:
                         try:
                             # Tentar buscar via fatura2via (que retorna o contrato ID)
                             faturas_res = await sync_to_async(sgp.listar_faturas_v2)(cpf_cnpj=input_limpo)
-                            if faturas_res and faturas_res.get('links') and len(faturas_res['links']) > 0:
-                                contrato_final = str(faturas_res['links'][0].get('contrato', input_limpo))
-                                logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto via fatura2via para liberação: {contrato_final}")
+                            if faturas_res:
+                                contrato_final = _sgp_contrato_id_from_fatura2via_response(faturas_res, input_limpo)
+                                if contrato_final != input_limpo:
+                                    logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto via fatura2via para liberação: {contrato_final}")
                         except Exception as e:
                             logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF via fatura2via na liberação: {e}")
                     else:
@@ -822,6 +1056,7 @@ class ChatbotEngine:
                                 if closing_msg and str(closing_msg).strip():
                                     await ChatbotEngine.send_message_agnostic(conv=conversation, text=str(closing_msg))
                                     logger.info(f"[ChatbotEngine][SGP] Mensagem de encerramento enviada após liberação para conv {conversation_id}")
+                                await sync_to_async(stamp_automation_closure_trace)(conversation, 'chatbot_sgp_liberacao_autoclose')
                                 await sync_to_async(closing_service.request_closing)(conversation)
                                 logger.info(f"[ChatbotEngine][SGP] Encerramento solicitado após liberação para conv {conversation_id}")
                         else:
@@ -841,9 +1076,10 @@ class ChatbotEngine:
                         result_context = {'sucesso': False, 'sgp_liberacao': None}
 
                 elif sgp_action == 'criar_chamado':
-                    # Tentar pegar do context ou da configuração do nó
-                    conteudo_cfg = node_data.get('content', '')
-                    conteudo = flow_context.get('conteudo') or conteudo_cfg or 'Chamado via Chatbot NioChat'
+                    # Descrição do chamado: priorizar texto configurado no nó (evita usar só o título do menu).
+                    conteudo_cfg_raw = node_data.get('content', '')
+                    conteudo_cfg = str(conteudo_cfg_raw).strip() if conteudo_cfg_raw else ''
+                    conteudo = conteudo_cfg or flow_context.get('conteudo') or 'Chamado via Chatbot NioChat'
                     
                     # Substituir placeholders se houver
                     conteudo = ChatbotEngine._replace_placeholders(conteudo, flow_context)
@@ -852,20 +1088,36 @@ class ChatbotEngine:
                     
                     # Garantir que o contrato seja apenas números se for criação de chamado
                     input_limpo = re.sub(r'[^\d]', '', str(input_value))
-                    contrato_final = input_limpo
-                    
-                    # Se o valor parece um CPF (11 dígitos), buscar o contrato ID real no SGP
-                    if len(input_limpo) == 11:
-                        logger.info(f"[ChatbotEngine][SGP] CPF detectado ({input_limpo}). Buscando Contrato ID real...")
+                    ctx_raw = (
+                        flow_context.get('sgp_contrato_id')
+                        or flow_context.get('contrato_id')
+                        or flow_context.get('contrato')
+                        or ''
+                    )
+                    ctx_contrato_limpo = re.sub(r'[^\d]', '', str(ctx_raw))
+
+                    # 1) Preferir contrato já resolvido no fluxo (ex.: consultar_cliente gravou contratoId=2121)
+                    if ctx_contrato_limpo and ctx_contrato_limpo != input_limpo:
+                        contrato_final = ctx_contrato_limpo
+                    elif ctx_contrato_limpo and len(ctx_contrato_limpo) not in (11, 14):
+                        contrato_final = ctx_contrato_limpo
+                    else:
+                        contrato_final = input_limpo
+
+                    # 2) Se ainda é CPF (11) ou CNPJ (14), resolver ID via fatura2via (links ou contratoId na raiz)
+                    if len(contrato_final) in (11, 14):
+                        logger.info(
+                            f"[ChatbotEngine][SGP] Documento ({len(contrato_final)} dígitos) para chamado. "
+                            f"Buscando contrato ID via fatura2via..."
+                        )
                         try:
-                            # Tentar buscar via fatura2via (que retorna o contrato ID)
-                            faturas_res = await sync_to_async(sgp.listar_faturas_v2)(cpf_cnpj=input_limpo)
-                            links = faturas_res.get('links', []) if faturas_res else []
-                            if links and len(links) > 0:
-                                contrato_final = str(links[0].get('contrato', input_limpo))
-                                logger.info(f"[ChatbotEngine][SGP] Contrato ID descoberto para o CPF via fatura2via: {contrato_final}")
+                            faturas_res = await sync_to_async(sgp.listar_faturas_v2)(cpf_cnpj=contrato_final)
+                            novo = _sgp_contrato_id_from_fatura2via_response(faturas_res, contrato_final)
+                            if novo != contrato_final:
+                                logger.info(f"[ChatbotEngine][SGP] Contrato ID para chamado via fatura2via: {novo}")
+                            contrato_final = novo
                         except Exception as e:
-                            logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato por CPF via fatura2via: {e}")
+                            logger.error(f"[ChatbotEngine][SGP] Erro ao buscar contrato via fatura2via: {e}")
                     
                     tipo = node_data.get('ocorrenciatipo', 1)
                     result = await sync_to_async(sgp.criar_chamado)(contrato_final, conteudo, ocorrenciatipo=tipo)
@@ -983,6 +1235,7 @@ class ChatbotEngine:
                     conversation.status = 'pending'
                     conversation.team = team
                     conversation.assignee = None
+                    conversation.waiting_for_agent = True # Libera para visualização humana
                     await sync_to_async(conversation.save)() # Salva tudo para garantir persistência
                     
                     # Limpar estado para encerrar o fluxo (humano assume)
@@ -1026,6 +1279,39 @@ class ChatbotEngine:
             except Exception as e:
                 logger.error(f"[ChatbotEngine][Transfer] Erro ao executar nó de transferência: {e}", exc_info=True)
 
+        elif node_type == 'galeria':
+            try:
+                from conversations.models import Conversation
+                from core.models import ProviderGalleryImage
+
+                conversation = await sync_to_async(Conversation.objects.select_related('inbox', 'inbox__provedor', 'contact').get)(id=conversation_id)
+                image_id = node_data.get('galleryImageId')
+                caption = (node_data.get('content') or '').strip()
+
+                if not image_id:
+                    logger.warning(f"[ChatbotEngine][Galeria] Nó {node_id} sem galleryImageId.")
+                    return
+
+                gallery_image = await sync_to_async(ProviderGalleryImage.objects.filter(
+                    id=image_id,
+                    provedor_id=provedor_id,
+                    ativo=True
+                ).first)()
+
+                if not gallery_image:
+                    logger.warning(f"[ChatbotEngine][Galeria] Imagem {image_id} não encontrada para provedor {provedor_id}.")
+                    return
+
+                await ChatbotEngine.send_gallery_image_agnostic(conversation, gallery_image, caption)
+
+                edge = next((e for e in flow.edges if e.get('source') == node_id), None)
+                if edge:
+                    next_node = next((n for n in flow.nodes if n.get('id') == edge.get('target')), None)
+                    if next_node:
+                        await ChatbotEngine.execute_node(provedor_id, conversation_id, next_node, flow)
+            except Exception as e:
+                logger.error(f"[ChatbotEngine][Galeria] Erro ao executar nó {node_id}: {e}", exc_info=True)
+
         elif node_type == 'close':
             try:
                 content = node_data.get('content', 'Atendimento encerrado. Obrigado!')
@@ -1037,6 +1323,7 @@ class ChatbotEngine:
                     await ChatbotEngine.send_message_agnostic(conv=conversation, text=content)
                 
                 # 2. Encerrar conversa usando o closing_service
+                await sync_to_async(stamp_automation_closure_trace)(conversation, 'chatbot_close_node')
                 await sync_to_async(closing_service.request_closing)(conversation)
                 
                 # 3. Limpar memória para garantir que o fluxo pare aqui
@@ -1218,6 +1505,76 @@ class ChatbotEngine:
             )
         # Uazapi fallback placeholder
         return await ChatbotEngine.send_message_agnostic(conv, f"{text}\n\nLink: {file_url}")
+
+    @staticmethod
+    async def _persist_chatbot_image_message(conv, content_for_db, file_url, display_file_name=None):
+        try:
+            from conversations.models import Message
+            from channels.layers import get_channel_layer
+            from django.utils import timezone as tz
+
+            fname = (display_file_name or "chatbot_gallery_image").strip() or "chatbot_gallery_image"
+            if len(fname) > 250:
+                fname = fname[:250]
+
+            msg_obj = await sync_to_async(Message.objects.create)(
+                conversation=conv,
+                content=content_for_db or '',
+                message_type='image',
+                is_from_customer=False,
+                file_url=file_url,
+                file_name=fname,
+                additional_attributes={
+                    'from_ai': True,
+                    'sent_via': 'chatbot_gallery',
+                    'sender_type': 'bot',
+                },
+            )
+
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                await channel_layer.group_send(
+                    f"conversation_{conv.id}",
+                    {
+                        "type": "chat_message",
+                        "message": {
+                            "id": msg_obj.id,
+                            "content": msg_obj.content,
+                            "message_type": "image",
+                            "is_from_customer": False,
+                            "created_at": msg_obj.created_at.isoformat() if msg_obj.created_at else tz.now().isoformat(),
+                            "sender": {"sender_type": "bot"},
+                            "from_ai": True,
+                            "file_url": file_url,
+                            "additional_attributes": msg_obj.additional_attributes or {},
+                        },
+                        "sender": {"sender_type": "bot"},
+                    }
+                )
+        except Exception as db_err:
+            logger.error(f"[ChatbotEngine][Galeria] Erro ao persistir imagem: {db_err}", exc_info=True)
+
+    @staticmethod
+    async def send_gallery_image_agnostic(conv, gallery_image, caption='') -> Tuple[bool, Any]:
+        inbox = conv.inbox
+        provedor = inbox.provedor
+        panel_url = await sync_to_async(_copy_provider_gallery_to_conversation_media)(conv, gallery_image)
+        await ChatbotEngine._persist_chatbot_image_message(
+            conv, caption, panel_url, display_file_name=gallery_image.nome
+        )
+
+        if inbox.channel_id == "whatsapp_cloud_api" or inbox.channel_type == "whatsapp_oficial" or (provedor.integracoes_externas.get('cloud_api_active') is True):
+            return await sync_to_async(send_via_whatsapp_cloud_api)(
+                conversation=conv,
+                content=caption or ' ',
+                message_type='image',
+                file_path=gallery_image.imagem.path
+            )
+
+        base_url = getattr(settings, 'APP_BASE_URL', '').rstrip('/')
+        public_url = f"{base_url}{relative_url}" if base_url else relative_url
+        fallback_text = caption or "Imagem enviada"
+        return await ChatbotEngine.send_message_agnostic(conv, f"{fallback_text}\n{public_url}")
 
     @staticmethod
     async def send_order_details_payment(conv, content, pix_code=None, boleto_code=None, merchant_name=None, amount_value=0, reference_id="ref", items_list=None) -> Tuple[bool, Any]:

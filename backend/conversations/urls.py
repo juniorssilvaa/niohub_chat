@@ -3,8 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     ContactViewSet, InboxViewSet, ConversationViewSet,
     MessageViewSet, TeamViewSet, TeamMemberViewSet,
-    serve_media_file, proxy_external_media, DashboardStatsView, DashboardResponseTimeHourlyView, ConversationAnalysisView,
-    TextCorrectionView
+    serve_media_file, proxy_external_media, DashboardResponseTimeHourlyView, ConversationAnalysisView,
+    TextCorrectionView, DashboardStatsView
 )
 from .views_internal_chat import (
     InternalChatRoomViewSet,
@@ -54,6 +54,9 @@ router.register(r'csat/requests', CSATRequestViewSet, basename='csat-requests')
 
 urlpatterns = [
     path('text/correct/', TextCorrectionView.as_view(), name='text_correct'),
+    path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('csat/feedbacks/stats/', CSATFeedbackViewSet.as_view({'get': 'stats'}), name='csat-feedback-stats'),
+    path('conversations/dashboard_stats/', ConversationViewSet.as_view({'get': 'dashboard_stats'}), name='conversation-dashboard-stats'),
     path('', include(router.urls)),
     # URLs específicas para recuperador de conversas (removidas - usando views separadas)
     # URL para servir arquivos de mídia
@@ -69,8 +72,6 @@ urlpatterns = [
     path('internal-chat-unread-count/', InternalChatUnreadCountView.as_view(), name='internal-chat-unread-count'),
     path('internal-chat-unread-by-user/', InternalChatUnreadByUserView.as_view(), name='internal-chat-unread-by-user'),
     path('users-list/', UsersListView.as_view(), name='users-list'),
-    path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
-    path('dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats-alt'),  # Mantido para compatibilidade
     path('dashboard/response-time-hourly/', DashboardResponseTimeHourlyView.as_view(), name='dashboard-response-time-hourly'),
     path('analysis/', ConversationAnalysisView.as_view(), name='conversation-analysis'),
     path('test-analysis/', ConversationAnalysisView.as_view(), name='test-analysis'),

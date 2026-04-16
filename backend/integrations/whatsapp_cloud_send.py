@@ -884,7 +884,7 @@ def mark_message_as_read(conversation, message_id: str) -> Tuple[bool, Optional[
 
 
 def send_template_message(
-    canal: Canal,
+    canal: Any,
     recipient_number: str,
     template_name: str,
     template_language: str,
@@ -895,7 +895,7 @@ def send_template_message(
     Usado para iniciar conversas quando a janela de atendimento está fechada.
     
     Args:
-        canal: Objeto Canal com token e phone_number_id configurados
+        canal: Objeto Canal (ou objeto com atributos token, phone_number_id e opcionalmente waba_id)
         recipient_number: Número do destinatário (formato internacional, ex: 5511999999999)
         template_name: Nome do template aprovado
         template_language: Código do idioma do template (ex: pt_BR, en_US)
@@ -994,6 +994,99 @@ def send_template_message(
         logger.exception(f"[WhatsAppCloud] Exceção ao enviar template: {str(e)}")
         return False, str(e), None
 
+
+def _normalize_whatsapp_to_number(recipient_number: str) -> str:
+    recipient_number = "".join(c for c in recipient_number if c.isdigit() or c == "+")
+    if not recipient_number.startswith("+"):
+        if not recipient_number.startswith("55") and len(recipient_number) <= 11:
+            recipient_number = "55" + recipient_number
+        recipient_number = "+" + recipient_number
+    return recipient_number
+
+
+def send_interactive_order_details_raw(
+    phone_number_id: str,
+    access_token: str,
+    recipient_number: str,
+    body_text: str,
+    order_parameters: Dict[str, Any],
+    document_link: Optional[str] = None,
+    document_filename: str = "Fatura.pdf",
+    footer_text: Optional[str] = None,
+) -> Tuple[bool, Optional[str], Optional[Dict]]:
+    """
+    Envia mensagem interativa order_details (PIX / revisar e pagar) via Cloud API,
+    sem conversa/canal no banco — usado pelo canal de cobrança do superadmin.
+    """
+    try:
+        to = _normalize_whatsapp_to_number(recipient_number)
+
+        def remove_none(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                return {k: remove_none(v) for k, v in obj.items() if v is not None}
+            if isinstance(obj, list):
+                return [remove_none(x) for x in obj]
+            return obj
+
+        interactive: Dict[str, Any] = {
+            "type": "order_details",
+            "body": {"text": str(body_text)[:1024]},
+            "action": {
+                "name": "review_and_pay",
+                "parameters": order_parameters,
+            },
+        }
+        if document_link:
+            interactive["header"] = {
+                "type": "document",
+                "document": {
+                    "link": document_link,
+                    "filename": (document_filename or "Fatura.pdf")[:240],
+                },
+            }
+        if footer_text:
+            interactive["footer"] = {"text": str(footer_text)[:60]}
+
+        payload: Dict[str, Any] = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "interactive",
+            "interactive": interactive,
+        }
+        payload = remove_none(payload)
+
+        url = f"https://graph.facebook.com/{PHONE_NUMBERS_API_VERSION}/{phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+        logger.info(
+            "[WhatsAppCloud] order_details interativo | to=%s doc=%s",
+            to,
+            "sim" if document_link else "não",
+        )
+        response = requests.post(url, json=payload, headers=headers, timeout=45)
+        if response.status_code == 200:
+            return True, None, response.json()
+        err_data: Dict[str, Any] = {}
+        try:
+            err_data = response.json().get("error", {}) or {}
+        except Exception:
+            pass
+        translated = translate_whatsapp_error(
+            err_data.get("code", response.status_code),
+            err_data.get("error_subcode"),
+            err_data.get("message", response.text),
+            (err_data.get("error_data") or {}).get("details", ""),
+        )
+        logger.error("[WhatsAppCloud] order_details falhou: %s", response.text[:800])
+        return False, translated, None
+    except Exception as e:
+        logger.exception("[WhatsAppCloud] exceção em order_details: %s", e)
+        return False, str(e), None
+
+
 def _extract_pix_info_from_code(pix_code: str) -> Tuple[str, str]:
     """
     Extrai chave e tipo de chave de um código PIX (EMV ou chave direta).
@@ -1040,4 +1133,4 @@ def _extract_pix_info_from_code(pix_code: str) -> Tuple[str, str]:
     elif '-' in pix_code and len(pix_code) == 36:
         return pix_code, "EVP"
     
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, pix_code[:50])), "EVP"
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, pix_code[:50])), "EVP"

@@ -167,8 +167,6 @@ if not USE_STUB_BROKER:
             password = unquote(parsed_url.password or "guest")
             virtual_host = parsed_url.path[1:] if parsed_url.path and len(parsed_url.path) > 1 else "/"
             
-            # ... (verificações de host existentes)
-            
             broker = RabbitmqBroker(
                 host=host,
                 port=port,
@@ -184,8 +182,7 @@ if not USE_STUB_BROKER:
                 blocked_connection_timeout=60
             )
         else:
-            # Sem SSL: usar parâmetros explícitos para garantir que caracteres especiais na senha
-            # sejam tratados corretamente via 'unquote', evitando erros de parsing de URL.
+            # Sem SSL: usar parâmetros explícitos
             host = parsed_url.hostname
             port = parsed_url.port or 5672
             username = parsed_url.username or "guest"
@@ -213,31 +210,25 @@ if not USE_STUB_BROKER:
 # =============================================================================
 
 # Obter configuração do Redis
-# IMPORTANTE: Todas as configurações DEVEM vir do .env via settings do Django
-# Se o Django não estiver configurado, tentar usar decouple diretamente
 try:
-    # Tentar obter do settings do Django primeiro (já lê do .env)
     redis_url = getattr(settings, "REDIS_URL", "")
     if not redis_url:
-        # Construir URL a partir das variáveis individuais
-        redis_host = getattr(settings, "REDIS_HOST", "localhost")  # Obrigatório no .env (padrão para testes)
-        redis_port = getattr(settings, "REDIS_PORT", 6379)  # Obrigatório no .env (padrão para testes)
-        redis_password = getattr(settings, "REDIS_PASSWORD", "")  # Opcional
-        redis_db = getattr(settings, "REDIS_DB", 0)  # Opcional (padrão: 0)
+        redis_host = getattr(settings, "REDIS_HOST", "localhost")
+        redis_port = getattr(settings, "REDIS_PORT", 6379)
+        redis_password = getattr(settings, "REDIS_PASSWORD", "")
+        redis_db = getattr(settings, "REDIS_DB", 0)
         
         if redis_password:
             redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}"
         else:
             redis_url = f"redis://{redis_host}:{redis_port}/{redis_db}"
 except (AttributeError, TypeError):
-    # Se settings não tiver as variáveis, tentar usar decouple diretamente
-    # Isso acontece quando Django ainda não está totalmente configurado
     redis_url = env_config("REDIS_URL", default="")
     if not redis_url:
-        redis_host = env_config("REDIS_HOST", default="localhost")  # Obrigatório no .env (padrão para testes)
-        redis_port = env_config("REDIS_PORT", default=6379, cast=int)  # Obrigatório no .env (padrão para testes)
-        redis_password = env_config("REDIS_PASSWORD", default="")  # Opcional
-        redis_db = env_config("REDIS_DB", default=0, cast=int)  # Opcional (padrão: 0)
+        redis_host = env_config("REDIS_HOST", default="localhost")
+        redis_port = env_config("REDIS_PORT", default=6379, cast=int)
+        redis_password = env_config("REDIS_PASSWORD", default="")
+        redis_db = env_config("REDIS_DB", default=0, cast=int)
         
         if redis_password:
             redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}"
@@ -246,10 +237,8 @@ except (AttributeError, TypeError):
 
 parsed_redis = urlparse(redis_url)
 
-# Construir parâmetros do RedisBackend a partir da URL parseada
-# Todos os valores devem vir do .env (sem defaults hardcoded)
 redis_backend_host = parsed_redis.hostname
-redis_backend_port = parsed_redis.port or 6379  # Porta padrão do Redis se não especificada
+redis_backend_port = parsed_redis.port or 6379
 redis_backend_password = parsed_redis.password or ""
 redis_backend_db = int(parsed_redis.path[1:]) if parsed_redis.path and len(parsed_redis.path) > 1 else 0
 
@@ -263,17 +252,15 @@ results_backend = RedisBackend(
 # =============================================================================
 # 5️⃣ MIDDLEWARES (CONFIÁVEIS PARA PRODUÇÃO)
 # =============================================================================
-# Verificar middlewares existentes para evitar duplicatas
-# Nota: StubBroker não suporta middlewares, então só adicionamos se não for StubBroker
 
 if not USE_STUB_BROKER:
     existing_middleware_types = {type(m) for m in broker.middleware}
 
     if AgeLimit not in existing_middleware_types:
-        broker.add_middleware(AgeLimit(max_age=86_400_000))      # 24h
+        broker.add_middleware(AgeLimit(max_age=86_400_000))
 
     if TimeLimit not in existing_middleware_types:
-        broker.add_middleware(TimeLimit(time_limit=1_800_000))  # 30 min
+        broker.add_middleware(TimeLimit(time_limit=1_800_000))
 
     if Callbacks not in existing_middleware_types:
         broker.add_middleware(Callbacks())
@@ -302,18 +289,16 @@ if not USE_STUB_BROKER:
 # =============================================================================
 # 6️⃣ REGISTRO GLOBAL DO BROKER (CRÍTICO)
 # =============================================================================
-# ❌ Antes: broker criado tarde demais
-# ✅ Agora: registrado ANTES de qualquer actor
 
 dramatiq.set_broker(broker)
 
 # =============================================================================
 # 7️⃣ AGENDADOR INTERNO (CRON HEARTBEAT)
 # =============================================================================
-# ❌ ANTES: Dependia de um container 'niochat-cron' separado
-# ✅ AGORA: O próprio worker pode disparar tarefas periódicas
-# Ativado apenas se a variável de ambiente RUN_HEARTBEAT=true estiver presente
 
+# Enfileira finalize_closing + cobrança superadmin a cada ~60s (útil com worker Dramatiq).
+# O Daphne também dispara a mesma lógica em processo via niochat.asgi_periodic (sem fila).
+# RUN_HEARTBEAT=true exige broker + worker; senão as mensagens ficam na fila.
 RUN_HEARTBEAT = os.getenv("RUN_HEARTBEAT", "false").lower() == "true"
 
 if RUN_HEARTBEAT:
@@ -325,19 +310,20 @@ if RUN_HEARTBEAT:
         """Thread que dispara tarefas periódicas a cada 120 segundos"""
         print("💓 [HEARTBEAT] Iniciando agendador interno de tarefas periódicas...")
         
-        # Esperar um pouco para o Django terminar de carregar ( AppConfig.ready() )
+        # Esperar um pouco para o Django terminar de carregar
         time.sleep(15) 
         
         while True:
             try:
                 from conversations.dramatiq_tasks import finalize_closing_conversations
+                from integrations.dramatiq_tasks import send_superadmin_billing_reminders
                 print(f"💓 [HEARTBEAT] {timezone.now()} - Disparando tarefa de encerramento automático...")
                 finalize_closing_conversations.send()
+                send_superadmin_billing_reminders.send()
             except Exception as e:
                 print(f"💓 [HEARTBEAT] Erro ao disparar tarefa periódica: {e}")
             
-            time.sleep(120)
+            time.sleep(60)
 
-    # Iniciar em uma thread separada para não travar o processo principal
     heartbeat_thread = threading.Thread(target=heartbeat_worker, daemon=True)
     heartbeat_thread.start()

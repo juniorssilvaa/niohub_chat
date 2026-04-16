@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Zap, Plus, Pencil, Trash2, X, Check, Search } from 'lucide-react';
+import { Zap, Pencil, Trash2, X, Search } from 'lucide-react';
 
 const getAuthHeaders = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -116,9 +116,8 @@ export default function RespostasRapidas({ provedorId: propProvedorId }) {
                 </div>
                 <button
                     onClick={openCreate}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-500/20"
+                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-semibold text-sm transition-colors border border-primary/60"
                 >
-                    <Plus className="w-4 h-4" />
                     Nova Resposta
                 </button>
             </div>
@@ -131,7 +130,7 @@ export default function RespostasRapidas({ provedorId: propProvedorId }) {
                     placeholder="Buscar por título ou conteúdo…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
             </div>
 
@@ -153,7 +152,7 @@ export default function RespostasRapidas({ provedorId: propProvedorId }) {
             ) : (
                 <div className="space-y-3">
                     {filtered.map(r => (
-                        <div key={r.id} className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 group hover:bg-[#2d2d2d] transition-all">
+                        <div key={r.id} className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 group hover:bg-muted transition-colors">
                             <div className="flex items-center justify-center text-muted-foreground flex-shrink-0 mt-0.5">
                                 <Zap className="w-5 h-5" strokeWidth={1.5} />
                             </div>
@@ -187,9 +186,9 @@ export default function RespostasRapidas({ provedorId: propProvedorId }) {
             {/* Modal */}
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="bg-card border border-border rounded-3xl p-6 w-full max-w-lg shadow-2xl">
+                    <div className="bg-card border border-border/80 rounded-3xl p-6 w-full max-w-lg shadow-2xl">
                         <div className="flex items-center justify-between mb-5">
-                            <h2 className="text-lg font-black text-foreground">
+                            <h2 className="text-2xl font-extrabold text-foreground tracking-tight">
                                 {editando ? 'Editar Resposta' : 'Nova Resposta Rápida'}
                             </h2>
                             <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
@@ -212,9 +211,9 @@ export default function RespostasRapidas({ provedorId: propProvedorId }) {
                                     value={form.titulo}
                                     onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))}
                                     required
-                                    className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">No chat, o atendente digitará <span className="font-mono text-blue-400">/{form.titulo || 'atalho'}</span></p>
+                                <p className="text-xs text-muted-foreground mt-1">No chat, o atendente digitará <span className="font-mono text-primary">/{form.titulo || 'atalho'}</span></p>
                             </div>
 
                             <div>
@@ -227,11 +226,11 @@ export default function RespostasRapidas({ provedorId: propProvedorId }) {
                                     onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))}
                                     required
                                     rows={5}
-                                    className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+                                    className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
                                 />
                             </div>
 
-                            <div className="flex gap-3 pt-2">
+                            <div className="flex gap-3 pt-4 border-t border-border/70">
                                 <button
                                     type="button"
                                     onClick={() => setShowModal(false)}
@@ -242,11 +241,11 @@ export default function RespostasRapidas({ provedorId: propProvedorId }) {
                                 <button
                                     type="submit"
                                     disabled={salvando}
-                                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                    className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold transition-colors disabled:opacity-50"
                                 >
                                     {salvando
                                         ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                        : <><Check className="w-4 h-4" strokeWidth={2} /> Salvar</>
+                                        : 'Salvar'
                                     }
                                 </button>
                             </div>

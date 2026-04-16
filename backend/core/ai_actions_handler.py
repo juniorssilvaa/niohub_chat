@@ -17,7 +17,7 @@ from .database_function_definitions import DATABASE_FUNCTION_MAPPING, DATABASE_F
 from .sgp_client import SGPClient
 from .fatura_service import FaturaService
 from .redis_memory_service import redis_memory_service
-from conversations.closing_service import closing_service
+from conversations.closing_service import closing_service, stamp_automation_closure_trace
 from core.chat_migration_service import chat_migration_service
 
 logger = logging.getLogger(__name__)
@@ -180,6 +180,7 @@ class AIActionsHandler:
             # Caso especial para encerramento
             if function_name == "encerrar_atendimento":
                 if conv:
+                    stamp_automation_closure_trace(conv, 'ia_encerrar_atendimento')
                     closing_service.request_closing(conv)
                     redis_memory_service.clear_conversation_memory_sync(provedor_id=provedor.id, conversation_id=conv.id, channel=channel, phone=phone)
                     res = {

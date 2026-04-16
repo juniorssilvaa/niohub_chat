@@ -5,13 +5,14 @@ from django.http import JsonResponse
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
+from rest_framework.parsers import MultiPartParser, FormParser
 from core.authentication import LoggedTokenAuthentication
 from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.db import models
 from django.conf import settings
-from core.models import CompanyUser, User, Provedor, Canal, AuditLog, SystemConfig, Company, MensagemSistema, ChatbotFlow, UserReminder
-from core.serializers import UserSerializer, UserCreateSerializer, CanalSerializer, AuditLogSerializer, SystemConfigSerializer, ProvedorSerializer, CompanySerializer, MensagemSistemaSerializer, UserReminderSerializer
+from core.models import CompanyUser, User, Provedor, Canal, AuditLog, SystemConfig, Company, MensagemSistema, ChatbotFlow, UserReminder, ProviderGalleryImage
+from core.serializers import UserSerializer, UserCreateSerializer, CanalSerializer, AuditLogSerializer, SystemConfigSerializer, ProvedorSerializer, CompanySerializer, MensagemSistemaSerializer, UserReminderSerializer, ProviderGalleryImageSerializer
 from django.db.models import Q
 from integrations.models import TelegramIntegration, EmailIntegration, WhatsAppIntegration, WebchatIntegration
 from integrations.serializers import (
@@ -20,9 +21,10 @@ from integrations.serializers import (
 )
 from integrations.email_service import email_manager
 from integrations.asaas_service import AsaasService
+from datetime import datetime
 import asyncio
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 import json
 import tempfile
 import traceback
@@ -41,9 +43,10 @@ import subprocess
 import os
 import logging
 import django
+from types import SimpleNamespace
 
 logger = logging.getLogger(__name__)
-from django.conf import settings
+
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -146,14 +149,14 @@ def changelog_view(request):
             # Retornar estrutura vazia se não encontrar
             return JsonResponse({
                 "versions": [],
-                "current_version": "2.27.0"
+                "current_version": "2.34.0"
             }, safe=False)
     except Exception as e:
         logger.error(f'Erro ao carregar changelog: {e}')
         # Retornar estrutura vazia em caso de erro
         return JsonResponse({
             "versions": [],
-            "current_version": "2.26.3"
+            "current_version": "2.34.0"
         }, safe=False)
 
 
@@ -2729,6 +2732,7 @@ class LoginView(APIView):
     def post(self, request):
         from rest_framework.authtoken.models import Token
         from django.contrib.auth import authenticate
+        from core.asaas_provedor_block import is_asaas_auto_inadimplencia_reason
         
         username = request.data.get('username')
         password = request.data.get('password')
@@ -2742,6 +2746,30 @@ class LoginView(APIView):
         if not user:
             logger.warning(f"Falha de login: credenciais inválidas para username={username}")
             return Response({'error': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Bloqueio de acesso para suspensão MANUAL do provedor (superadmin)
+        # Regra: se o provedor está inativo por motivo NÃO financeiro automático, bloquear no login.
+        if getattr(user, 'user_type', None) != 'superadmin':
+            try:
+                provedores_usuario = []
+                if hasattr(user, 'provedor') and user.provedor:
+                    provedores_usuario.append(user.provedor)
+                if hasattr(user, 'provedores_admin'):
+                    for p in user.provedores_admin.all():
+                        if p and p not in provedores_usuario:
+                            provedores_usuario.append(p)
+
+                for provedor_user in provedores_usuario:
+                    if provedor_user and provedor_user.is_active is False:
+                        reason = (provedor_user.block_reason or '').strip()
+                        is_financial_block = is_asaas_auto_inadimplencia_reason(reason)
+                        if not is_financial_block:
+                            return Response(
+                                {'error': 'Acesso não autorizado. Provedor suspenso pelo administrador do sistema.'},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
+            except Exception as block_check_err:
+                logger.warning(f"Falha ao validar suspensão manual no login: {block_check_err}")
         
         # Obter ou criar token para o usuário
         from django.db import transaction
@@ -4869,12 +4897,13 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
                 # Ordenar por timestamp descendente
                 params['order'] = 'ended_at.desc'
             
-            # Limite de resultados
-            page_size = request.query_params.get('page_size', '50')
+            # Limite de resultados (aceita page_size e limit)
+            raw_limit = request.query_params.get('limit') or request.query_params.get('page_size') or '50'
             try:
-                params['limit'] = int(page_size)
+                limit_value = int(raw_limit)
             except (ValueError, TypeError):
-                params['limit'] = 50
+                limit_value = 50
+            params['limit'] = limit_value
             
             logger.info(f"[AUDIT-LOGS] Buscando do Supabase: {params}")
             response = requests.get(audit_url, headers=headers, params=params, timeout=10)
@@ -4891,11 +4920,18 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
                 
                 # Coletar todos os conversation_ids únicos para buscar dados em lote
                 conversation_ids = set()
+                user_ids = set()
                 for log in audit_logs:
                     conv_id = log.get('conversation_id')
                     if conv_id:
                         try:
                             conversation_ids.add(int(conv_id))
+                        except (ValueError, TypeError):
+                            pass
+                    log_user_id = log.get('user_id')
+                    if log_user_id is not None:
+                        try:
+                            user_ids.add(int(log_user_id))
                         except (ValueError, TypeError):
                             pass
                 
@@ -4936,6 +4972,19 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
                 # NOTA: A tabela 'inboxes' não existe no Supabase
                 # O channel_type será extraído dos detalhes do audit log ou da conversa
                 inboxes_data = {}
+
+                # Resolver nomes de usuários locais para exibir "quem fez a ação"
+                users_data = {}
+                if user_ids:
+                    try:
+                        users = User.objects.filter(id__in=list(user_ids)).only(
+                            'id', 'first_name', 'last_name', 'username'
+                        )
+                        for u in users:
+                            display_name = f"{u.first_name} {u.last_name}".strip() or u.username or f"Usuário {u.id}"
+                            users_data[u.id] = display_name
+                    except Exception as users_err:
+                        logger.warning(f"[AUDIT-LOGS] Erro ao resolver nomes de usuários: {users_err}")
                 
                 # Formatar dados para o formato esperado pelo frontend
                 formatted_logs = []
@@ -4991,6 +5040,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
                         'action': log.get('action'),
                         'details': details,
                         'user_id': log.get('user_id'),
+                        'user': users_data.get(log.get('user_id')) if log.get('user_id') is not None else None,
                         'provedor_id': log.get('provedor_id'),
                         'conversation_id': conv_id,
                         'contact_name': contact_data.get('name') if contact_data else (details.get('contact_name') if isinstance(details, dict) else None),
@@ -5004,6 +5054,58 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
                     
                     formatted_logs.append(formatted_log)
                 
+                # Mesclar logs locais relevantes (algumas ações não são enviadas ao Supabase)
+                if provedor_id and not conversation_closed and not conversation_id_param:
+                    try:
+                        local_actions = [
+                            'login', 'logout',
+                            'create', 'edit', 'delete',
+                            'contact_created',
+                            'conversation_closed_ai',
+                            'conversation_closed_agent',
+                            'conversation_closed_manual',
+                            'conversation_closed_timeout',
+                            'conversation_assigned',
+                        ]
+                        local_auth_logs = AuditLog.objects.filter(
+                            provedor_id=provedor_id,
+                            action__in=local_actions
+                        ).select_related('user').order_by('-timestamp')[:max(limit_value * 2, 100)]
+
+                        for log in local_auth_logs:
+                            formatted_logs.append({
+                                'id': f"local-{log.id}",
+                                'action': log.action,
+                                'details': {'details': log.details} if log.details else {},
+                                'user_id': log.user_id,
+                                'user': str(log.user) if log.user else None,
+                                'provedor_id': provedor_id,
+                                'conversation_id': None,
+                                'contact_name': None,
+                                'contact_photo': None,
+                                'channel_type': None,
+                                'created_at': log.timestamp,
+                                'ended_at': log.timestamp,
+                                'updated_at': log.timestamp,
+                                'timestamp': log.timestamp,
+                            })
+                    except Exception as local_err:
+                        logger.warning(f"[AUDIT-LOGS] Erro ao mesclar login/logout local: {local_err}")
+
+                # Ordenação global + limite final após merge
+                def _ts(item):
+                    from django.utils.dateparse import parse_datetime
+                    value = item.get('timestamp') or item.get('ended_at') or item.get('created_at')
+                    if isinstance(value, datetime):
+                        return value
+                    if isinstance(value, str):
+                        parsed = parse_datetime(value)
+                        if parsed:
+                            return parsed
+                    return datetime.min
+
+                formatted_logs = sorted(formatted_logs, key=_ts, reverse=True)[:limit_value]
+
                 # Retornar no formato paginado esperado pelo frontend
                 from rest_framework.response import Response
                 return Response({
@@ -5266,6 +5368,167 @@ class SystemConfigView(APIView):
         except Exception as e:
             logger.error(f"Erro ao atualizar configurações do sistema: {e}", exc_info=True)
             return Response({'error': str(e)}, status=500)
+
+
+def _get_system_config_singleton():
+    config = SystemConfig.objects.filter(key='system_config').first()
+    if not config:
+        config = SystemConfig.objects.first()
+    if not config:
+        config = SystemConfig.objects.create(
+            key='system_config',
+            value='{}',
+            description='Configurações gerais do sistema',
+            is_active=True
+        )
+    return config
+
+
+class BillingWhatsAppEmbeddedSignupFinishView(APIView):
+    """
+    Finaliza o Embedded Signup para o canal de cobrança exclusivo do superadmin.
+    Persiste token/waba/phone_number_id diretamente em SystemConfig.
+    """
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if request.user.user_type != 'superadmin':
+            return Response({'success': False, 'error': 'Acesso negado'}, status=403)
+
+        from integrations.embedded_signup_finish import exchange_code_for_token, fetch_phone_numbers_from_waba
+
+        waba_id = request.data.get('waba_id')
+        code = request.data.get('code')
+        if not waba_id or not code:
+            return Response({'success': False, 'error': 'waba_id e code são obrigatórios'}, status=400)
+
+        access_token = exchange_code_for_token(code)
+        if not access_token:
+            return Response({'success': False, 'error': 'Falha na troca de token da Meta'}, status=400)
+
+        phone_data = fetch_phone_numbers_from_waba(waba_id, access_token)
+        if not phone_data:
+            return Response({'success': False, 'error': 'Não foi possível obter phone_number_id do WABA'}, status=400)
+
+        config = _get_system_config_singleton()
+        config.billing_whatsapp_token = access_token
+        config.billing_whatsapp_waba_id = waba_id
+        config.billing_whatsapp_phone_number_id = phone_data.get('phone_number_id')
+        config.billing_channel_enabled = True
+        config.save(update_fields=[
+            'billing_whatsapp_token',
+            'billing_whatsapp_waba_id',
+            'billing_whatsapp_phone_number_id',
+            'billing_channel_enabled',
+        ])
+
+        return Response({
+            'success': True,
+            'billing': {
+                'waba_id': config.billing_whatsapp_waba_id,
+                'phone_number_id': config.billing_whatsapp_phone_number_id,
+                'display_phone_number': phone_data.get('display_phone_number', ''),
+                'verified_name': phone_data.get('verified_name', ''),
+            }
+        })
+
+
+class BillingWhatsAppTemplatesView(APIView):
+    """
+    Lista e cria templates no canal de cobrança exclusivo do superadmin.
+    """
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_billing_proxy(self):
+        config = _get_system_config_singleton()
+        return config, SimpleNamespace(
+            token=config.billing_whatsapp_token,
+            waba_id=config.billing_whatsapp_waba_id
+        )
+
+    def get(self, request):
+        if request.user.user_type != 'superadmin':
+            return Response({'success': False, 'error': 'Acesso negado'}, status=403)
+
+        from integrations.whatsapp_templates import list_message_templates
+        config, proxy = self._get_billing_proxy()
+        if not config.billing_whatsapp_token or not config.billing_whatsapp_waba_id:
+            return Response({'success': False, 'error': 'Canal de cobrança não conectado na Meta'}, status=400)
+
+        ok, templates, error = list_message_templates(proxy)
+        if not ok:
+            return Response({'success': False, 'error': error or 'Erro ao listar templates'}, status=400)
+        return Response({'success': True, 'templates': templates or []})
+
+    def post(self, request):
+        if request.user.user_type != 'superadmin':
+            return Response({'success': False, 'error': 'Acesso negado'}, status=403)
+
+        from integrations.whatsapp_templates import create_message_template
+        config, proxy = self._get_billing_proxy()
+        if not config.billing_whatsapp_token or not config.billing_whatsapp_waba_id:
+            return Response({'success': False, 'error': 'Canal de cobrança não conectado na Meta'}, status=400)
+
+        name = request.data.get('name')
+        category = request.data.get('category', 'UTILITY')
+        language = request.data.get('language', 'pt_BR')
+        parameter_format = request.data.get('parameter_format', 'positional')
+        components = request.data.get('components')
+        body_text = request.data.get('body_text')
+
+        if not name:
+            return Response({'success': False, 'error': 'name é obrigatório'}, status=400)
+
+        # Compatibilidade: se não vier components, montar mínimo com body_text
+        if not components:
+            if not body_text:
+                return Response({'success': False, 'error': 'body_text é obrigatório quando components não é enviado'}, status=400)
+            components = [{"type": "BODY", "text": body_text}]
+
+        if not isinstance(components, list) or not components:
+            return Response({'success': False, 'error': 'components deve ser uma lista não vazia'}, status=400)
+
+        ok, template, error = create_message_template(
+            canal=proxy,
+            name=name,
+            category=category,
+            language=language,
+            components=components,
+            parameter_format=parameter_format,
+        )
+        if not ok:
+            return Response({'success': False, 'error': error or 'Erro ao criar template'}, status=400)
+        return Response({'success': True, 'template': template}, status=201)
+
+
+class BillingWhatsAppTemplateDeleteView(APIView):
+    """
+    Remove template no canal de cobrança exclusivo do superadmin.
+    """
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, template_id=None):
+        if request.user.user_type != 'superadmin':
+            return Response({'success': False, 'error': 'Acesso negado'}, status=403)
+
+        from integrations.whatsapp_templates import delete_message_template
+        config = _get_system_config_singleton()
+        proxy = SimpleNamespace(
+            token=config.billing_whatsapp_token,
+            waba_id=config.billing_whatsapp_waba_id
+        )
+        if not proxy.token or not proxy.waba_id:
+            return Response({'success': False, 'error': 'Canal de cobrança não conectado na Meta'}, status=400)
+        if not template_id:
+            return Response({'success': False, 'error': 'template_id é obrigatório'}, status=400)
+
+        ok, error = delete_message_template(proxy, template_id)
+        if not ok:
+            return Response({'success': False, 'error': error or 'Erro ao deletar template'}, status=400)
+        return Response({'success': True})
 
 class ProvedorViewSet(viewsets.ModelViewSet):
     """
@@ -5867,7 +6130,7 @@ class ProvedorViewSet(viewsets.ModelViewSet):
             return Response({'success': True, 'data': []})
             
         asaas_service = AsaasService()
-        result = asaas_service.list_payments(provedor.asaas_subscription_id)
+        result = asaas_service.list_payments(subscription_id=provedor.asaas_subscription_id)
         
         if result.get('success'):
             # Formatar dados para o frontend
@@ -5903,7 +6166,7 @@ class ProvedorViewSet(viewsets.ModelViewSet):
             
         asaas_service = AsaasService()
         changes = False
-        status_info = {"customer": "not_checked", "subscription": "not_checked"}
+        status_info = {"customer": "not_checked", "subscription": "not_checked", "billing": "not_checked"}
 
         # 1. Verificar Cliente
         if provedor.asaas_customer_id:
@@ -5941,6 +6204,14 @@ class ProvedorViewSet(viewsets.ModelViewSet):
                     changes = True
                 status_info["subscription"] = "active"
 
+        # 3. Verificar inadimplência (OVERDUE) e aplicar bloqueio/desbloqueio local
+        from core.asaas_provedor_block import apply_subscription_overdue_block_for_provedor
+
+        block_res = apply_subscription_overdue_block_for_provedor(provedor, asaas_service)
+        status_info["billing"] = block_res.get("billing", "not_checked")
+        if block_res.get("changes"):
+            changes = True
+
         if changes:
             provedor.save()
             
@@ -5968,42 +6239,54 @@ class ProvedorViewSet(viewsets.ModelViewSet):
         if not provedor:
             return Response({'blocked': False})
 
-        # Se o provedor estiver inativo por motivo de atraso no Asaas
-        if not provedor.is_active and provedor.block_reason and 'Asaas' in provedor.block_reason:
-            asaas_service = AsaasService()
-            
-            # Buscar a fatura atrasada mais recente
-            result = asaas_service.list_payments(
-                customer=provedor.asaas_customer_id,
-                status='OVERDUE'
+        from core.asaas_provedor_block import (
+            get_auto_block_settings,
+            is_asaas_auto_inadimplencia_reason,
+            list_subscription_overdue_payments,
+            payment_is_blocking_overdue,
+        )
+
+        enabled, min_days_late = get_auto_block_settings()
+        if not enabled:
+            return Response({'blocked': False})
+
+        asaas_service = AsaasService()
+        ok, overdue_payments, _err = list_subscription_overdue_payments(provedor, asaas_service)
+        if not ok or not overdue_payments:
+            return Response({'blocked': False})
+
+        blocking_overdues = [
+            p
+            for p in overdue_payments
+            if payment_is_blocking_overdue(p.get('dueDate'), min_days_late)
+        ]
+        if not blocking_overdues:
+            return Response({'blocked': False})
+
+        latest_overdue = blocking_overdues[0]
+        payment_id = latest_overdue.get('id')
+        qr_result = asaas_service.get_payment_pix_qr_code(payment_id)
+
+        reason_text = provedor.block_reason
+        if not is_asaas_auto_inadimplencia_reason(reason_text):
+            reason_text = (
+                'Pagamento pendente no Asaas. Quite a fatura para continuar usando o sistema.'
             )
-            
-            if result.get('success') and result.get('data'):
-                # Pegar a cobrança mais antiga que está atrasada primeiro (ou a primeira da lista)
-                overdue_payments = result.get('data', [])
-                # Ordenar por vencimento (mais antiga primeiro)
-                overdue_payments.sort(key=lambda x: x.get('dueDate', ''))
-                
-                latest_overdue = overdue_payments[0]
-                payment_id = latest_overdue.get('id')
-                
-                # Buscar QR Code Pix desta fatura
-                qr_result = asaas_service.get_payment_pix_qr_code(payment_id)
-                
-                return Response({
-                    'blocked': True,
-                    'reason': provedor.block_reason,
-                    'payment': {
-                        'id': payment_id,
-                        'value': latest_overdue.get('value'),
-                        'dueDate': latest_overdue.get('dueDate'),
-                        'invoiceUrl': latest_overdue.get('invoiceUrl'),
-                        'description': latest_overdue.get('description')
-                    },
-                    'pix': qr_result.get('data') if qr_result.get('success') else None
-                })
-        
-        return Response({'blocked': False})
+
+        return Response(
+            {
+                'blocked': True,
+                'reason': reason_text,
+                'payment': {
+                    'id': payment_id,
+                    'value': latest_overdue.get('value'),
+                    'dueDate': latest_overdue.get('dueDate'),
+                    'invoiceUrl': latest_overdue.get('invoiceUrl'),
+                    'description': latest_overdue.get('description'),
+                },
+                'pix': qr_result.get('data') if qr_result.get('success') else None,
+            }
+        )
 
 class CompanyViewSet(viewsets.ModelViewSet):
     """
@@ -6596,6 +6879,103 @@ class RespostaRapidaViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save()
+
+
+def _provider_gallery_allowed_provedor_ids(user):
+    """IDs de provedor que o usuário pode administrar (None = superadmin, todos)."""
+    if getattr(user, 'user_type', None) == 'superadmin':
+        return None
+    allowed = set()
+    if getattr(user, 'provedor_id', None):
+        allowed.add(user.provedor_id)
+    allowed.update(Provedor.objects.filter(admins=user).values_list('id', flat=True))
+    try:
+        from conversations.models import TeamMember
+        tm = TeamMember.objects.filter(user=user).select_related('team__provedor').first()
+        if tm and tm.team and tm.team.provedor_id:
+            allowed.add(tm.team.provedor_id)
+    except Exception:
+        pass
+    return allowed
+
+
+class ProviderGalleryImageViewSet(viewsets.ModelViewSet):
+    """Galeria de imagens do provedor para uso no chatbot."""
+    serializer_class = ProviderGalleryImageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Listagem: só ativos. Detalhe/DELETE/PATCH: inclui inativos para poder
+        # remover registros legados (soft-delete) e linhas com ativo=False.
+        queryset = ProviderGalleryImage.objects.all()
+        if getattr(self, 'action', None) == 'list':
+            queryset = queryset.filter(ativo=True)
+        provedor_id = self.request.query_params.get('provedor')
+
+        # Se o frontend informar provedor explicitamente, usar esse filtro direto.
+        # Isso evita falsos vazios quando o vínculo do usuário com provedor
+        # não está no campo esperado (admins/provedor_id/teammember).
+        if provedor_id:
+            try:
+                provedor_pk = int(str(provedor_id).strip())
+            except (TypeError, ValueError):
+                return queryset.none().order_by('nome', '-created_at')
+            qs = queryset.filter(provedor_id=provedor_pk)
+            allowed = _provider_gallery_allowed_provedor_ids(user)
+            if allowed is None or provedor_pk in allowed:
+                return qs.order_by('nome', '-created_at')
+            return qs.filter(criado_por=user).order_by('nome', '-created_at')
+
+        if user.user_type != 'superadmin':
+            allowed_provedor_ids = _provider_gallery_allowed_provedor_ids(user) or set()
+            queryset = queryset.filter(provedor_id__in=allowed_provedor_ids or [-1])
+
+        return queryset.order_by('nome', '-created_at')
+
+    def perform_create(self, serializer):
+        provedor = serializer.validated_data.get('provedor')
+        if not provedor:
+            if getattr(self.request.user, 'provedor_id', None):
+                provedor = Provedor.objects.filter(id=self.request.user.provedor_id).first()
+            if not provedor:
+                provedor = self.request.user.provedores_admin.first()
+
+        if not provedor:
+            raise PermissionDenied("Provedor não identificado para este usuário.")
+
+        serializer.save(provedor=provedor, criado_por=self.request.user, ativo=True)
+
+    def perform_destroy(self, instance):
+        """Remove definitivamente o registro e o arquivo em disco."""
+        try:
+            if instance.imagem:
+                instance.imagem.delete(save=False)
+        except Exception:
+            pass
+        instance.delete()
+
+
+@require_http_methods(["GET"])
+def serve_provider_gallery_media(request, image_id):
+    """Serve imagem da galeria por id (link utilizado pelo chatbot)."""
+    try:
+        img = ProviderGalleryImage.objects.get(id=image_id, ativo=True)
+    except ProviderGalleryImage.DoesNotExist as exc:
+        raise Http404("Imagem não encontrada") from exc
+
+    if not img.imagem or not img.imagem.name:
+        raise Http404("Arquivo não encontrado")
+
+    file_path = img.imagem.path
+    if not os.path.exists(file_path):
+        raise Http404("Arquivo não existe")
+
+    response = FileResponse(open(file_path, "rb"), content_type="image/*")
+    response["Access-Control-Allow-Origin"] = "*"
+    response["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+    return response
 
 
 class UserReminderViewSet(viewsets.ModelViewSet):

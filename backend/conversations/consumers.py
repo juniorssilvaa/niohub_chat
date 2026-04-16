@@ -447,17 +447,48 @@ class DashboardConsumer(TokenAuthMixin, SafeConsumerMixin, AsyncWebsocketConsume
                 return
 
             self.user = user
-            self.room_group_name = "conversas_dashboard"
-
-            await self.channel_layer.group_add(
-                self.room_group_name,
-                self.channel_name,
-            )
+            
+            # Tentar obter o provedor_id do usuário
+            self.provedor_id = await self.get_user_provedor_id(user)
+            
+            # Grupos
+            self.groups = ["conversas_dashboard"] # Grupo global legado
+            if self.provedor_id:
+                # Grupo específico do provedor para estatísticas e eventos filtrados
+                self.groups.append(f"dashboard_{self.provedor_id}")
+            
+            # Adicionar a todos os grupos
+            for group_name in self.groups:
+                await self.channel_layer.group_add(
+                    group_name,
+                    self.channel_name,
+                )
 
             await self.accept()
 
         except Exception as e:
+            logger.error(f"[DashboardConsumer] Erro ao conectar: {e}")
             await self.close(code=4000)  # Internal error
+
+    @database_sync_to_async
+    def get_user_provedor_id(self, user):
+        """Obtém o ID do provedor do usuário logado"""
+        try:
+            # 1. Através do campo provedor_id (comum para agentes/admins)
+            if hasattr(user, 'provedor_id') and user.provedor_id:
+                return user.provedor_id
+            
+            # 2. Através de relacionamento M2M ou Admin
+            from core.models import Provedor
+            prov = Provedor.objects.filter(admins=user).first()
+            if prov:
+                return prov.id
+            
+            # 3. Superadmin pode não ter provedor fixo (usar da querystring se necessário, 
+            # mas aqui o dashboard é sempre de um provedor)
+            return None
+        except Exception:
+            return None
 
     async def disconnect(self, close_code):
         # Marcar como desconectando para evitar envios
@@ -470,16 +501,23 @@ class DashboardConsumer(TokenAuthMixin, SafeConsumerMixin, AsyncWebsocketConsume
         
         # Desconectar sem bloquear - fazer limpeza em background
         try:
-            if hasattr(self, "room_group_name") and self.room_group_name:
-                # Executar group_discard em background sem bloquear
-                self._run_background(
-                    self._cleanup_group(self.room_group_name, self.channel_name)
-                )
+            if hasattr(self, "groups"):
+                for group_name in self.groups:
+                    self._run_background(
+                        self._cleanup_group(group_name, self.channel_name)
+                    )
         except Exception:
             pass  # Ignorar erros no disconnect
 
     async def dashboard_event(self, event):
         await self._safe_send(text_data=json.dumps(event["data"]))
+
+    async def dashboard_stats_update(self, event):
+        """Notifica o frontend para recarregar as contagens do dashboard"""
+        await self._safe_send(text_data=json.dumps({
+            "type": "dashboard_stats_update",
+            "timestamp": timezone.now().isoformat()
+        }))
 
 
 class PainelConsumer(TokenAuthMixin, SafeConsumerMixin, AsyncWebsocketConsumer):

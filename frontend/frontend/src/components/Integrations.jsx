@@ -5,7 +5,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 import fotoPerfilNull from '../assets/foto-perfil-null.gif';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
 import { getApiBaseUrl, buildApiPath } from '../utils/apiBaseUrl';
-import useMetaEmbeddedSignupListener from '../hooks/useMetaEmbeddedSignupListener.js';
 import { useNavigate } from 'react-router-dom';
 import { Switch } from './ui/switch';
 
@@ -321,6 +320,14 @@ export default function Integrations({ provedorId }) {
     });
   };
 
+  const withProviderContext = useCallback((data = {}) => {
+    if (!provedorId) return data;
+    return {
+      ...data,
+      provedor_id: Number(provedorId),
+    };
+  }, [provedorId]);
+
   const { t } = useLanguage();
   const navigate = useNavigate();
 
@@ -395,127 +402,8 @@ export default function Integrations({ provedorId }) {
   const [provedor, setProvedor] = useState(null);
   const connectingIdRef = useRef(null);
 
-  // Hook para escutar eventos FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING da Meta
-  // Usado junto com o listener existente para garantir captura do evento
-  // NOTA: O hook e o listener existente podem coexistir - ambos escutarão o mesmo evento
-  const { sendFinishToBackend } = useMetaEmbeddedSignupListener({
-    providerId: provedorId,
-    debug: true, // Ativar logs de debug
-    onFinish: async (wabaId, eventData) => {
-      console.log('✅ [Hook] Evento FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING recebido via hook:', {
-        wabaId,
-        eventData: eventData?.payload || eventData?.data
-      });
-
-      // Encontrar canal WhatsApp Oficial e colocá-lo em processing
-      // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      if (!token) {
-        console.error('❌ [Hook] Token não encontrado');
-        return;
-      }
-
-      try {
-        const res = await fetchCanais(token);
-        const channelsList = Array.isArray(res.data) ? res.data : res.data.results || [];
-        const whatsappOficial = channelsList.find(c => c.tipo === 'whatsapp_oficial');
-
-        if (whatsappOficial) {
-          setProcessingChannels(prev => new Set(prev).add(whatsappOficial.id));
-        }
-
-        // Exibir feedback visual
-        setToast({
-          show: true,
-          message: 'Finalizando conexão...',
-          type: 'info'
-        });
-
-        // Enviar para backend usando a função helper do hook - passar TODOS os dados do evento
-        const response = await sendFinishToBackend(wabaId, provedorId, eventData);
-
-        console.log('✅ [Hook] Finish processado com sucesso. Dados do canal:', response.canal);
-
-        // Remover do estado "processing" e recarregar canais
-        if (response.canal?.id) {
-          setProcessingChannels(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(response.canal.id);
-            return newSet;
-          });
-        }
-
-        // Recarregar canais para atualizar status e exibir dados completos
-        const updatedRes = await fetchCanais(token);
-        const updatedChannels = Array.isArray(updatedRes.data) ? updatedRes.data : updatedRes.data.results || [];
-        setChannels(updatedChannels);
-
-        // Log dos dados retornados do backend para debug
-        if (response.canal) {
-          console.log('✅ [Hook] Dados do canal retornados do backend:', {
-            id: response.canal.id,
-            waba_id: response.canal.waba_id,
-            phone_number_id: response.canal.phone_number_id,
-            phone_number: response.canal.phone_number,
-            display_phone_number: response.canal.display_phone_number,
-            verified_name: response.canal.verified_name,
-            status: response.canal.status
-          });
-        }
-
-        // Limpar parâmetros da URL após sucesso
-        window.history.replaceState({}, '', window.location.pathname);
-
-        // Mensagem de sucesso com informações do canal se disponíveis
-        let successMessage = 'WhatsApp Oficial conectado com sucesso!';
-        if (response.canal?.display_phone_number) {
-          successMessage += ` Número: ${response.canal.display_phone_number}`;
-        }
-        if (response.canal?.verified_name) {
-          successMessage += ` (${response.canal.verified_name})`;
-        }
-        successMessage += ' Sincronizações iniciadas.';
-
-        setToast({
-          show: true,
-          message: successMessage,
-          type: 'success'
-        });
-        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 8000);
-      } catch (error) {
-        console.error('❌ [Hook] Erro ao processar finish:', error);
-
-        // Remover do estado "processing" em caso de erro
-        const res = await fetchCanais(token);
-        const channelsList = Array.isArray(res.data) ? res.data : res.data.results || [];
-        const whatsappOficial = channelsList.find(c => c.tipo === 'whatsapp_oficial');
-        if (whatsappOficial) {
-          setProcessingChannels(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(whatsappOficial.id);
-            return newSet;
-          });
-        }
-
-        const errorMessage = error.message || 'Erro ao finalizar conexão';
-        setToast({
-          show: true,
-          message: `Erro: ${errorMessage}`,
-          type: 'error'
-        });
-        setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 5000);
-      }
-    },
-    onError: (error) => {
-      console.error('❌ [Hook] Erro no listener:', error);
-      setToast({
-        show: true,
-        message: `Erro: ${error.message}`,
-        type: 'error'
-      });
-      setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 5000);
-    }
-  });
+  // Listener dedicado abaixo cobre o fluxo FINISH da Meta.
+  // O hook adicional foi removido para evitar conflito/duplicidade de hooks em runtime.
 
   // Função para parar polling - deve ser declarada antes dos useEffect que a usam
   const stopStatusPolling = useCallback((canalId) => {
@@ -2109,7 +1997,7 @@ export default function Integrations({ provedorId }) {
   const handleSaveWhatsapp = () => {
     setAdding(true);
     const token = localStorage.getItem('token');
-    axios.post('/api/canais/', { tipo: selectedType, nome: instanceName }, {
+    axios.post('/api/canais/', withProviderContext({ tipo: selectedType, nome: instanceName }), {
       headers: { Authorization: `Token ${token}` }
     }).then(() => {
       setShowModal(false);
@@ -2135,10 +2023,10 @@ export default function Integrations({ provedorId }) {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
     // Preparar dados do canal
-    const canalData = {
+    const canalData = withProviderContext({
       tipo: selectedType,
       ...formData
-    };
+    });
 
     // Para Telegram, verificar se estamos atualizando um canal existente
     if (selectedType === 'telegram') {
@@ -3007,7 +2895,7 @@ export default function Integrations({ provedorId }) {
 
       {/* MODAL DE GERENCIAR MODELOS (WhatsApp Oficial) */}
       {showTemplateModal && selectedChannelForTemplates && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 md:pl-56">
           <div className={`bg-card border border-border p-8 rounded-xl shadow-lg w-full ${showCreateTemplate ? 'max-w-7xl' : 'max-w-4xl'} max-h-[90vh] overflow-y-auto relative`}>
             {/* Botão fechar */}
             <button
@@ -3017,13 +2905,13 @@ export default function Integrations({ provedorId }) {
                 setShowCreateTemplate(false);
                 setTemplates([]);
               }}
-              className="absolute top-4 right-4 p-2 rounded hover:bg-[#2d2e4a] transition"
+              className="absolute top-4 right-4 p-2 rounded hover:bg-accent transition"
               title="Fechar"
             >
               <XCircle className="w-5 h-5 text-red-400" />
             </button>
 
-            <h3 className="text-xl font-bold text-white mb-6">Gerenciar Modelos de Mensagem</h3>
+            <h3 className="text-xl font-bold text-foreground mb-6">Gerenciar Modelos de Mensagem</h3>
 
             {!showCreateTemplate ? (
               <div>
@@ -3038,7 +2926,7 @@ export default function Integrations({ provedorId }) {
                   <button
                     onClick={() => loadTemplates(selectedChannelForTemplates)}
                     disabled={loadingTemplates}
-                    className="bg-[#2d2e4a] hover:bg-[#35365a] text-gray-200 px-6 py-2 rounded-lg text-sm font-semibold shadow border border-[#45466a] transition disabled:opacity-50"
+                    className="bg-secondary hover:bg-accent text-secondary-foreground px-6 py-2 rounded-lg text-sm font-semibold shadow border border-border transition disabled:opacity-50"
                   >
                     {loadingTemplates ? 'Carregando...' : 'Atualizar Lista'}
                   </button>
@@ -3046,30 +2934,30 @@ export default function Integrations({ provedorId }) {
 
                 {/* Lista de modelos */}
                 {loadingTemplates ? (
-                  <div className="text-center py-8 text-gray-400">Carregando modelos...</div>
+                  <div className="text-center py-8 text-muted-foreground">Carregando modelos...</div>
                 ) : templates.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400">Nenhum modelo encontrado</div>
+                  <div className="text-center py-8 text-muted-foreground">Nenhum modelo encontrado</div>
                 ) : (
                   <div className="space-y-3">
                     {templates.map((template) => (
                       <div
                         key={template.id || template.name}
-                        className="bg-[#1a1b2e] border border-[#35365a] rounded-lg p-4"
+                        className="bg-muted border border-border rounded-lg p-4"
                       >
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <h4 className="text-white font-semibold mb-1">{template.name}</h4>
-                            <div className="text-sm text-gray-400 space-y-1">
-                              <p>Categoria: <span className="text-gray-300">{translateCategory(template.category)}</span>
+                            <h4 className="text-foreground font-semibold mb-1">{template.name}</h4>
+                            <div className="text-sm text-muted-foreground space-y-1">
+                              <p>Categoria: <span className="text-foreground/90">{translateCategory(template.category)}</span>
                                 {template.sub_category && (
-                                  <span className="text-gray-500 ml-2">
+                                  <span className="text-muted-foreground ml-2">
                                     ({typeof template.sub_category === 'object'
                                       ? JSON.stringify(template.sub_category)
                                       : template.sub_category})
                                   </span>
                                 )}
                               </p>
-                              <p>Idioma: <span className="text-gray-300">{translateLanguage(template.language)}</span></p>
+                              <p>Idioma: <span className="text-foreground/90">{translateLanguage(template.language)}</span></p>
                               <p>Status: <span className={`font-semibold ${template.status === 'APPROVED' ? 'text-green-400' :
                                 template.status === 'PENDING' ? 'text-yellow-400' :
                                   template.status === 'REJECTED' ? 'text-red-400' :
@@ -3080,11 +2968,11 @@ export default function Integrations({ provedorId }) {
                               {(() => {
                                 const translatedQuality = translateQuality(template.quality_score);
                                 return translatedQuality ? (
-                                  <p>Qualidade: <span className="text-gray-300">{translatedQuality}</span></p>
+                                  <p>Qualidade: <span className="text-foreground/90">{translatedQuality}</span></p>
                                 ) : null;
                               })()}
                               {template.last_updated_time && (
-                                <p>Última atualização: <span className="text-gray-300">
+                                <p>Última atualização: <span className="text-foreground/90">
                                   {new Date(template.last_updated_time).toLocaleString('pt-BR')}
                                 </span></p>
                               )}
@@ -3098,10 +2986,10 @@ export default function Integrations({ provedorId }) {
                                 ) : null;
                               })()}
                               {template.components && (
-                                <div className="mt-2 pt-2 border-t border-[#35365a]">
-                                  <p className="text-xs text-gray-500">Componentes:</p>
+                                <div className="mt-2 pt-2 border-t border-border">
+                                  <p className="text-xs text-muted-foreground">Componentes:</p>
                                   {template.components.map((comp, idx) => (
-                                    <span key={idx} className="text-xs text-gray-400 mr-2">
+                                    <span key={idx} className="text-xs text-foreground/90 mr-2">
                                       {translateComponentType(comp.type)}
                                     </span>
                                   ))}
@@ -3127,13 +3015,13 @@ export default function Integrations({ provedorId }) {
             ) : (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-lg font-bold text-white">Criar Novo Modelo</h4>
+                  <h4 className="text-lg font-bold text-foreground">Criar Novo Modelo</h4>
                   <button
                     onClick={() => {
                       setShowCreateTemplate(false);
                       resetTemplateForm();
                     }}
-                    className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow transition"
+                    className="bg-secondary hover:bg-accent text-secondary-foreground px-4 py-2 rounded-lg text-sm font-semibold shadow transition border border-border"
                   >
                     ← Voltar
                   </button>
@@ -3145,7 +3033,7 @@ export default function Integrations({ provedorId }) {
                   <div className="space-y-4 pr-2" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
 
                     <div className="bg-muted border border-border rounded-lg p-4">
-                      <p className="text-xs text-blue-300">
+                      <p className="text-xs text-foreground">
                         <strong>Informação:</strong> Os modelos de mensagem permitem enviar mensagens fora da janela de atendimento ao cliente (24 horas).
                         Após criar, o modelo será analisado pela Meta e pode levar até 24 horas para ser aprovado.
                       </p>

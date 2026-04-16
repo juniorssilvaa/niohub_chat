@@ -192,7 +192,7 @@ const ChatbotManager = () => {
                                 input.click();
                             }}
                             disabled={isCreating}
-                            className="flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-full transition-all shadow-md hover:shadow-lg active:scale-95 border border-border"
+                            className="flex items-center justify-center gap-2 px-6 py-3 bg-card text-foreground font-bold rounded-xl transition-colors border border-border hover:bg-muted disabled:opacity-60"
                         >
                             <Share2 size={20} className="rotate-180" />
                             {t('importar_fluxo') || 'Importar Fluxo'}
@@ -203,7 +203,7 @@ const ChatbotManager = () => {
                                 setNewFlowName('');
                                 setIsCreateModalOpen(true);
                             }}
-                            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white font-bold rounded-full transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/40 active:scale-95 border-b-2 border-green-800"
+                            className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-colors border border-emerald-700/60"
                         >
                             <Plus size={20} />
                             {t('criar_novo_fluxo')}
@@ -241,14 +241,14 @@ const ChatbotManager = () => {
                                     layout
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    whileHover={{ y: -5 }}
+                                    whileHover={{ y: -2 }}
                                     onClick={() => navigate(`/app/accounts/${provedorId}/chatbot-builder/${flow.id}`)}
-                                    className="group relative bg-card border border-border rounded-3xl p-6 shadow-sm hover:shadow-xl hover:border-blue-500/30 transition-all cursor-pointer overflow-hidden"
+                                    className="group relative bg-card border border-border rounded-3xl p-6 hover:border-primary/50 transition-colors cursor-pointer overflow-hidden"
                                 >
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-blue-500/10 transition-colors"></div>
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors"></div>
 
                                     <div className="flex justify-between items-start mb-4 relative z-10">
-                                        <div className="p-3 rounded-2xl bg-muted group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 shadow-inner">
+                                        <div className="p-3 rounded-2xl bg-muted group-hover:bg-primary group-hover:text-white transition-colors duration-200">
                                             <Layout size={24} />
                                         </div>
                                         <div className="flex gap-2">
@@ -269,7 +269,7 @@ const ChatbotManager = () => {
                                         </div>
                                     </div>
 
-                                    <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-blue-500 transition-colors">
+                                    <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
                                         {flow.name}
                                     </h3>
 
@@ -283,14 +283,14 @@ const ChatbotManager = () => {
                                             <span>{t('atualizado_em')} {formatDate(flow.updated_at)}</span>
                                         </div>
                                         {flow.canal_nome && (
-                                            <div className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-lg w-fit">
+                                            <div className="flex items-center gap-2 text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-lg w-fit">
                                                 <Check size={12} />
                                                 <span>{flow.canal_nome}</span>
                                             </div>
                                         )}
                                     </div>
 
-                                    <div className="mt-6 pt-4 border-t border-border flex items-center justify-between group-hover:border-blue-500/20 transition-colors text-blue-500 font-bold text-sm">
+                                    <div className="mt-6 pt-4 border-t border-border flex items-center justify-between group-hover:border-primary/30 transition-colors text-primary font-bold text-sm">
                                         <span>{t('abrir_no_editor')}</span>
                                         <ChevronRight size={18} className="transform group-hover:translate-x-1 transition-transform" />
                                     </div>
@@ -312,7 +312,7 @@ const ChatbotManager = () => {
                                         setNewFlowName('');
                                         setIsCreateModalOpen(true);
                                     }}
-                                    className="px-8 py-3 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white font-bold rounded-full transition-all shadow-lg shadow-green-500/20"
+                                    className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-colors border border-emerald-700/60"
                                 >
                                     Começar agora
                                 </button>

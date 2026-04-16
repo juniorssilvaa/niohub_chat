@@ -2,42 +2,74 @@ import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogIn, LogOut, Activity, Plus, Edit, Trash, MessageCircle, UserPlus, Settings, X } from "lucide-react";
 import { format } from "date-fns";
+import axios from "axios";
+import { buildApiPath } from "@/utils/apiBaseUrl";
 
-export default function RecentActivity() {
+const HUMAN_ACTIONS = {
+  login: 'entrou no sistema',
+  logout: 'saiu do sistema',
+  conversation_closed_ai: 'finalizou uma conversa com automação',
+  conversation_closed_agent: 'finalizou uma conversa',
+  conversation_closed_manual: 'finalizou uma conversa',
+  conversation_closed_timeout: 'teve conversa finalizada por timeout',
+  conversation_assigned: 'atribuiu uma conversa',
+  create: 'criou um item no sistema',
+  edit: 'editou um item no sistema',
+  delete: 'excluiu um item do sistema',
+  contact_created: 'adicionou um contato'
+};
+
+const extractUserName = (activity) => {
+  if (typeof activity.user === 'string' && activity.user.trim()) {
+    const userMatch = activity.user.match(/^([^(]+)/);
+    return (userMatch ? userMatch[1] : activity.user).trim();
+  }
+  if (activity.user_name) return activity.user_name;
+  return 'Usuário';
+};
+
+const getActivityType = (activity) => {
+  const action = (activity.action || '').toLowerCase();
+  if (action.includes('login')) return 'login';
+  if (action.includes('logout')) return 'logout';
+  if (action.includes('conversation_closed')) return 'encerramento';
+  if (action.includes('create') || action.includes('contact_created')) return 'criacao';
+  return 'outros';
+};
+
+const getBadgeStyle = (type) => {
+  switch (type) {
+    case 'login':
+      return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+    case 'logout':
+      return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+    case 'encerramento':
+      return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+    case 'criacao':
+      return 'bg-violet-500/15 text-violet-300 border-violet-500/30';
+    default:
+      return 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30';
+  }
+};
+
+const getBadgeLabel = (type) => {
+  switch (type) {
+    case 'login':
+      return 'Login';
+    case 'logout':
+      return 'Logout';
+    case 'encerramento':
+      return 'Encerramento';
+    case 'criacao':
+      return 'Criação';
+    default:
+      return 'Atividade';
+  }
+};
+
+export default function RecentActivity({ provedorId }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [provedorId, setProvedorId] = useState(null);
-
-  // Buscar provedor_id do usuário logado
-  useEffect(() => {
-    async function fetchUserInfo() {
-      try {
-        // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-        const response = await fetch('/api/auth/me/', {
-          headers: {
-            'Authorization': `Token ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.ok) {
-          const userData = await response.json();
-          // Usar provedor_id do usuário (não mostrar atividades de outros provedores)
-          if (userData.provedor_id) {
-            setProvedorId(userData.provedor_id);
-          } else if (userData.provedores_admin && userData.provedores_admin.length > 0) {
-            // Se não tiver provedor_id direto, usar o primeiro provedor admin
-            setProvedorId(userData.provedores_admin[0].id);
-          }
-        }
-      } catch (error) {
-        console.error('Erro ao buscar informações do usuário:', error);
-      }
-    }
-    
-    fetchUserInfo();
-  }, []);
 
   useEffect(() => {
     async function fetchActivityData() {
@@ -51,119 +83,40 @@ export default function RecentActivity() {
         const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
         
         // Buscar logs de auditoria/atividade - buscar mais logs para garantir que pegamos login/logout
-        const response = await fetch(`/api/audit-logs/?limit=100&provedor_id=${provedorId}`, {
+        const response = await axios.get(buildApiPath(`/api/audit-logs/?limit=120&provedor_id=${provedorId}`), {
           headers: {
             'Authorization': `Token ${token}`,
             'Content-Type': 'application/json'
           }
         });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const allActivities = data.results || data || [];
-          
-          // Filtrar atividades: incluir login/logout e outras ações relevantes
-          const filteredActivities = allActivities
-            .filter(activity => {
-              const action = (activity.action || '').toLowerCase();
-              
-              // PRIORIDADE: Sempre incluir login e logout
-              if (action === 'login' || action === 'logout') {
-                // Verificar se o usuário pertence ao provedor
-                if (activity.user) {
-                  let userProvedorId = null;
-                  if (typeof activity.user === 'object') {
-                    userProvedorId = activity.user.provedor_id;
-                  } else if (typeof activity.user === 'string') {
-                    // Tentar extrair provedor_id se o user for string
-                    const userMatch = activity.user.match(/provedor_id[:\s]*(\d+)/i);
-                    if (userMatch) {
-                      userProvedorId = parseInt(userMatch[1]);
-                    }
-                  }
-                  
-                  const provedorIdNum = parseInt(provedorId);
-                  // Se o usuário tem provedor_id e corresponde, incluir
-                  if (userProvedorId && userProvedorId === provedorIdNum) {
-                    return true;
-                  }
-                  // Se não tem provedor_id mas a atividade tem, verificar
-                  if (!userProvedorId && activity.provedor_id) {
-                    return parseInt(activity.provedor_id) === provedorIdNum;
-                  }
-                }
-                // Se não conseguiu verificar, incluir se a atividade tem o provedor_id correto
-                if (activity.provedor_id) {
-                  return parseInt(activity.provedor_id) === parseInt(provedorId);
-                }
-                // Por segurança, incluir login/logout mesmo sem provedor_id explícito
-                return true;
-              }
-              
-              // Verificar provedor_id de diferentes formas (pode vir como número ou string)
-              const activityProvedorId = activity.provedor_id;
-              const provedorIdNum = parseInt(provedorId);
-              const activityProvedorIdNum = activityProvedorId ? parseInt(activityProvedorId) : null;
-          
-              // Excluir atividades sem provedor (exceto login/logout que já foram tratados)
-              if (!activityProvedorIdNum || activityProvedorIdNum !== provedorIdNum) {
-                return false;
-              }
-              
-              // Excluir atividades de usuários superadmin (garantia extra)
-              if (activity.user && typeof activity.user === 'object' && activity.user.user_type === 'superadmin') {
-                return false;
-              }
-            
-            // Converter details para string se for objeto
-            let details = activity.details;
-            if (typeof details === 'object') {
-              details = JSON.stringify(details);
-            }
-            details = (details || '').toLowerCase();
-            
-              // Incluir ações relevantes do provedor
-              const relevantActions = [
-                'login', 'logout', 'contact_created', 'create', 'delete', 'update', 'edit',
-                'conversation_closed', 'conversation_created', 'message_sent', 'team_created',
-                'user_created', 'channel_created', 'settings_updated', 'conversation_closed_agent',
-                'conversation_closed_ai', 'conversation_closed_manual', 'conversation_assigned'
-              ];
-              
-              if (relevantActions.some(act => action.includes(act))) {
-              return true;
-            }
-            
-              // Verificar se há informações relevantes nos detalhes (case insensitive)
-              const detailsLower = details.toLowerCase();
-              if (detailsLower.includes('equipe') || 
-                  detailsLower.includes('provedor') || 
-                  detailsLower.includes('canal') || 
-                  detailsLower.includes('empresa') ||
-                  detailsLower.includes('usuário') ||
-                  detailsLower.includes('conversa') ||
-                  detailsLower.includes('contato') ||
-                  detailsLower.includes('criou') ||
-                  detailsLower.includes('excluiu') ||
-                  detailsLower.includes('atualizou') ||
-                  detailsLower.includes('encerrada') ||
-                  detailsLower.includes('login') ||
-                  detailsLower.includes('logout')) {
-              return true;
-            }
-            
-            return false;
-            })
-            .slice(0, 30) // Limitar a 30 atividades mais recentes
-            .sort((a, b) => {
-              // Ordenar por timestamp (mais recente primeiro)
-              const timeA = new Date(a.timestamp || a.created_at || a.event_at || 0);
-              const timeB = new Date(b.timestamp || b.created_at || b.event_at || 0);
-              return timeB - timeA;
-            });
-          
-          setActivities(filteredActivities);
-        }
+        const data = response.data;
+        const allActivities = data.results || data || [];
+
+        const relevantActions = Object.keys(HUMAN_ACTIONS);
+        const filteredActivities = allActivities
+          .filter((activity) => {
+            const action = (activity.action || '').toLowerCase();
+            if (relevantActions.some((act) => action.includes(act))) return true;
+            const detailsRaw = typeof activity.details === 'string'
+              ? activity.details
+              : JSON.stringify(activity.details || {});
+            const details = detailsRaw.toLowerCase();
+            return (
+              details.includes('login') ||
+              details.includes('logout') ||
+              details.includes('conversa') ||
+              details.includes('contato') ||
+              details.includes('canal')
+            );
+          })
+          .sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.created_at || a.event_at || 0);
+            const timeB = new Date(b.timestamp || b.created_at || b.event_at || 0);
+            return timeB - timeA;
+          })
+          .slice(0, 20);
+
+        setActivities(filteredActivities);
         
         setLoading(false);
       } catch (error) {
@@ -228,9 +181,7 @@ export default function RecentActivity() {
 
   const getActivityText = (activity) => {
     const action = (activity.action || '').toLowerCase();
-    // Extrair nome do usuário (formato: "nome (tipo)")
-    const userMatch = activity.user?.match(/^([^(]+)/);
-    const userName = userMatch ? userMatch[1].trim() : 'Usuário';
+    const userName = extractUserName(activity);
     
     // Tentar extrair detalhes específicos da atividade
     let details = activity.details;
@@ -311,7 +262,19 @@ export default function RecentActivity() {
         const contactName = activity.contact_name || 'cliente';
         return `${userName} adicionou o contato ${contactName}`;
       default:
-        return `${userName} executou ação no sistema`;
+        if (HUMAN_ACTIONS[action]) {
+          return `${userName} ${HUMAN_ACTIONS[action]}`;
+        }
+        if (action.includes('conversation_closed')) {
+          return `${userName} finalizou uma conversa`;
+        }
+        if (action.includes('logout')) {
+          return `${userName} saiu do sistema`;
+        }
+        if (action.includes('login')) {
+          return `${userName} entrou no sistema`;
+        }
+        return `${userName} executou ${action || 'ação no sistema'}`;
     }
   };
 
@@ -346,6 +309,13 @@ export default function RecentActivity() {
               <div key={activity.id} className="flex items-center gap-3 p-2 rounded-md bg-muted border border-border">
                 <div className="shrink-0">{getActivityIcon(activity)}</div>
                 <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getBadgeStyle(getActivityType(activity))}`}
+                    >
+                      {getBadgeLabel(getActivityType(activity))}
+                    </span>
+                  </div>
                   <div className="text-sm text-foreground">
                     {getActivityText(activity)}
                   </div>

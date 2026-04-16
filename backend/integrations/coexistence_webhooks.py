@@ -31,6 +31,7 @@ from conversations.models import Message, Conversation, Contact
 from conversations.services import ConversationNotificationService
 from core.models import Provedor, Canal
 from core.chatbot_engine import ChatbotEngine
+from core.redis_memory_service import redis_memory_service
 from integrations.models import WhatsAppIntegration
 
 # Importar handlers modulares
@@ -1077,12 +1078,27 @@ def process_incoming_messages(waba_id: str, value: dict):
             else:
                 conv_created = False
             
-            # Se a conversa já existia mas estava fechada ou em closing, reabrir
+            # Se a conversa já existia mas estava fechada ou em closing, reabrir (Reset Completo)
             if conversation.status in ["closed", "resolved", "finalizada", "closing"]:
+                now = timezone.now()
                 conversation.status = "snoozed"
                 conversation.team = ia_team
                 conversation.assignee = None
+                conversation.waiting_for_agent = False # Bot assume o controle
+                conversation.created_at = now # Resetar cronômetro para o painel
+                conversation.updated_at = now
                 conversation.save()
+                
+                # Limpar memória do chatbot para reiniciar o fluxo do zero (Resgate)
+                import asyncio
+                from asgiref.sync import async_to_sync
+                try:
+                    async_to_sync(redis_memory_service.clear_memory)(
+                        provedor.id, conversation.id, "whatsapp", "unknown"
+                    )
+                    logger.info(f"[WhatsAppWebhook] Reset de memória e tempo para conversa reaberta: {conversation.id}")
+                except Exception as e:
+                    logger.error(f"[WhatsAppWebhook] Erro ao resetar memória da conversa {conversation.id}: {e}")
             
             content = ""
             file_url = None
@@ -1399,8 +1415,15 @@ def process_incoming_messages(waba_id: str, value: dict):
             chatbot_handled = False
             
             if is_customer_message:
+                # Bloqueio financeiro: não permitir IA/Chatbot para provedor inativo
+                if not getattr(provedor, 'is_active', True):
+                    logger.info(
+                        f"[WhatsAppWebhook] IA/Chatbot suprimidos para provedor {provedor.id}: "
+                        f"provedor inativo. Motivo: {getattr(provedor, 'block_reason', '')}"
+                    )
+                    chatbot_handled = False
                 # VERIFICAR SE O CANAL TEM IA/CHATBOT ATIVA
-                if canal and not canal.ia_ativa:
+                elif canal and not canal.ia_ativa:
                     logger.info(f"[WhatsAppWebhook] ChatBot suprimido para o canal {canal.id} ({canal.nome}): ia_ativa=False")
                     chatbot_handled = False
                 elif bot_mode == 'chatbot':
@@ -1525,6 +1548,7 @@ def process_incoming_messages(waba_id: str, value: dict):
                 and message_obj.is_from_customer 
                 and message_type == "text"  # Apenas mensagens de texto
                 and canal_ia_ativa  # Apenas se a IA estiver ativa no canal
+                and getattr(provedor, 'is_active', True)  # Apenas se o provedor estiver ativo
             )
             
             if not canal_ia_ativa:
@@ -1609,6 +1633,14 @@ def call_ai_and_respond_whatsapp(conversation, contact, provedor, content: str, 
             logger.warning(f"[WhatsAppWebhook] IA ignorada: provedor não encontrado.")
             return
         
+        # Bloqueio financeiro: provedor inativo não pode receber respostas da IA
+        if not getattr(provedor, 'is_active', True):
+            logger.info(
+                f"[WhatsAppWebhook] IA ignorada: provedor {provedor.id} inativo. "
+                f"Motivo: {getattr(provedor, 'block_reason', '')}"
+            )
+            return
+
         # Verificar se a IA está ativa no canal
         from core.models import Canal
         canal_obj = None

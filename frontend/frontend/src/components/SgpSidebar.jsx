@@ -97,21 +97,8 @@ const SgpSidebar = ({ conversation, user, messages = [], onClose }) => {
     setManuallyReset(false);
   }, [conversation?.id]);
 
-  useEffect(() => {
-    if (!messages || messages.length === 0 || clienteData || manuallyReset) return;
-    const lastMessages = messages.slice(-5);
-    const cpfRegex = /(\d{3}\.?\d{3}\.?\d{3}-?\d{2})|(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/;
+  // Removida captura automática de CPF/CNPJ a pedido do usuário
 
-    for (const msg of [...lastMessages].reverse()) {
-      const match = msg.content?.match(cpfRegex);
-      if (match && msg.author_type !== 'agent') {
-        const docEncontrado = match[0];
-        setDocumento(docEncontrado);
-        buscarCliente(docEncontrado);
-        break;
-      }
-    }
-  }, [messages, clienteData, buscarCliente]);
 
   const copyToClipboard = (text, label) => {
     if(!text) return;

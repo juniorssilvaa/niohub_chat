@@ -7,7 +7,7 @@ import {
     ArrowLeft, Settings, Trash2, MessageSquare,
     Zap, GitBranch, Database, Globe, X, Check,
     GripVertical, Info, Send, User, ChevronRight, List,
-    Eye, EyeOff, Wifi, XCircle, ChevronDown, ChevronUp
+    Eye, EyeOff, Wifi, XCircle, ChevronDown, ChevronUp, Clock, Image as LucideImage
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -17,9 +17,13 @@ const NODE_TYPES = {
     sgp: { label: 'Consulta SGP', color: 'text-slate-400', icon: Database },
     planos: { label: 'Planos de Internet', color: 'text-slate-400', icon: Wifi },
     menu: { label: 'Lista Interativa (WhatsApp)', color: 'text-slate-400', icon: List },
+    galeria: { label: 'Galeria', color: 'text-slate-400', icon: LucideImage },
     transfer: { label: 'Transferir Atendimento', color: 'text-slate-400', icon: Share2 },
     close: { label: 'Encerrar Atendimento', color: 'text-slate-400', icon: XCircle },
 };
+
+/** Largura fixa do cartão no canvas (arestas SVG usam o mesmo valor). */
+const NODE_CARD_WIDTH = 280;
 
 const ChatbotBuilder = () => {
     const { t } = useLanguage();
@@ -41,6 +45,8 @@ const ChatbotBuilder = () => {
     const [connectionSource, setConnectionSource] = useState(null);
     const [connectionSourceHandle, setConnectionSourceHandle] = useState(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+    const [hoveredNodeId, setHoveredNodeId] = useState(null);
+    const [hoveredEdgeId, setHoveredEdgeId] = useState(null);
 
     // Simulator State
     const [showSimulator, setShowSimulator] = useState(false);
@@ -54,6 +60,7 @@ const ChatbotBuilder = () => {
     const [contextMenu, setContextMenu] = useState({ show: false, x: 0, y: 0, type: null, targetId: null });
     const [availableTeams, setAvailableTeams] = useState([]);
     const [availablePlanos, setAvailablePlanos] = useState([]);
+    const [galleryImages, setGalleryImages] = useState([]);
 
     useEffect(() => {
         const fetchFlowData = async () => {
@@ -108,10 +115,21 @@ const ChatbotBuilder = () => {
             }
         };
 
+        const fetchGalleryImages = async () => {
+            try {
+                const response = await axios.get(`/api/provider-gallery/?provedor=${provedorId}`);
+                const images = Array.isArray(response.data) ? response.data : (response.data.results || []);
+                setGalleryImages(images);
+            } catch (error) {
+                console.error('Erro ao buscar galeria:', error);
+            }
+        };
+
         if (provedorId) {
             fetchFlowData();
             fetchTeams();
             fetchPlanos();
+            fetchGalleryImages();
         }
     }, [provedorId, flowId]);
 
@@ -436,6 +454,7 @@ const ChatbotBuilder = () => {
                     position: 'absolute',
                     top: node.position.y,
                     left: node.position.x,
+                    width: NODE_CARD_WIDTH,
                     x: 0,
                     y: 0
                 }}
@@ -453,19 +472,23 @@ const ChatbotBuilder = () => {
                     setSelectedNode(node.id);
                     setIsEditorOpen(false);
                 }}
-                className={`group flex flex-col w-[240px] bg-background border border-border rounded-3xl shadow-2xl transition-all cursor-move z-20 ${isSelected ? 'ring-2 ring-primary border-primary bg-card' : 'hover:border-accent/50'
+                onMouseEnter={() => setHoveredNodeId(node.id)}
+                onMouseLeave={() => setHoveredNodeId(curr => (curr === node.id ? null : curr))}
+                className={`group flex flex-col bg-card border border-border rounded-2xl transition-all cursor-move z-20 ${isSelected ? 'ring-2 ring-primary border-primary' : 'hover:border-accent/50'
                     }`}
             >
                 {/* Header do Nó */}
-                <div className="flex items-center gap-3 p-4 border-b border-background bg-background/50 rounded-t-3xl text-white">
-                    <div className={`${TypeConfig.color}`}>
+                <div className="relative flex items-start gap-2.5 p-3 border-b border-border bg-card rounded-t-2xl text-foreground">
+                    {/* Input Point (Left) — alinhado ao centro vertical do cabeçalho */}
+                    <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-muted border-2 border-card rounded-full z-30" />
+                    <div className={`${TypeConfig.color} shrink-0 mt-0.5`}>
                         <TypeConfig.icon size={20} strokeWidth={1.5} />
                     </div>
-                    <div className="flex flex-col flex-1 truncate">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 leading-none">
+                    <div className="flex flex-col flex-1 min-w-0 pr-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-tight">
                             {TypeConfig.label}
                         </span>
-                        <span className="text-xs font-bold text-white truncate mt-1">
+                        <span className="text-[11px] font-bold text-foreground mt-1 break-words whitespace-normal leading-snug">
                             {node.data.label || 'Nó sem título'}
                         </span>
                     </div>
@@ -477,7 +500,7 @@ const ChatbotBuilder = () => {
                                 updateNodeData(node.id, { isCollapsed: !node.data.isCollapsed });
                                 setSelectedNode(node.id);
                             }}
-                            className="p-1.5 hover:bg-[#2d2d2d] rounded-lg text-[#888888] hover:text-white transition-all"
+                            className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-all"
                             title={node.data.isCollapsed ? "Expandir bloco" : "Recolher bloco"}
                         >
                             {node.data.isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -489,7 +512,7 @@ const ChatbotBuilder = () => {
                                 setSelectedNode(node.id);
                                 setIsEditorOpen(true);
                             }}
-                            className="p-1.5 hover:bg-[#2d2d2d] rounded-lg text-primary hover:text-primary/80 transition-all"
+                            className="p-1.5 hover:bg-muted rounded-lg text-primary hover:text-primary/80 transition-all"
                             title="Abrir Editor"
                         >
                             <Eye size={14} />
@@ -507,25 +530,22 @@ const ChatbotBuilder = () => {
                     {(!node.data.buttons || node.data.buttons.length === 0) && (!node.data.rows || node.data.rows.length === 0) && node.type !== 'transfer' && node.type !== 'close' && node.type !== 'planos' && (
                         <div
                             onMouseDown={(e) => startConnection(e, node.id, null)}
-                            className="absolute -right-2 top-[35px] w-4 h-4 rounded-full bg-primary border-4 border-background hover:scale-125 transition-all cursor-crosshair z-30"
+                            className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary border-2 border-card hover:scale-110 transition-transform cursor-crosshair z-30"
                         />
                     )}
                 </div>
 
-                {/* Input Point (Left) */}
-                <div className="absolute -left-1.5 top-[35px] w-3 h-3 bg-muted border-2 border-background rounded-full" />
-
                 {/* Botões do Nó (Para Branching) */}
                 {
                     !node.data.isCollapsed && (node.data.buttons || []).map((btn, bidx) => (
-                        <div key={btn.id} className="relative px-4 py-2 border-b border-slate-900 last:border-0 group/btn">
-                            <div className="bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-[10px] font-bold text-blue-400 uppercase tracking-widest truncate">
+                        <div key={btn.id} className="relative px-3 py-1.5 border-b border-border last:border-0 group/btn">
+                            <div className="bg-background border border-border rounded-lg px-3 py-1.5 text-[10px] font-bold text-primary uppercase tracking-widest truncate">
                                 {btn.title}
                             </div>
                             {/* Dot por botão */}
                             <div
                                 onMouseDown={(e) => startConnection(e, node.id, btn.id)}
-                                className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary border-4 border-background hover:scale-125 transition-all cursor-crosshair z-30"
+                                className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary border-2 border-card hover:scale-110 transition-transform cursor-crosshair z-30"
                             />
                         </div>
                     ))
@@ -534,15 +554,15 @@ const ChatbotBuilder = () => {
                 {/* Itens do Menu (Para Branching) */}
                 {
                     !node.data.isCollapsed && (node.data.rows || []).map((row, ridx) => (
-                        <div key={row.id} className="relative px-4 py-2 border-b border-slate-900 last:border-0 group/row">
-                            <div className={`bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-[10px] font-bold truncate ${node.type === 'planos' ? 'text-cyan-400' : 'text-emerald-400'}`}>
+                        <div key={row.id} className="relative px-3 py-1.5 border-b border-border last:border-0 group/row">
+                            <div className={`bg-background border border-border rounded-lg px-3 py-1.5 text-[10px] font-bold truncate ${node.type === 'planos' ? 'text-cyan-400' : 'text-emerald-400'}`}>
                                 {row.title}
-                                {row.description && <span className="text-slate-500 ml-1">— {row.description}</span>}
+                                {row.description && <span className="text-muted-foreground ml-1">— {row.description}</span>}
                             </div>
                             {/* Dot por item */}
                             <div
                                 onMouseDown={(e) => startConnection(e, node.id, row.id)}
-                                className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-slate-950 hover:scale-125 transition-all cursor-crosshair z-30 ${node.type === 'planos' ? 'bg-cyan-500' : 'bg-emerald-500'}`}
+                                className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-card hover:scale-110 transition-transform cursor-crosshair z-30 ${node.type === 'planos' ? 'bg-cyan-500' : 'bg-emerald-500'}`}
                             />
                         </div>
                     ))
@@ -662,7 +682,7 @@ const ChatbotBuilder = () => {
                             <button
                                 onClick={handleSaveFlow}
                                 disabled={isSaving}
-                                className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-xl transition-all shadow-sm ${isSaving ? 'bg-[#242424] text-[#444444]' : 'bg-emerald-600 text-white hover:bg-emerald-500 hover:shadow-lg active:scale-95 border-b-4 border-emerald-800'
+                                className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-xl transition-all border border-border ${isSaving ? 'bg-muted text-muted-foreground' : 'bg-emerald-600 text-white hover:bg-emerald-500'
                                     }`}
                             >
                                 <Save size={16} />
@@ -673,7 +693,7 @@ const ChatbotBuilder = () => {
 
                     <button
                         onClick={startSimulator}
-                        className="flex items-center gap-2 px-6 py-2 text-sm font-bold bg-amber-500 text-white rounded-xl hover:bg-amber-400 transition-all active:scale-95 border-b-4 border-amber-700"
+                        className="flex items-center gap-2 px-6 py-2 text-sm font-bold bg-amber-500 text-white rounded-xl hover:bg-amber-400 transition-all border border-amber-600/60"
                     >
                         <Play size={16} />
                         Testar
@@ -758,6 +778,13 @@ const ChatbotBuilder = () => {
                                                                 headerText: type === 'menu' ? 'MENU' : (type === 'planos' ? 'PLANOS' : ''),
                                                                 footerText: (type === 'menu' || type === 'planos') ? 'Clique para selecionar' : '',
                                                                 rows: type === 'menu' ? [{ id: 'row_' + Date.now(), title: 'Opção 1', description: '' }] : (type === 'planos' ? availablePlanos.map(p => ({ id: 'plano_' + p.id, title: p.nome, description: `${p.velocidade_download}Mbps - R$ ${p.preco}` })) : []),
+                                                                galleryImageId: type === 'galeria' ? '' : undefined,
+                                                                galleryImageUrl: type === 'galeria' ? '' : undefined,
+                                                                maxInvalidAttempts: type === 'menu' ? 3 : undefined,
+                                                                invalidOptionMessage: type === 'menu' ? 'Opção inválida. Por favor, selecione uma opção do menu.' : undefined,
+                                                                maxInvalidAttemptsMessage: type === 'menu' ? 'Não consegui identificar a opção informada. Vou seguir com o atendimento humano.' : undefined,
+                                                                maxInvalidAction: type === 'menu' ? 'repeat_menu' : undefined,
+                                                                maxInvalidActionTeamId: type === 'menu' ? '' : undefined,
                                                                 ...(type === 'planos' ? { useDynamicPlanos: true } : {})
                                                             }
                                                         };
@@ -795,7 +822,7 @@ const ChatbotBuilder = () => {
                             onMouseMove={handleCanvasMouseMove}
                             onMouseUp={handleCanvasMouseUp}
                             onContextMenu={handleCanvasContextMenu}
-                            className={`flex-1 overflow-hidden bg-background relative select-none ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+                            className={`flex-1 overflow-hidden relative select-none bg-[linear-gradient(180deg,#2b313c_0%,#262c36_100%)] ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
                             onClick={() => {
                                 setSelectedNode(null);
                                 setIsEditorOpen(false);
@@ -803,7 +830,7 @@ const ChatbotBuilder = () => {
                             }}
                         >
                             {/* Grid Background */}
-                            <div className="absolute inset-0 bg-[radial-gradient(#333333_2px,transparent_2px)] dark:bg-[radial-gradient(#222222_2px,transparent_2px)] [background-size:32px_32px] opacity-40" />
+                            <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(148,163,184,0.28)_1.3px,transparent_1.3px)] [background-size:30px_30px] opacity-45" />
 
                             <div
                                 style={{
@@ -813,7 +840,6 @@ const ChatbotBuilder = () => {
                                 className="absolute top-0 left-0"
                             >
                                 {/* SVG Layer for Edges */}
-                                {console.log("Edges rendering:", edges.length)}
                                 <svg
                                     className="absolute top-0 left-0 pointer-events-none z-10 overflow-visible"
                                     style={{ width: '1px', height: '1px' }}
@@ -826,12 +852,12 @@ const ChatbotBuilder = () => {
                                         if (!sourceNode || !targetNode) return null;
 
                                         // Side-to-side connections
-                                        const x1 = sourceNode.position.x + 240;
+                                        const x1 = sourceNode.position.x + NODE_CARD_WIDTH;
                                         const x2 = targetNode.position.x - 5;
-                                        const y2 = targetNode.position.y + 35; // Alinhado com o input dot (35px do topo)
+                                        const y2 = targetNode.position.y + 40; // centro do cabeçalho (input à esquerda)
 
                                         // Calcular y1 baseado no sourceHandle
-                                        let y1 = sourceNode.position.y + 35; // Default: Ponto central do header
+                                        let y1 = sourceNode.position.y + 40; // saída padrão: centro vertical do cabeçalho
 
                                         if (edge.sourceHandle && !sourceNode.data.isCollapsed) {
                                             if (sourceNode.data.buttons) {
@@ -849,6 +875,12 @@ const ChatbotBuilder = () => {
                                             }
                                         }
 
+                                        const isRelatedToNode =
+                                            (selectedNode && (edge.source == selectedNode || edge.target == selectedNode)) ||
+                                            (hoveredNodeId && (edge.source == hoveredNodeId || edge.target == hoveredNodeId));
+                                        const isEdgeAlert = hoveredEdgeId === edge.id || (contextMenu.type === 'edge' && contextMenu.targetId === edge.id);
+                                        const edgeStroke = isEdgeAlert ? '#ef4444' : isRelatedToNode ? '#22c55e' : '#8b949e';
+
                                         return (
                                             <g key={edge.id}>
                                                 {/* Hit area for context menu */}
@@ -858,6 +890,8 @@ const ChatbotBuilder = () => {
                                                     stroke="transparent"
                                                     strokeWidth="20"
                                                     className="pointer-events-auto cursor-pointer"
+                                                    onMouseEnter={() => setHoveredEdgeId(edge.id)}
+                                                    onMouseLeave={() => setHoveredEdgeId(curr => (curr === edge.id ? null : curr))}
                                                     onContextMenu={(e) => {
                                                         e.preventDefault();
                                                         e.stopPropagation();
@@ -875,12 +909,12 @@ const ChatbotBuilder = () => {
                                                 <path
                                                     d={`M ${x1} ${y1} C ${x1 + 100} ${y1}, ${x2 - 100} ${y2}, ${x2} ${y2}`}
                                                     fill="none"
-                                                    stroke="#ffff00"
-                                                    strokeWidth="4"
-                                                    strokeDasharray="none"
-                                                    className="opacity-100 drop-shadow-[0_0_10px_rgba(255,255,0,0.7)] pointer-events-none"
+                                                    stroke={edgeStroke}
+                                                    strokeWidth="2.5"
+                                                    strokeDasharray="8 6"
+                                                    className="opacity-100 pointer-events-none"
                                                 />
-                                                <circle cx={x2} cy={y2} r="5" fill="#ffff00" className="pointer-events-none shadow-lg" />
+                                                <circle cx={x2} cy={y2} r="3.5" fill={edgeStroke} className="pointer-events-none" />
                                             </g>
                                         );
                                     })}
@@ -889,7 +923,7 @@ const ChatbotBuilder = () => {
                                         const sNode = nodes.find(n => n.id == connectionSource);
                                         if (!sNode) return null;
 
-                                        let sy = sNode.position.y + 35;
+                                        let sy = sNode.position.y + 40;
                                         if (connectionSourceHandle && !sNode.data.isCollapsed) {
                                             if (sNode.data.buttons) {
                                                 const bidx = sNode.data.buttons.findIndex(b => b.id == connectionSourceHandle);
@@ -906,14 +940,14 @@ const ChatbotBuilder = () => {
 
                                         return (
                                             <path
-                                                d={`M ${sNode.position.x + 240} ${sy} 
+                                                d={`M ${sNode.position.x + NODE_CARD_WIDTH} ${sy} 
                                                     C ${sNode.position.x + 340} ${sy},
                                                       ${mousePos.x - 50} ${mousePos.y}, ${mousePos.x} ${mousePos.y}`}
                                                 fill="none"
-                                                stroke="#ffff00"
-                                                strokeWidth="4"
-                                                strokeDasharray="none"
-                                                className="opacity-100 pointer-events-none drop-shadow-[0_0_10px_rgba(255,255,0,0.7)]"
+                                                stroke="#8b949e"
+                                                strokeWidth="2.5"
+                                                strokeDasharray="8 6"
+                                                className="opacity-100 pointer-events-none"
                                             />
                                         );
                                     })()}
@@ -933,24 +967,24 @@ const ChatbotBuilder = () => {
                                     initial={{ x: 400 }}
                                     animate={{ x: 0 }}
                                     exit={{ x: 400 }}
-                                    className="w-96 bg-white dark:bg-background border-l border-slate-200 dark:border-border z-50 shadow-2xl flex flex-col"
+                                    className="w-96 bg-card border-l border-border z-50 shadow-lg flex flex-col"
                                 >
-                                    <div className="p-6 border-b border-slate-100 dark:border-border flex items-center justify-between bg-slate-50/50 dark:bg-background/50">
+                                    <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
                                         <div>
-                                            <h3 className="font-black text-[10px] uppercase tracking-widest text-slate-400 mb-1">Configuração</h3>
-                                            <p className="text-sm font-bold text-slate-800 dark:text-white">Editor de Propriedades</p>
+                                            <h3 className="font-semibold text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Configuração</h3>
+                                            <p className="text-sm font-bold text-foreground">Editor de Propriedades</p>
                                         </div>
-                                        <button onClick={() => setSelectedNode(null)} className="p-3 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-2xl transition-colors text-slate-500">
+                                        <button onClick={() => setSelectedNode(null)} className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" type="button" aria-label="Fechar editor">
                                             <X size={20} />
                                         </button>
                                     </div>
 
-                                    <div className="p-8 space-y-8 flex-1 overflow-y-auto">
+                                    <div className="p-6 space-y-8 flex-1 overflow-y-auto">
                                         <div>
                                             <div className="flex items-center justify-between mb-3">
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Bloco (Apelido)</label>
+                                                <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Nome do Bloco (Apelido)</label>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">Identificação</span>
+                                                    <span className="text-[9px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-md border border-border">Identificação</span>
                                                 </div>
                                             </div>
                                             <input
@@ -958,10 +992,68 @@ const ChatbotBuilder = () => {
                                                 value={nodes.find(n => n.id === selectedNode)?.data.label || ''}
                                                 onChange={(e) => updateNodeData(selectedNode, { label: e.target.value })}
                                                 placeholder="Ex: Menu Principal, Boas-vindas"
-                                                className="w-full bg-slate-50 dark:bg-background border-2 border-slate-100 dark:border-border rounded-2xl px-5 py-4 text-sm focus:border-primary transition-all outline-none text-slate-800 dark:text-white font-bold placeholder:font-normal shadow-inner"
+                                                className="w-full bg-background border border-border rounded-lg px-4 py-3 text-sm outline-none text-foreground font-medium placeholder:text-muted-foreground placeholder:font-normal focus:ring-2 focus:ring-primary/35 focus:border-primary"
                                             />
-                                            <p className="text-[9px] text-slate-400 mt-2 italic px-1">Este nome serve para você se organizar no canvas.</p>
+                                            <p className="text-[9px] text-muted-foreground mt-2 px-0.5">Este nome serve para você se organizar no canvas.</p>
                                         </div>
+
+                                        {/* Configurações de Inatividade (Global por Nó) */}
+                                        {nodes.find(n => n.id === selectedNode)?.type !== 'start' && (
+                                            <div className="p-4 bg-muted/25 border border-border rounded-xl space-y-4">
+                                                <div className="flex items-center gap-2">
+                                                    <Clock size={16} className="text-muted-foreground shrink-0" />
+                                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Configurações de Inatividade</label>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Tempo (Minutos)</label>
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.inactivityTime || ''}
+                                                            onChange={(e) => updateNodeData(selectedNode, { inactivityTime: e.target.value })}
+                                                            placeholder="Ex: 5"
+                                                            className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-xs font-medium outline-none text-foreground focus:ring-2 focus:ring-primary/35 focus:border-primary"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Ação</label>
+                                                        <select
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.timeoutAction || 'nothing'}
+                                                            onChange={(e) => updateNodeData(selectedNode, { timeoutAction: e.target.value })}
+                                                            className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-xs font-medium outline-none text-foreground focus:ring-2 focus:ring-primary/35 focus:border-primary"
+                                                        >
+                                                            <option value="nothing">Nenhuma</option>
+                                                            <option value="transfer">Transferir</option>
+                                                            <option value="close">Encerrar</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                {nodes.find(n => n.id === selectedNode)?.data.timeoutAction === 'transfer' && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: -10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="space-y-2"
+                                                    >
+                                                        <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Equipe de Destino</label>
+                                                        <select
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.timeoutTeam || ''}
+                                                            onChange={(e) => updateNodeData(selectedNode, { timeoutTeam: e.target.value })}
+                                                            className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-xs font-medium outline-none text-foreground focus:ring-2 focus:ring-primary/35 focus:border-primary"
+                                                        >
+                                                            <option value="">Selecione a equipe...</option>
+                                                            {availableTeams.map(team => (
+                                                                <option key={team.id} value={team.id}>{team.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <p className="text-[9px] text-muted-foreground italic">A conversa será enviada para esta equipe se o cliente não responder.</p>
+                                                    </motion.div>
+                                                )}
+                                            </div>
+                                        )}
 
                                         {/* Campos básicos específicos por tipo */}
                                         {(nodes.find(n => n.id === selectedNode)?.type === 'message' || nodes.find(n => n.id === selectedNode)?.type === 'menu') && (
@@ -1030,10 +1122,10 @@ const ChatbotBuilder = () => {
 
                                         {nodes.find(n => n.id === selectedNode)?.type === 'menu' && (
                                             <div className="space-y-6">
-                                                <div className="p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl">
-                                                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-widest mb-1">Dica WhatsApp</p>
-                                                    <p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70 leading-relaxed">
-                                                        Este bloco cria uma **Lista Interativa**. Ideal para menus com mais de 3 opções (limite de botões).
+                                                <div className="p-4 bg-muted/20 border border-border rounded-xl">
+                                                    <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest mb-1.5">Dica — Lista no WhatsApp</p>
+                                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                                        Este bloco cria uma lista interativa. Ideal para menus com mais de 3 opções (limite de botões).
                                                     </p>
                                                 </div>
 
@@ -1104,7 +1196,7 @@ const ChatbotBuilder = () => {
 
                                                     <div className="space-y-4">
                                                         {(nodes.find(n => n.id === selectedNode)?.data.rows || []).map((row, idx) => (
-                                                            <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-3">
+                                                            <div key={idx} className="p-4 bg-muted/20 border border-border rounded-xl space-y-3">
                                                                 <div className="flex justify-between items-center gap-2">
                                                                     <input
                                                                         type="text"
@@ -1116,7 +1208,7 @@ const ChatbotBuilder = () => {
                                                                             currentRows[idx].title = e.target.value;
                                                                             updateNodeData(selectedNode, { rows: currentRows });
                                                                         }}
-                                                                        className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-blue-500"
+                                                                        className="flex-1 bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-primary"
                                                                     />
                                                                     <button
                                                                         onClick={() => {
@@ -1138,7 +1230,7 @@ const ChatbotBuilder = () => {
                                                                         currentRows[idx].description = e.target.value;
                                                                         updateNodeData(selectedNode, { rows: currentRows });
                                                                     }}
-                                                                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-[10px] font-medium outline-none focus:border-blue-500"
+                                                                    className="w-full bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-4 py-2 text-[10px] font-medium outline-none focus:border-primary"
                                                                 />
                                                             </div>
                                                         ))}
@@ -1154,7 +1246,7 @@ const ChatbotBuilder = () => {
                                                                     });
                                                                     updateNodeData(selectedNode, { rows: currentRows });
                                                                 }}
-                                                                className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl text-slate-400 hover:text-pink-500 hover:border-pink-500 transition-all font-bold text-xs flex items-center justify-center gap-2"
+                                                                className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-border rounded-2xl text-slate-400 hover:text-primary hover:border-primary transition-all font-bold text-xs flex items-center justify-center gap-2"
                                                             >
                                                                 <Plus size={16} />
                                                                 Adicionar Opção
@@ -1164,14 +1256,85 @@ const ChatbotBuilder = () => {
                                                 </div>
 
                                                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
-                                                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200 dark:border-slate-800 rounded-2xl">
+                                                    <div className="p-4 bg-muted/20 border border-border rounded-xl space-y-3">
+                                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Tentativas para opção inválida</label>
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            max={10}
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.maxInvalidAttempts ?? 3}
+                                                            onChange={(e) => {
+                                                                const parsed = Number(e.target.value);
+                                                                const safeValue = Number.isFinite(parsed) ? Math.min(10, Math.max(1, parsed)) : 3;
+                                                                updateNodeData(selectedNode, { maxInvalidAttempts: safeValue });
+                                                            }}
+                                                            className="w-full bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-primary"
+                                                        />
+                                                        <p className="text-[9px] text-slate-500">Após atingir esse limite, o sistema executa a ação configurada abaixo.</p>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mensagem para opção inválida</label>
+                                                        <input
+                                                            type="text"
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.invalidOptionMessage || ''}
+                                                            onChange={(e) => updateNodeData(selectedNode, { invalidOptionMessage: e.target.value })}
+                                                            placeholder="Ex: Opção inválida. Escolha um item da lista."
+                                                            maxLength={180}
+                                                            className="w-full bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-4 py-3 text-xs font-medium outline-none focus:border-primary"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mensagem ao atingir o limite</label>
+                                                        <input
+                                                            type="text"
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.maxInvalidAttemptsMessage || ''}
+                                                            onChange={(e) => updateNodeData(selectedNode, { maxInvalidAttemptsMessage: e.target.value })}
+                                                            placeholder="Ex: Vou te direcionar para atendimento humano."
+                                                            maxLength={180}
+                                                            className="w-full bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-4 py-3 text-xs font-medium outline-none focus:border-primary"
+                                                        />
+                                                    </div>
+
+                                                    <div className="p-4 bg-muted/20 border border-border rounded-xl space-y-3">
+                                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Ação ao atingir o limite</label>
+                                                        <select
+                                                            value={
+                                                                (() => {
+                                                                    const action = nodes.find(n => n.id === selectedNode)?.data.maxInvalidAction;
+                                                                    return action === 'transfer_choice' ? 'repeat_menu' : (action || 'repeat_menu');
+                                                                })()
+                                                            }
+                                                            onChange={(e) => updateNodeData(selectedNode, { maxInvalidAction: e.target.value === 'transfer_choice' ? 'repeat_menu' : e.target.value })}
+                                                            className="w-full bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-primary"
+                                                        >
+                                                            <option value="repeat_menu">Reenviar o menu</option>
+                                                            <option value="transfer_direct">Transferir para equipe específica</option>
+                                                        </select>
+
+                                                        {nodes.find(n => n.id === selectedNode)?.data.maxInvalidAction === 'transfer_direct' && (
+                                                            <select
+                                                                value={nodes.find(n => n.id === selectedNode)?.data.maxInvalidActionTeamId || ''}
+                                                                onChange={(e) => updateNodeData(selectedNode, { maxInvalidActionTeamId: e.target.value })}
+                                                                className="w-full bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-primary"
+                                                            >
+                                                                <option value="">Selecione a equipe</option>
+                                                                {availableTeams.filter(team => team?.is_active !== false).map(team => (
+                                                                    <option key={team.id} value={team.id}>{team.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-xl">
                                                         <div className="flex flex-col gap-1">
                                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Encerrar Atendimento</span>
                                                             <span className="text-[9px] text-slate-500 font-medium">Fecha a conversa automaticamente após o envio</span>
                                                         </div>
                                                         <button
                                                             onClick={() => updateNodeData(selectedNode, { autoClose: !(nodes.find(n => n.id === selectedNode)?.data.autoClose || false) })}
-                                                            className={`w-12 h-6 rounded-full transition-all relative ${nodes.find(n => n.id === selectedNode)?.data.autoClose ? 'bg-pink-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                                            className={`w-12 h-6 rounded-full transition-all relative ${nodes.find(n => n.id === selectedNode)?.data.autoClose ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'}`}
                                                         >
                                                             <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${nodes.find(n => n.id === selectedNode)?.data.autoClose ? 'left-7' : 'left-1'}`} />
                                                         </button>
@@ -1179,17 +1342,70 @@ const ChatbotBuilder = () => {
 
                                                     {nodes.find(n => n.id === selectedNode)?.data.autoClose && (
                                                         <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                                                            <label className="block text-[10px] font-black text-pink-500 uppercase tracking-widest mb-2">Mensagem de Encerramento (Opcional)</label>
+                                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mensagem de Encerramento (Opcional)</label>
                                                             <textarea
                                                                 value={nodes.find(n => n.id === selectedNode)?.data.closingMessage || ''}
                                                                 onChange={(e) => updateNodeData(selectedNode, { closingMessage: e.target.value })}
                                                                 placeholder="Ex: Obrigado! Atendimento finalizado por aqui."
                                                                 rows={2}
-                                                                className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-pink-500 transition-all resize-none"
+                                                                className="w-full bg-muted/20 dark:bg-background border border-slate-200 dark:border-border rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-primary transition-all resize-none"
                                                             />
                                                         </div>
                                                     )}
                                                 </div>
+                                            </div>
+                                        )}
+
+                                        {nodes.find(n => n.id === selectedNode)?.type === 'galeria' && (
+                                            <div className="space-y-5">
+                                                <div className="p-4 bg-muted/20 border border-border rounded-xl">
+                                                    <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest mb-1.5">Bloco Galeria</p>
+                                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                                        Selecione uma imagem da galeria do provedor para enviar ao cliente e seguir para o próximo bloco.
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Imagem da galeria</label>
+                                                    <select
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.galleryImageId || ''}
+                                                        onChange={(e) => {
+                                                            const imageId = e.target.value;
+                                                            const selected = galleryImages.find(img => String(img.id) === String(imageId));
+                                                            updateNodeData(selectedNode, {
+                                                                galleryImageId: imageId,
+                                                                galleryImageUrl: selected?.image_url || ''
+                                                            });
+                                                        }}
+                                                        className="w-full bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-primary"
+                                                    >
+                                                        <option value="">Selecione uma imagem</option>
+                                                        {galleryImages.map(img => (
+                                                            <option key={img.id} value={img.id}>{img.nome}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Legenda (opcional)</label>
+                                                    <textarea
+                                                        rows={3}
+                                                        value={nodes.find(n => n.id === selectedNode)?.data.content || ''}
+                                                        onChange={(e) => updateNodeData(selectedNode, { content: e.target.value })}
+                                                        placeholder="Ex: Confira nosso cartão de planos."
+                                                        className="w-full bg-muted/20 dark:bg-background border border-slate-200 dark:border-border rounded-2xl px-4 py-3 text-xs font-medium outline-none focus:border-primary resize-none"
+                                                    />
+                                                </div>
+
+                                                {nodes.find(n => n.id === selectedNode)?.data.galleryImageUrl && (
+                                                    <div className="rounded-xl overflow-hidden border border-border bg-card">
+                                                        <img
+                                                            src={nodes.find(n => n.id === selectedNode)?.data.galleryImageUrl}
+                                                            alt="Prévia da galeria"
+                                                            className="w-full h-44 object-cover"
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
@@ -1562,24 +1778,25 @@ const ChatbotBuilder = () => {
                                             </div>
                                         )}
 
-                                        <div className="p-5 bg-blue-50 dark:bg-blue-900/20 rounded-3xl border border-blue-100 dark:border-blue-800/30">
-                                            <div className="flex items-center gap-3 mb-3 text-blue-600 dark:text-blue-400">
-                                                <Zap size={18} />
-                                                <span className="text-xs font-black uppercase tracking-widest">Motor de Fluxo</span>
+                                        <div className="p-4 bg-muted/20 border border-border rounded-xl">
+                                            <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                                <Zap size={16} />
+                                                <span className="text-[10px] font-semibold uppercase tracking-widest">Motor de Fluxo</span>
                                             </div>
-                                            <p className="text-xs text-blue-700/70 dark:text-blue-400/70 leading-relaxed font-medium">
+                                            <p className="text-xs text-muted-foreground leading-relaxed">
                                                 Este bloco será executado automaticamente quando o usuário chegar nesta etapa do fluxo.
                                             </p>
                                         </div>
                                     </div>
 
-                                    <div className="p-8 border-t border-slate-100 dark:border-slate-700">
+                                    <div className="p-6 border-t border-border bg-muted/10">
                                         <button
+                                            type="button"
                                             onClick={() => deleteNode(selectedNode)}
-                                            className="w-full flex items-center justify-center gap-3 py-5 bg-red-50 dark:bg-red-900/10 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl transition-all font-black text-xs uppercase tracking-widest border border-red-100 dark:border-red-900/30"
+                                            className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 text-xs font-semibold uppercase tracking-widest transition-colors"
                                         >
-                                            <Trash2 size={18} />
-                                            Remover este Bloco
+                                            <Trash2 size={16} />
+                                            Remover este bloco
                                         </button>
                                     </div>
                                 </motion.div>

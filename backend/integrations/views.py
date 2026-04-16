@@ -23,6 +23,8 @@ from core.models import Company
 from django.utils import timezone
 from core.openai_service import openai_service
 from core.models import Provedor
+from core.models import SystemConfig
+from integrations.asaas_service import AsaasService
 import requests
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -1450,21 +1452,51 @@ def webhook_evolution_uazapi(request):
                     if conversation.inbox != inbox:
                         conversation.inbox = inbox
                         conversation.save()
+                    
+                    # Resetar estado do chatbot ao reabrir (Reset de Fluxo e Cronômetro)
+                    try:
+                        from core.redis_memory_service import redis_memory_service
+                        redis_memory_service.clear_memory_sync(
+                            conversation.inbox.provedor_id if conversation.inbox else None,
+                            conversation.id,
+                            conversation.inbox.channel_type if conversation.inbox else 'whatsapp',
+                            contact.phone
+                        )
+                        # Limpar metadados de nó de fluxo antigos se existirem
+                        if 'chatbot_node_id' in conversation.additional_attributes:
+                            del conversation.additional_attributes['chatbot_node_id']
+                        if 'chatbot_flow_id' in conversation.additional_attributes:
+                            del conversation.additional_attributes['chatbot_flow_id']
+                        
+                        # Resetar TIMESTAMP para o cronômetro do Dashboard começar do zero (como se fosse novo ciclo)
+                        from django.utils import timezone
+                        # Usamos .update() para contornar o auto_now_add=True
+                        ConversationModel.objects.filter(id=conversation.id).update(created_at=timezone.now())
+                        conversation.save(update_fields=['additional_attributes'])
+                    except Exception as e:
+                        logger.error(f"Erro ao resetar chatbot na reabertura da conversa {conversation.id}: {e}")
+                        
                     conv_created = False
                 else:
                     # Fora da janela de tolerância - criar nova conversa
                     logger.info(f"[UAZAPI] Conversa {existing_conversation.id} em 'closing' fora da janela de tolerância. Criando nova conversa.")
-                    # Limpar memória Redis da conversa anterior
+                    # Limpar memória Redis total (Reset de IA e Cronômetro)
                     try:
                         from core.redis_memory_service import redis_memory_service
                         redis_memory_service.clear_conversation_memory_sync(
                             provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None,
                             conversation_id=existing_conversation.id
                         )
+                        redis_memory_service.clear_memory_sync(
+                            existing_conversation.inbox.provedor_id if existing_conversation.inbox else None,
+                            existing_conversation.id,
+                            existing_conversation.inbox.channel_type if existing_conversation.inbox else 'whatsapp',
+                            contact.phone
+                        )
                     except Exception as e:
-                        pass
+                        logger.error(f"Erro ao limpar memória total {existing_conversation.id}: {e}")
                     
-                    # Criar nova conversa para novo atendimento
+                    # Criar nova conversa para novo atendimento (Reset de Cronômetro)
                     conversation = ConversationModel.objects.create(
                         contact=contact,
                         inbox=inbox,
@@ -1472,7 +1504,8 @@ def webhook_evolution_uazapi(request):
                         assignee=None,
                         additional_attributes={
                             'instance': instance,
-                            'event': event_type
+                            'event': event_type,
+                            'reset_cycle': True # Flag para identificar novo ciclo
                         }
                     )
                     conv_created = True
@@ -1496,28 +1529,35 @@ def webhook_evolution_uazapi(request):
                         conversation.save()
                     conv_created = False
                 else:
-                    # Limpar memória Redis da conversa anterior
+                    # Limpar memória Redis total (Reset de IA e Cronômetro)
                     try:
                         from core.redis_memory_service import redis_memory_service
                         redis_memory_service.clear_conversation_memory_sync(
                             provedor_id=existing_conversation.inbox.provedor_id if existing_conversation.inbox else None,
                             conversation_id=existing_conversation.id
                         )
+                        redis_memory_service.clear_memory_sync(
+                            existing_conversation.inbox.provedor_id if existing_conversation.inbox else None,
+                            existing_conversation.id,
+                            existing_conversation.inbox.channel_type if existing_conversation.inbox else 'whatsapp',
+                            contact.phone
+                        )
                     except Exception as e:
-                        pass
+                        logger.error(f"Erro ao limpar memória total após fechamento {existing_conversation.id}: {e}")
                     
-                    # Criar nova conversa para novo atendimento
+                    # Criar nova conversa para novo atendimento (Reset de Cronômetro)
                     conversation = ConversationModel.objects.create(
                         contact=contact,
                         inbox=inbox,
                         status='snoozed',  # Nova conversa começa com IA
-                    assignee=None,
-                    additional_attributes={
-                        'instance': instance,
-                        'event': event_type
-                    }
-                )
-                conv_created = True
+                        assignee=None,
+                        additional_attributes={
+                            'instance': instance,
+                            'event': event_type,
+                            'reset_cycle': True
+                        }
+                    )
+                    conv_created = True
         else:
             # Criar nova conversa
             conversation = ConversationModel.objects.create(
@@ -2852,4 +2892,126 @@ def webhook_evolution_uazapi(request):
         return JsonResponse({'status': 'ok'})
     except Exception as e:
         return JsonResponse({'error': str(e), 'traceback': traceback.format_exc()}, status=500)
+
+
+@csrf_exempt
+def asaas_webhook(request):
+    """
+    Webhook do Asaas para atualizar bloqueio/desbloqueio de provedores.
+    Regras:
+    - Bloqueia quando houver fatura OVERDUE com mais de 3 dias.
+    - Libera automaticamente quando nao houver mais faturas elegiveis para bloqueio.
+    """
+    # Alguns validadores de webhook testam a URL com GET/HEAD antes de salvar.
+    # Retornamos 200 para validar disponibilidade do endpoint.
+    if request.method in ('GET', 'HEAD'):
+        return JsonResponse({'status': 'ok', 'message': 'Asaas webhook endpoint online'}, status=200)
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Metodo nao permitido'}, status=405)
+
+    # Validacao do token de autenticacao do webhook (configurado no painel do Asaas)
+    config = SystemConfig.objects.filter(key='system_config').first() or SystemConfig.objects.first()
+    expected_token = (getattr(config, 'asaas_webhook_auth_token', None) or '').strip()
+
+    if not expected_token:
+        logger.error("[AsaasWebhook] Token de autenticacao do webhook nao configurado no SystemConfig.")
+        return JsonResponse({'error': 'Webhook auth token nao configurado no sistema'}, status=503)
+
+    received_token = (
+        request.headers.get('asaas-access-token')
+        or request.headers.get('access_token')
+        or request.headers.get('token')
+        or request.headers.get('Authorization')
+        or request.META.get('HTTP_ASAAS_ACCESS_TOKEN')
+        or request.META.get('HTTP_ACCESS_TOKEN')
+        or request.META.get('HTTP_TOKEN')
+        or request.META.get('HTTP_AUTHORIZATION')
+        or ''
+    ).strip()
+
+    if received_token.lower().startswith('bearer '):
+        received_token = received_token[7:].strip()
+
+    import secrets
+    if not received_token or not secrets.compare_digest(received_token, expected_token):
+        logger.warning("[AsaasWebhook] Requisicao rejeitada por token invalido/ausente.")
+        return JsonResponse({'error': 'Nao autorizado'}, status=403)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON invalido'}, status=400)
+
+    event = str(payload.get('event') or '').upper()
+    payment = payload.get('payment') or {}
+    customer_id = payment.get('customer')
+    subscription_id = payment.get('subscription')
+
+    if not customer_id and not subscription_id:
+        return JsonResponse({'status': 'ignored', 'reason': 'missing_customer_or_subscription'}, status=200)
+
+    provedor = None
+    if subscription_id:
+        provedor = Provedor.objects.filter(asaas_subscription_id=subscription_id).first()
+    if not provedor and customer_id:
+        provedor = Provedor.objects.filter(asaas_customer_id=customer_id).first()
+
+    if not provedor:
+        return JsonResponse({'status': 'ignored', 'reason': 'provider_not_found'}, status=200)
+
+    asaas = AsaasService()
+    if not asaas.access_token:
+        return JsonResponse({'error': 'Asaas token nao configurado'}, status=500)
+
+    if not provedor.asaas_subscription_id:
+        return JsonResponse({'status': 'ignored', 'reason': 'provider_without_subscription'}, status=200)
+
+    overdue_res = asaas.list_payments(subscription_id=provedor.asaas_subscription_id, status='OVERDUE')
+    if not overdue_res.get('success'):
+        return JsonResponse({'error': 'failed_to_sync_overdue', 'details': overdue_res.get('error')}, status=502)
+
+    overdue_payments = overdue_res.get('data', [])
+    today = timezone.now().date()
+    blocking_overdues = []
+    for p in overdue_payments:
+        due_date_raw = p.get('dueDate')
+        if not due_date_raw:
+            continue
+        try:
+            due_date = datetime.strptime(str(due_date_raw)[:10], "%Y-%m-%d").date()
+        except Exception:
+            continue
+        if (today - due_date).days > 3:
+            blocking_overdues.append(p)
+
+    changed = False
+    if blocking_overdues:
+        block_reason = 'Bloqueado por inadimplencia Asaas (fatura vencida ha mais de 3 dias).'
+        if provedor.is_active or provedor.block_reason != block_reason:
+            provedor.is_active = False
+            provedor.block_reason = block_reason
+            changed = True
+    else:
+        if (not provedor.is_active) and provedor.block_reason and 'Asaas' in provedor.block_reason:
+            provedor.is_active = True
+            provedor.block_reason = None
+            changed = True
+
+    payment_status = (payment.get('status') or '').upper()
+    if payment_status and provedor.subscription_status != payment_status:
+        provedor.subscription_status = payment_status
+        changed = True
+
+    if changed:
+        provedor.save(update_fields=['is_active', 'block_reason', 'subscription_status', 'updated_at'])
+
+    return JsonResponse({
+        'status': 'ok',
+        'event': event,
+        'provider_id': provedor.id,
+        'provider_active': provedor.is_active,
+        'blocking_overdues': len(blocking_overdues),
+        'payment_status': payment_status
+    }, status=200)
 

@@ -68,7 +68,7 @@ export default function Login() {
         navigate('/superadmin', { replace: true });
       } else if (userData.provedor_id) {
         if (userData.user_type === 'agent') {
-          navigate(`/app/accounts/${userData.provedor_id}/conversations`, { replace: true });
+          navigate(`/${userData.provedor_id}/chat`, { replace: true });
         } else {
           navigate(`/app/accounts/${userData.provedor_id}/dashboard`, { replace: true });
         }
@@ -78,8 +78,10 @@ export default function Login() {
     } catch (err) {
       if (err.response?.status === 401) {
         setError('Usuário ou senha inválidos');
+      } else if (err.response?.status === 403) {
+        setError(err.response?.data?.error || 'Acesso não autorizado');
       } else {
-        setError('Erro ao conectar com o servidor');
+        setError(err.response?.data?.error || 'Erro ao conectar com o servidor');
       }
     } finally {
       setLoading(false);
@@ -87,47 +89,47 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#222831] flex items-center justify-center p-4 dark">
+    <div className="min-h-screen bg-zinc-900 flex items-center justify-center p-4 text-white">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="relative w-full max-w-4xl"
       >
-        <div className="bg-[#27303D] rounded-2xl shadow-2xl overflow-hidden border border-[#3A4352]">
+        <div className="bg-zinc-800 rounded-2xl shadow-2xl overflow-hidden border border-zinc-700">
           <div className="flex flex-col md:flex-row">
-            <div className="md:w-1/2 bg-[#27303D] p-8 md:p-12 flex flex-col items-center justify-center relative">
-              <div className="absolute inset-0 opacity-[0.03] bg-white" />
+            <div className="md:w-1/2 bg-zinc-800 p-8 md:p-12 flex flex-col items-center justify-center relative">
+              <div className="absolute inset-0 opacity-[0.03] bg-zinc-200" />
               <div className="relative z-10 flex flex-col items-center">
                 <div className="w-48 h-48 md:w-56 md:h-56 mb-6">
                   <img src={logoImage} alt="NIO HUB Logo" className="w-full h-full object-contain" />
                 </div>
-                <h1 className="text-3xl md:text-4xl font-bold tracking-wide text-white">
+                <h1 className="text-3xl md:text-4xl font-bold tracking-wide text-zinc-100">
                   NIO HUB
                 </h1>
-                <p className="text-slate-300 mt-3 text-sm text-center">
+                <p className="text-zinc-300 mt-3 text-sm text-center">
                   Sua plataforma inteligente de atendimento
                 </p>
               </div>
             </div>
 
-            <div className="md:w-1/2 p-8 md:p-12">
-              <h2 className="text-2xl font-semibold text-white mb-2">
+            <div className="md:w-1/2 p-8 md:p-12 bg-zinc-800">
+              <h2 className="text-2xl font-bold text-zinc-100 mb-2 tracking-tight">
                 Bem-vindo de volta
               </h2>
-              <p className="text-slate-300 mb-8">
+              <p className="text-zinc-200 mb-8">
                 Faça login para continuar
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Usuário</Label>
+                  <Label className="text-zinc-200">Usuário</Label>
                   <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                     <Input
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="pl-12 h-12 bg-[#3A4352] border-none text-white focus:ring-2 focus:ring-blue-500 transition-all"
+                      className="pl-12 h-12 bg-zinc-900 border border-zinc-700 text-white placeholder:text-zinc-400 focus:ring-2 focus:ring-primary transition-all"
                       placeholder="Seu usuário"
                       required
                     />
@@ -135,21 +137,21 @@ export default function Login() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Senha</Label>
+                  <Label className="text-zinc-200">Senha</Label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-12 pr-12 h-12 bg-[#3A4352] border-none text-white focus:ring-2 focus:ring-blue-500 transition-all"
+                      className="pl-12 pr-12 h-12 bg-zinc-900 border border-zinc-700 text-white placeholder:text-zinc-400 focus:ring-2 focus:ring-primary transition-all"
                       placeholder="Sua senha"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors"
                     >
                       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
@@ -162,7 +164,7 @@ export default function Login() {
                   </div>
                 )}
 
-                <Button type="submit" disabled={loading} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all">
+                <Button type="submit" disabled={loading} className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all">
                   {loading ? 'Entrando...' : 'Acessar'}
                 </Button>
               </form>
@@ -170,7 +172,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="text-center mt-6 text-sm text-slate-400 space-y-1">
+        <div className="text-center mt-6 text-sm text-zinc-400 space-y-1">
           <p>© 2026 NIO HUB</p>
           <p>Versão {version}</p>
         </div>

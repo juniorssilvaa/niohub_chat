@@ -25,6 +25,8 @@ export default function ConversationsPieChart({ data, title = "Distribuição" }
     if (n.includes('atendiment')) return '#10b981'; // Verde
     if (n.includes('esper')) return '#f59e0b'; // Laranja  
     if (n.includes('autom')) return '#2d5eff'; // Azul (IA)
+    if (n.includes('chatbot')) return '#2d5eff';
+    if (n.includes('demais') || n.includes('outros encerr')) return '#94a3b8';
     if (n.includes('finalizad') || n.includes('resolvida')) return '#94a3b8'; // Cinza
     
     // Cores para Canais de Atendimento

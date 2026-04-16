@@ -1,6 +1,32 @@
 {
-  "current_version": "2.32.0",
+  "current_version": "2.34.0",
   "versions": [
+    {
+      "version": "2.34.0",
+      "version_type": "minor",
+      "date": "2026-04-16",
+      "title": "Dashboard, atendimento, chatbot e automação",
+      "changes": [
+        {
+          "type": "improvement",
+          "module": "Dashboard & Atendimento",
+          "title": "Novo painel e tela de atendimento",
+          "description": "Dashboard aprimorado e nova experiência na tela de atendimento, com fluxo mais claro para a equipe acompanhar e responder conversas."
+        },
+        {
+          "type": "feature",
+          "module": "Chatbot",
+          "title": "Imagem na mensagem inicial",
+          "description": "Agora é possível enviar imagem como parte da mensagem inicial do fluxo do chatbot (automação com mídia na primeira interação)."
+        },
+        {
+          "type": "feature",
+          "module": "Automação",
+          "title": "Inatividade do cliente",
+          "description": "Implementado o sistema de inatividade do cliente na automação, permitindo ações programadas conforme o tempo sem resposta do contato."
+        }
+      ]
+    },
     {
       "version": "2.32.0",
       "version_type": "patch",

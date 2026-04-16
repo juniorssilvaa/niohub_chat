@@ -373,25 +373,140 @@ class ConversationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = DefaultPagination  # ETAPA 3: Forçar paginação controlada
     
-    def get_queryset(self):
+    @action(detail=False, methods=['get'], url_path='dashboard_stats')
+    def dashboard_stats(self, request):
+        """
+        Action para retornar estatísticas rápidas do dashboard.
+        """
+        user = request.user
+        provedor = None
+        
+        # Se for superadmin, permitir passar provedor_id como parâmetro
+        if user.user_type == 'superadmin':
+            provedor_id_param = request.GET.get('provedor_id')
+            if provedor_id_param:
+                try:
+                    provedor_id = int(provedor_id_param)
+                    provedor = Provedor.objects.filter(id=provedor_id).first()
+                except (ValueError, TypeError):
+                    return Response({'error': 'provedor_id inválido'}, status=400)
+        
+        # Se não foi passado como parâmetro, buscar do usuário
+        if not provedor:
+            if hasattr(user, 'provedor_id') and user.provedor_id:
+                provedor = Provedor.objects.filter(id=user.provedor_id).first()
+            if not provedor:
+                from .models import TeamMember
+                tm = TeamMember.objects.filter(user=user).select_related('team__provedor').first()
+                if tm and tm.team:
+                    provedor = tm.team.provedor
+            if hasattr(user, 'provedor_id') and user.provedor_id:
+                provedor = Provedor.objects.filter(id=user.provedor_id).first()
+            if not provedor and hasattr(user, 'provedor') and user.provedor:
+                provedor = user.provedor
+            if not provedor:
+                provedor = Provedor.objects.filter(admins=user).first()
+        
+        if not provedor:
+            return Response({'error': 'Provedor não identificado para este atendente'}, status=400)
+        
+        # 1. Queryset global do provedor para estatísticas (ignora filtros de equipe do agente)
+        qs_ativas = Conversation.objects.filter(
+            inbox__provedor=provedor
+        ).exclude(
+            status__in=['closed', 'encerrada', 'resolved', 'finalizada', 'closing']
+        )
+        
+        # 2. Contagens explícitas e robustas
+        conversas_abertas = qs_ativas.filter(assignee__isnull=False).count()
+        conversas_pendentes = qs_ativas.filter(waiting_for_agent=True, assignee__isnull=True).count()
+        conversas_ia = qs_ativas.filter(waiting_for_agent=False, assignee__isnull=True).count()
+        
+        # LOG PARA DEPURAÇÃO
+        import logging
+        logger_stats = logging.getLogger('conversations.dashboard_debug')
+        logger_stats.info(f"--- DASHBOARD REFRESH (Provedor {provedor.id}) ---")
+        logger_stats.info(f"IA: {conversas_ia} | Espera: {conversas_pendentes} | Atendimento: {conversas_abertas}")
+        
+        # 3. Métricas históricas
+        from django.db.models import Count, Q
+        provedor_filter = Q(inbox__provedor=provedor)
+        
+        total_stats = Conversation.objects.filter(provedor_filter).aggregate(
+            total=Count('id'),
+            finalizadas_local=Count('id', filter=Q(status__in=['closed', 'encerrada', 'resolved', 'finalizada']))
+        )
+        
+        total_conversas_local = total_stats['total'] or 0
+        conversas_resolvidas_local = total_stats['finalizadas_local'] or 0
+        conversas_em_andamento = conversas_abertas + conversas_pendentes + conversas_ia
+        
+        # Estatísticas de conversas - Supabase (encerradas)
+        conversas_resolvidas_supabase = 0
+        try:
+            import requests
+            from django.conf import settings
+            url = f"{settings.SUPABASE_URL}/rest/v1/conversations"
+            headers = {
+                'apikey': settings.SUPABASE_ANON_KEY,
+                'Authorization': f'Bearer {settings.SUPABASE_ANON_KEY}',
+                'Prefer': 'count=exact'
+            }
+            params = {'provedor_id': f'eq.{provedor.id}', 'status': 'eq.closed', 'select': 'id'}
+            response = requests.get(url, headers=headers, params=params, timeout=5)
+            if response.status_code == 200:
+                content_range = response.headers.get('Content-Range', '')
+                if content_range:
+                    conversas_resolvidas_supabase = int(content_range.split('/')[-1])
+        except Exception:
+            pass
+            
+        total_encerradas = conversas_resolvidas_local + conversas_resolvidas_supabase
+        
+        return Response({
+            'stats': {
+                'conversas_abertas': conversas_abertas,
+                'conversas_pendentes': conversas_pendentes,
+                'conversas_ia': conversas_ia,
+                'total_resolvidas': total_encerradas,
+                'conversas_em_andamento': conversas_em_andamento,
+                'total_geral': total_encerradas + conversas_em_andamento
+            }
+        })
+
+    def get_queryset(self, include_bot=None):
         """
         ETAPA 4: Queryset otimizado com exclusão de conversas fechadas e select_related.
         
         Retorna queryset de conversas com isolamento por provedor.
         Se superadmin passar provedor_id como parâmetro, filtra apenas aquele provedor.
         """
+        # Se include_bot não foi passado via argumento, verificar query_params
+        if include_bot is None:
+            include_bot = self.request.query_params.get('include_bot', 'false') == 'true'
+            
         user = self.request.user
         
-        # ETAPA 4: Excluir conversas fechadas no banco (reduz carga)
-        # Status fechados: closed, encerrada, resolved, finalizada, closing
-        base_queryset = Conversation.objects.exclude(
-            status__in=['closed', 'encerrada', 'resolved', 'finalizada', 'closing']
-        )
+        # ETAPA 4: Excluir conversas fechadas no banco para listagem (reduz carga).
+        # No retrieve precisamos aceitar conversas fechadas, pois o frontend pode
+        # solicitar detalhes logo após o encerramento antes de limpar totalmente o estado local.
+        if self.action == 'retrieve':
+            base_queryset = Conversation.objects.all()
+        else:
+            # Status fechados: closed, encerrada, resolved, finalizada, closing
+            base_queryset = Conversation.objects.exclude(
+                status__in=['closed', 'encerrada', 'resolved', 'finalizada', 'closing']
+            )
+        
+        # Ocultar conversas do bot (waiting_for_agent=False) apenas na listagem.
+        # Em ações de detalhe/alteração precisamos permitir qualquer conversa do provedor,
+        # senão fluxos de encerramento podem receber 404 indevidamente.
+        if self.action == 'list' and not include_bot:
+            base_queryset = base_queryset.filter(waiting_for_agent=True)
         
         # Otimização: prefetch_related para mensagens apenas na listagem (evita N+1 no get_last_message)
         # Prefetch apenas a última mensagem para reduzir carga
-        from django.db.models import Prefetch, F
-        from django.db.models.functions import Coalesce
+        from django.db.models import Prefetch, Q
         from .models import Message
         messages_prefetch = Prefetch(
             'messages',
@@ -401,7 +516,6 @@ class ConversationViewSet(viewsets.ModelViewSet):
         
         # Helper para aplicar otimizações comuns
         from django.db.models.functions import Coalesce
-        from django.db.models import F
         
         def apply_optimizations(qs):
             qs = qs.select_related(
@@ -411,17 +525,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
             if self.action == 'list':
                 qs = qs.prefetch_related(messages_prefetch)
             
-            # Usar Coalesce para garantir que mensagens novas ou sem last_message_at subam para o topo
-            # Otimizado para não gerar subqueries complexas
             return qs.annotate(
                 sort_date=Coalesce('last_message_at', 'created_at')
             ).order_by('-sort_date')
         
         # Filtrar por provedor específico se fornecido (para superadmin)
-        provedor_id = self.request.query_params.get('provedor_id')
-        if provedor_id and user.user_type == 'superadmin':
+        provedor_id_param = self.request.query_params.get('provedor_id')
+        if provedor_id_param and user.user_type == 'superadmin':
             try:
-                provedor_id_int = int(provedor_id)
+                provedor_id_int = int(provedor_id_param)
                 return apply_optimizations(
                     base_queryset.filter(inbox__provedor_id=provedor_id_int)
                 )
@@ -447,73 +559,43 @@ class ConversationViewSet(viewsets.ModelViewSet):
                     base_queryset.filter(inbox__provedor__in=provedores_obj)
                 )
             return Conversation.objects.none()
-        
-        # Agent (atendente) - implementar permissões baseadas em equipes e permissões específicas
+        # Agent (atendente)
         else:
             # Buscar equipes do usuário
             user_teams = TeamMember.objects.filter(user=user).values_list('team_id', flat=True)
-            
-            # Verificar permissões específicas do usuário
             user_permissions = getattr(user, 'permissions', [])
             if not isinstance(user_permissions, list):
                 user_permissions = []
             
-            # Se não está em nenhuma equipe, verificar se tem provedor associado
-            if not user_teams.exists():
-                if user.provedor:
-                    # Agente sem equipe mas com provedor: vê as dele + unassigned do provedor
-                    provider_queryset = base_queryset.filter(inbox__provedor=user.provedor)
-                    
-                    has_no_special_permissions = not any(p in user_permissions for p in ['view_ai_conversations', 'view_team_unassigned'])
-                    
-                    if has_no_special_permissions or 'view_ai_conversations' in user_permissions:
-                        ai_convs = provider_queryset.filter(status='snoozed')
-                    else:
-                        ai_convs = Conversation.objects.none()
-                        
-                    if has_no_special_permissions or 'view_team_unassigned' in user_permissions:
-                        unassigned_convs = provider_queryset.filter(assignee__isnull=True)
-                    else:
-                        unassigned_convs = Conversation.objects.none()
-                        
-                    my_convs = provider_queryset.filter(assignee=user)
-                    
-                    return apply_optimizations((ai_convs | unassigned_convs | my_convs).distinct())
-                
-                # Fallback: apenas as dele
-                return apply_optimizations(base_queryset.filter(assignee=user))
+            # Buscar provedor do usuário (garantir que temos o provedor base)
+            user_provider = user.provedor
+            if not user_provider:
+                tm = TeamMember.objects.filter(user=user).select_related('team__provedor').first()
+                if tm and tm.team:
+                    user_provider = tm.team.provedor
+
+            if not user_provider:
+                return Conversation.objects.none()
+
+            # Base: todas as conversas ativas do provedor do usuário
+            provider_queryset = base_queryset.filter(inbox__provedor=user_provider)
             
-            # Buscar provedores das equipes do usuário
-            provedores_equipes = Team.objects.filter(id__in=user_teams).values_list('provedor_id', flat=True)
+            # 1. Minhas conversas (onde sou atendente)
+            my_convs = provider_queryset.filter(assignee=user)
             
-            # Base: conversas dos provedores das equipes do usuário
-            team_queryset = base_queryset.filter(inbox__provedor_id__in=provedores_equipes)
+            # 2. Conversas em Espera (Fila Global do Provedor)
+            # Para garantir que o Dashboard mostre o que o card laranja conta
+            unassigned_waiting = provider_queryset.filter(waiting_for_agent=True, assignee__isnull=True)
             
-            # Filtrar baseado nas permissões
-            # Se for superadmin ou admin do provedor, vê tudo
-            if user.user_type in ['superadmin', 'admin']:
-                return apply_optimizations(team_queryset)
-            
-            # Para Agentes, aplicar filtros de permissão
-            # Se não tem permissões configuradas, por padrão permitimos ver unassigned e IA do próprio provedor/equipe
-            # para evitar que novos atendimentos "sumam"
+            # 3. Conversas do Bot (se tiver permissão ou fallback)
             has_no_special_permissions = not any(p in user_permissions for p in ['view_ai_conversations', 'view_team_unassigned'])
-            
-            if has_no_special_permissions or 'view_ai_conversations' in user_permissions:
-                ai_convs = team_queryset.filter(status='snoozed')
+            if 'view_ai_conversations' in user_permissions:
+                ai_convs = provider_queryset.filter(waiting_for_agent=False, assignee__isnull=True)
             else:
                 ai_convs = Conversation.objects.none()
-                
-            if has_no_special_permissions or 'view_team_unassigned' in user_permissions:
-                unassigned_convs = team_queryset.filter(assignee__isnull=True)
-            else:
-                unassigned_convs = Conversation.objects.none()
-                
-            # Sempre incluir as dele
-            my_convs = team_queryset.filter(assignee=user)
             
-            # Combinar e ordenar com otimizações
-            final_qs = (ai_convs | unassigned_convs | my_convs).distinct()
+            # Combinar tudo e garantir que o que está em espera seja visível
+            final_qs = (my_convs | unassigned_waiting | ai_convs).distinct()
             return apply_optimizations(final_qs)
     
     def retrieve(self, request, *args, **kwargs):
@@ -1543,7 +1625,12 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def transfer(self, request, pk=None):
-        conversation = self.get_object()
+        try:
+            conversation = self.get_object()
+        except Exception:
+            # Caso a conversa não seja encontrada (ex: filtrada pelo get_queryset sem include_bot)
+            return Response({'error': 'Conversa não encontrada ou acesso negado. Verifique se o chatbot está ativo e use o parâmetro adequado.'}, status=status.HTTP_404_NOT_FOUND)
+            
         user_id = request.data.get('user_id')
         team_id = request.data.get('team_id')
         
@@ -1553,20 +1640,30 @@ class ConversationViewSet(viewsets.ModelViewSet):
         try:
             if user_id:
                 # Transferir para usuário específico (deixar sem assignee para ele se atribuir)
-                conversation.assignee = None
-                conversation.status = 'pending'
-                # Salvar informação do usuário de destino nos additional_attributes
-                if not conversation.additional_attributes:
-                    conversation.additional_attributes = {}
-                conversation.additional_attributes['assigned_user'] = {'id': user_id}
+                try:
+                    target_user = User.objects.get(id=user_id)
+                    conversation.assignee = None
+                    conversation.status = 'pending'
+                    conversation.waiting_for_agent = True
+                    conversation.updated_at = timezone.now()
+                    # Salvar informação do usuário de destino nos additional_attributes
+                    if not conversation.additional_attributes:
+                        conversation.additional_attributes = {}
+                    conversation.additional_attributes['assigned_user'] = {
+                        'id': target_user.id,
+                        'name': f"{target_user.first_name} {target_user.last_name}".strip() or target_user.username
+                    }
+                except User.DoesNotExist:
+                    return Response({'error': 'Usuário de destino não encontrado'}, status=status.HTTP_404_NOT_FOUND)
             elif team_id:
                 # Transferir para equipe
                 from .models import Team
                 try:
-                    team = Team.objects.get(id=team_id)
                     conversation.team = team
                     conversation.assignee = None
                     conversation.status = 'pending'
+                    conversation.waiting_for_agent = True
+                    conversation.updated_at = timezone.now()
                     
                     # Salvar também nos additional_attributes para compatibilidade
                     if not conversation.additional_attributes:
@@ -1576,7 +1673,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                         'name': team.name
                     }
                 except Team.DoesNotExist:
-                    return Response({'error': 'Equipe não encontrada'}, status=status.HTTP_404_NOT_FOUND)
+                    return Response({'error': f'Equipe com ID {team_id} não encontrada no banco de dados.'}, status=status.HTTP_404_NOT_FOUND)
             
             conversation.save()
             
@@ -1587,8 +1684,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 'success': True,
                 'conversation': serializer.data
             })
-        except User.DoesNotExist:
-            return Response({'error': 'Usuário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': f'Erro interno ao processar transferência: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])
     def assign(self, request, pk=None):
@@ -1623,6 +1720,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 # Atribuir conversa
                 conversation.assignee = user
                 conversation.status = 'open'
+                conversation.waiting_for_agent = True
                 conversation.updated_at = timezone.now()
                 conversation.save()
                 
@@ -4879,52 +4977,35 @@ class DashboardStatsView(APIView):
         
         # Se não foi passado como parâmetro, buscar do usuário
         if not provedor:
-            # Tentar por provedor_id primeiro
             if hasattr(user, 'provedor_id') and user.provedor_id:
                 provedor = Provedor.objects.filter(id=user.provedor_id).first()
-            
-            # Se não encontrou, tentar por relacionamento direto
             if not provedor and hasattr(user, 'provedor') and user.provedor:
                 provedor = user.provedor
-            
-            # Se ainda não encontrou, tentar por admins
             if not provedor:
                 provedor = Provedor.objects.filter(admins=user).first()
         
         if not provedor:
             return Response({'error': 'Provedor não encontrado'}, status=400)
         
-        # Log para debug
-        import logging
-        # logger = logging.getLogger(__name__)
-        logger.info(f"[DashboardStats] Usuário {user.id} ({user.username}) - Provedor: {provedor.id} ({provedor.nome})")
-        
-        # Importar modelos necessários
-        from django.db.models import Count, Q
-        from django.utils import timezone
-        from datetime import timedelta
-        
-        # ETAPA 5: Sincronizar com a lógica do ConversationViewSet
-        # Instanciar o viewset para obter o queryset oficial (respeita equipes e permissões)
-        viewset = ConversationViewSet()
-        viewset.request = request
-        viewset.action = 'list'
-        
-        # Queryset de conversas ATIVAS (excludes closed/closing) para o provedor
-        qs_ativas = viewset.get_queryset()
-        
-        # Estatísticas sincronizadas com ConversasDashboard.jsx
-        conversas_stats = qs_ativas.aggregate(
-            atendimento=Count('id', filter=Q(assignee__isnull=False)),
-            ia=Count('id', filter=Q(assignee__isnull=True, status='snoozed')),
-            espera=Count('id', filter=Q(assignee__isnull=True) & (Q(status='pending') | Q(additional_attributes__has_key='assigned_team')))
+        # 1. Queryset global do provedor para estatísticas (ignora filtros de equipe do agente)
+        qs_ativas = Conversation.objects.filter(
+            inbox__provedor=provedor
+        ).exclude(
+            status__in=['closed', 'encerrada', 'resolved', 'finalizada', 'closing']
         )
         
-        conversas_abertas = conversas_stats['atendimento'] or 0
-        conversas_pendentes = conversas_stats['espera'] or 0
-        conversas_ia = conversas_stats['ia'] or 0
+        # 2. Contagens explícitas e robustas (IA, Espera, Atendimento)
+        conversas_abertas = qs_ativas.filter(assignee__isnull=False).count()
+        conversas_pendentes = qs_ativas.filter(waiting_for_agent=True, assignee__isnull=True).count()
+        conversas_ia = qs_ativas.filter(waiting_for_agent=False, assignee__isnull=True).count()
         
-        # Filtros baseados no provedor para estatísticas históricas
+        # LOG PARA DEPURAÇÃO
+        import logging
+        logger_stats = logging.getLogger('conversations.dashboard_debug')
+        logger_stats.info(f"--- DASHBOARD REFRESH (Provedor {provedor.id}) ---")
+        logger_stats.info(f"IA: {conversas_ia} | Espera: {conversas_pendentes} | Atendimento: {conversas_abertas}")
+        
+        # 3. Métricas históricas
         provedor_filter = Q(inbox__provedor=provedor)
         
         # Buscar totais históricos (incluindo finalizadas)
@@ -5000,12 +5081,77 @@ class DashboardStatsView(APIView):
             logger.warning(f"Erro ao buscar conversas do Supabase para provedor {provedor.id}: {e}")
             conversas_resolvidas_supabase = 0
         
-        # Log para debug
-        logger.info(f"[DashboardStats] Provedor {provedor.id} - Local: {conversas_resolvidas_local} resolvidas, Supabase: {conversas_resolvidas_supabase} resolvidas")
+        # Resolvidas por IA / chatbot (local + Supabase) — additional_attributes após migração
+        resolvidas_automacao_local = 0
+        try:
+            resolvidas_automacao_local = Conversation.objects.filter(
+                provedor_filter,
+                status__in=['closed', 'encerrada', 'resolved', 'finalizada'],
+            ).filter(
+                Q(additional_attributes__resolucao_automacao=True)
+                | Q(additional_attributes__encerrado_por='ai')
+            ).count()
+        except Exception as e:
+            logger.warning(f"[DashboardStats] Erro ao contar resoluções automáticas (local) provedor {provedor.id}: {e}")
+            resolvidas_automacao_local = 0
+        
+        resolvidas_automacao_supabase = 0
+        try:
+            import requests
+            from django.conf import settings
+            
+            auto_url = f"{settings.SUPABASE_URL}/rest/v1/conversations"
+            auto_headers = {
+                'apikey': settings.SUPABASE_ANON_KEY,
+                'Authorization': f'Bearer {settings.SUPABASE_ANON_KEY}',
+                'Content-Type': 'application/json',
+                'Prefer': 'count=exact',
+            }
+            auto_params = {
+                'provedor_id': f'eq.{provedor.id}',
+                'status': 'eq.closed',
+                'or': '(additional_attributes->>encerrado_por.eq.ai,additional_attributes->>resolucao_automacao.eq.true)',
+                'select': 'id,provedor_id',
+            }
+            auto_resp = requests.get(auto_url, headers=auto_headers, params=auto_params, timeout=5)
+            if auto_resp.status_code == 200:
+                auto_range = auto_resp.headers.get('Content-Range', '')
+                if auto_range and '/' in auto_range:
+                    try:
+                        resolvidas_automacao_supabase = int(auto_range.split('/')[-1])
+                    except (ValueError, IndexError):
+                        data_auto = auto_resp.json()
+                        if isinstance(data_auto, list):
+                            resolvidas_automacao_supabase = sum(
+                                1 for item in data_auto if item.get('provedor_id') == provedor.id
+                            )
+                        else:
+                            resolvidas_automacao_supabase = 0
+                else:
+                    data_auto = auto_resp.json()
+                    if isinstance(data_auto, list):
+                        resolvidas_automacao_supabase = sum(
+                            1 for item in data_auto if item.get('provedor_id') == provedor.id
+                        )
+                    else:
+                        resolvidas_automacao_supabase = 0
+        except Exception as e:
+            logger.warning(f"[DashboardStats] Erro ao contar resoluções automáticas (Supabase) provedor {provedor.id}: {e}")
+            resolvidas_automacao_supabase = 0
+        
+        resolvidas_automacao_ia = resolvidas_automacao_local + resolvidas_automacao_supabase
         
         # Combinar totais
         total_conversas = total_conversas_local + conversas_resolvidas_supabase
         conversas_resolvidas = conversas_resolvidas_local + conversas_resolvidas_supabase
+        
+        resolvidas_demais_encerramentos = max(0, conversas_resolvidas - resolvidas_automacao_ia)
+        
+        # Log para debug
+        logger.info(
+            f"[DashboardStats] Provedor {provedor.id} - Local: {conversas_resolvidas_local} resolvidas, "
+            f"Supabase: {conversas_resolvidas_supabase} resolvidas, automação (IA/bot): {resolvidas_automacao_ia}"
+        )
         
         # Estatísticas de contatos únicos
         contatos_unicos = Contact.objects.filter(provedor=provedor).count()
@@ -5080,7 +5226,6 @@ class DashboardStatsView(APIView):
         atendentes_performance = []
         try:
             from core.models import User
-            from django.db.models import Avg, Count
             
             # OTIMIZAÇÃO: Buscar usuários do provedor com prefetch
             usuarios_provedor = User.objects.filter(
@@ -5149,6 +5294,9 @@ class DashboardStatsView(APIView):
             'conversas_pendentes': conversas_pendentes,
             'conversas_ia': conversas_ia,
             'conversas_resolvidas': conversas_resolvidas,
+            'resolvidas_automacao_ia': resolvidas_automacao_ia,
+            'resolvidas_demais_encerramentos': resolvidas_demais_encerramentos,
+            'bot_mode': getattr(provedor, 'bot_mode', 'ia'),
             'conversas_em_andamento': conversas_em_andamento,
             'contatos_unicos': contatos_unicos,
             'mensagens_30_dias': mensagens_30_dias,
@@ -5428,9 +5576,11 @@ class ConversationAnalysisView(APIView):
         
         channel_names = {
             'whatsapp': 'WhatsApp',
+            'whatsapp_session': 'WhatsApp QR',
+            'whatsapp_oficial': 'WhatsApp Oficial',
             'telegram': 'Telegram',
             'email': 'Email',
-            'webchat': 'Web',
+            'webchat': 'Chat Web',
             'facebook': 'Facebook',
             'instagram': 'Instagram'
         }
@@ -5438,8 +5588,11 @@ class ConversationAnalysisView(APIView):
         formatted_data = []
         for item in channel_stats:
             channel_type = item['inbox__channel_type']
+            pretty_name = channel_names.get(channel_type)
+            if not pretty_name:
+                pretty_name = str(channel_type).replace('_', ' ').title() if channel_type else 'Canal'
             formatted_data.append({
-                'name': channel_names.get(channel_type, channel_type.title()),
+                'name': pretty_name,
                 'value': item['count'],
                 'color': channel_colors.get(channel_type, '#94a3b8')
             })
