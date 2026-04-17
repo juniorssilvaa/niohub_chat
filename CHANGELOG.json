@@ -1,6 +1,38 @@
 {
-  "current_version": "2.34.0",
+  "current_version": "2.35.0",
   "versions": [
+    {
+      "version": "2.35.0",
+      "version_type": "minor",
+      "date": "2026-04-17",
+      "title": "Galeria no chat, melhorias visuais e notificações com links",
+      "changes": [
+        {
+          "type": "feature",
+          "module": "Atendimento",
+          "title": "Galeria integrada ao envio de mensagens",
+          "description": "Adicionado botão de galeria ao lado do emoji no chat. Agora é possível visualizar imagens cadastradas (miniatura + nome) e enviar diretamente ao cliente."
+        },
+        {
+          "type": "feature",
+          "module": "Notificações",
+          "title": "Correções internas",
+          "description": "Ajustes internos e refinamentos técnicos para melhoria de estabilidade."
+        },
+        {
+          "type": "fix",
+          "module": "Interface",
+          "title": "Correção de contraste em textos e ícones",
+          "description": "Corrigidas cores de texto e ícones em pontos críticos do atendimento, incluindo campos de digitação, menu de novo contato e itens da galeria."
+        },
+        {
+          "type": "improvement",
+          "module": "Notificações",
+          "title": "Correções internas",
+          "description": "Melhorias internas de funcionamento e manutenção do sistema."
+        }
+      ]
+    },
     {
       "version": "2.34.0",
       "version_type": "minor",

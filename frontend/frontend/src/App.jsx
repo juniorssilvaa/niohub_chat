@@ -41,6 +41,7 @@ export default function App() {
   // ✅ CONSUMIR APENAS - não decidir nada sobre auth
   const { user, loading: authLoading, logout } = useAuth();
   const [showChangelog, setShowChangelog] = useState(false);
+  const [pendingChangelogVersion, setPendingChangelogVersion] = useState(APP_VERSION);
   const [whatsappDisconnected, setWhatsappDisconnected] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [checkingBilling, setCheckingBilling] = useState(false);
@@ -50,17 +51,34 @@ export default function App() {
   // Extrair dados do usuário (sem acessar localStorage)
   const userRole = user?.user_type || user?.role || null;
   const provedorId = user?.provedor_id || null;
+  const changelogStorageKey = user?.id ? `last_seen_changelog_version:${user.id}` : 'last_seen_changelog_version';
 
   // Iniciar timeout de sessão quando usuário estiver logado
   useEffect(() => {
     if (user?.id) {
       startTimeout();
 
-      // Verificar versão do Changelog
-      const lastSeenVersion = localStorage.getItem('last_seen_changelog_version');
-      if (lastSeenVersion !== APP_VERSION) {
-        setShowChangelog(true);
-      }
+      // Verificar versão do Changelog de forma determinística (por usuário)
+      const checkChangelogVersion = async () => {
+        try {
+          const response = await axios.get('/api/changelog/');
+          const currentVersion = response.data?.current_version || APP_VERSION;
+          const lastSeenVersion = localStorage.getItem(changelogStorageKey);
+
+          setPendingChangelogVersion(currentVersion);
+          if (lastSeenVersion !== currentVersion) {
+            setShowChangelog(true);
+          }
+        } catch (error) {
+          // Fallback local para manter funcionamento mesmo sem API
+          const lastSeenVersion = localStorage.getItem(changelogStorageKey);
+          setPendingChangelogVersion(APP_VERSION);
+          if (lastSeenVersion !== APP_VERSION) {
+            setShowChangelog(true);
+          }
+        }
+      };
+      checkChangelogVersion();
 
       // Verificar inadimplência do provedor (apenas usuários não-superadmin)
       if (userRole !== 'superadmin' && !checkingBilling) {
@@ -80,7 +98,7 @@ export default function App() {
         checkBilling();
       }
     }
-  }, [user?.id, userRole, startTimeout]);
+  }, [user?.id, userRole, startTimeout, changelogStorageKey]);
 
   /* =====================================================
      WEBSOCKET (SÓ DEPOIS DO AUTH)
@@ -242,7 +260,7 @@ export default function App() {
           isOpen={showChangelog}
           onClose={() => {
             setShowChangelog(false);
-            localStorage.setItem('last_seen_changelog_version', APP_VERSION);
+            localStorage.setItem(changelogStorageKey, pendingChangelogVersion || APP_VERSION);
           }}
         />
         <UserStatusManager user={user} />

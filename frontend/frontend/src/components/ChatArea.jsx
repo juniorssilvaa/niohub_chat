@@ -16,6 +16,7 @@ import {
   FileText,
   Zap,
   X,
+  Image,
   Music,
   Wallet,
   CreditCard,
@@ -106,12 +107,16 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   const [audioProgress, setAudioProgress] = useState({});
   const audioRefs = useRef({});
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showEmojiGallery, setShowEmojiGallery] = useState(false);
+  const [galleryItems, setGalleryItems] = useState([]);
+  const [loadingGallery, setLoadingGallery] = useState(false);
   const [showSgpSidebar, setShowSgpSidebar] = useState(() => {
     const saved = localStorage.getItem('niochat_showSgpSidebar');
     // Se não houver nada salvo, o padrão agora é FALSE (fechado)
     return saved === 'true';
   });
   const emojiPickerRef = useRef(null);
+  const emojiGalleryRef = useRef(null);
 
   // Lista abrangente de emojis categorizada
   const emojiList = [
@@ -127,25 +132,130 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   const [pendingMessages, setPendingMessages] = useState(new Set());
   const pendingMessagesRef = useRef(new Set());
 
-  // Efeito para fechar o seletor de emojis ao clicar fora
+  // Efeito para fechar seletores de emoji ao clicar fora
   useEffect(() => {
     function handleClickOutside(event) {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+      const clickedOutsideEmojiPicker = emojiPickerRef.current && !emojiPickerRef.current.contains(event.target);
+      const clickedOutsideEmojiGallery = emojiGalleryRef.current && !emojiGalleryRef.current.contains(event.target);
+
+      if (clickedOutsideEmojiPicker && clickedOutsideEmojiGallery) {
         setShowEmojiPicker(false);
+        setShowEmojiGallery(false);
       }
     }
-    if (showEmojiPicker) {
+    if (showEmojiPicker || showEmojiGallery) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showEmojiPicker]);
+  }, [showEmojiPicker, showEmojiGallery]);
 
   const addEmoji = (emoji) => {
-    setMessage(prev => prev + emoji);
-    // Não fechamos o picker para permitir adicionar vários emojis seguidos
+    setMessage((prev) => prev + emoji);
+    setTimeout(() => document.getElementById('message-input')?.focus(), 10);
   };
+
+  const loadGalleryItems = async () => {
+    try {
+      setLoadingGallery(true);
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      const provedorId = conversation?.inbox?.provedor?.id || user?.provedor_id || user?.provedores_admin?.[0]?.id;
+
+      if (!token || !provedorId) {
+        setGalleryItems([]);
+        return;
+      }
+
+      const res = await axios.get('/api/provider-gallery/', {
+        headers: { Authorization: `Token ${token}` },
+        params: { provedor: provedorId },
+      });
+
+      const data = res.data?.results || res.data || [];
+      setGalleryItems(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Erro ao carregar imagens da galeria:', error);
+      setGalleryItems([]);
+    } finally {
+      setLoadingGallery(false);
+    }
+  };
+
+  const emojiToCodepoint = (emoji) =>
+    Array.from(emoji)
+      .map((char) => char.codePointAt(0).toString(16))
+      .filter((cp) => cp !== 'fe0f')
+      .join('-');
+
+  const createEmojiImageFile = async (emoji) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) throw new Error('Canvas indisponivel para gerar emoji');
+
+    // Fundo transparente e emoji centralizado para envio como imagem.
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = "200px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
+    ctx.fillText(emoji, canvas.width / 2, canvas.height / 2 + 8);
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((generatedBlob) => {
+        if (generatedBlob) resolve(generatedBlob);
+        else reject(new Error('Falha ao converter emoji em imagem'));
+      }, 'image/png');
+    });
+
+    return new File([blob], `emoji-${emojiToCodepoint(emoji)}.png`, { type: 'image/png' });
+  };
+
+  const handleSendEmojiImage = async (emoji) => {
+    try {
+      const file = await createEmojiImageFile(emoji);
+
+      setShowEmojiGallery(false);
+      await handleSendMedia(file, 'image', '');
+    } catch (error) {
+      console.error('Erro ao enviar emoji como imagem:', error);
+      toast.error('Não foi possível enviar o emoji como imagem.');
+    }
+  };
+
+  const handleSendGalleryImage = async (item) => {
+    try {
+      if (!item?.image_url) {
+        toast.error('Imagem invalida na galeria.');
+        return;
+      }
+
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      const imageResponse = await axios.get(item.image_url, {
+        responseType: 'blob',
+        headers: token ? { Authorization: `Token ${token}` } : {},
+      });
+
+      const safeName = (item.nome || 'imagem').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').toLowerCase();
+      const file = new File([imageResponse.data], `${safeName || 'imagem-galeria'}.png`, {
+        type: imageResponse.data.type || 'image/png',
+      });
+
+      setShowEmojiGallery(false);
+      await handleSendMedia(file, 'image', item.nome || '');
+    } catch (error) {
+      console.error('Erro ao enviar imagem da galeria:', error);
+      toast.error('Nao foi possivel enviar a imagem da galeria.');
+    }
+  };
+
+  useEffect(() => {
+    if (showEmojiGallery) {
+      loadGalleryItems();
+    }
+  }, [showEmojiGallery, conversation?.inbox?.provedor?.id, user?.provedor_id]);
 
   // Persistir estado do Sidebar SGP
   useEffect(() => {
@@ -3542,7 +3652,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       )}
 
       {/* Input de mensagem */}
-      <div className="border-t border-border p-4 bg-card">
+      <div className="border-t border-border p-4 bg-card overflow-visible">
         {/* Botão de templates quando janela fechada */}
         {is24hWindowOpen === false && isWhatsAppChannel && (
 
@@ -3558,7 +3668,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           </div>
         )}
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 overflow-visible">
           {/* Upload de arquivo */}
           <input
             type="file"
@@ -3576,10 +3686,13 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             <Paperclip className="w-5 h-5" />
           </button>
 
-          {/* Botão de Emojis */}
-          <div className="relative" ref={emojiPickerRef}>
+          {/* Botão de Emojis (texto) */}
+          <div className="relative overflow-visible" ref={emojiPickerRef}>
             <button
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              onClick={() => {
+                setShowEmojiPicker(!showEmojiPicker);
+                setShowEmojiGallery(false);
+              }}
               disabled={is24hWindowOpen === false && isWhatsAppChannel}
 
               className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${showEmojiPicker ? 'text-primary bg-accent' : 'text-muted-foreground hover:text-primary hover:bg-accent'}`}
@@ -3589,23 +3702,84 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             </button>
 
             {showEmojiPicker && (
-              <div className="absolute bottom-full left-0 mb-2 w-72 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+              <div className="absolute bottom-full left-0 mb-2 w-80 max-w-[85vw] bg-card border border-border rounded-xl shadow-2xl z-[120] overflow-hidden animate-in fade-in slide-in-from-bottom-2">
                 <div className="p-2 border-b border-border bg-accent/50 flex justify-between items-center">
-                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Emojis</span>
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Emojis (texto)</span>
                   <button onClick={() => setShowEmojiPicker(false)} className="text-muted-foreground hover:text-foreground">
                     <X size={14} />
                   </button>
                 </div>
-                <div className="h-48 overflow-y-auto p-2 grid grid-cols-8 gap-1 custom-scrollbar">
+                <div className="h-64 overflow-y-auto p-2 grid grid-cols-7 gap-2 custom-scrollbar">
                   {emojiList.map((emoji, index) => (
                     <button
                       key={index}
                       onClick={() => addEmoji(emoji)}
-                      className="text-xl p-1 hover:bg-accent rounded transition-colors"
+                      className="p-1.5 hover:bg-accent rounded-lg transition-colors flex items-center justify-center border border-transparent hover:border-border text-2xl"
+                      title={`Inserir emoji ${emoji}`}
                     >
-                      {emoji}
+                      <span aria-hidden="true">{emoji}</span>
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Botão Galeria (envia emoji como imagem) */}
+          <div className="relative overflow-visible" ref={emojiGalleryRef}>
+            <button
+              onClick={() => {
+                setShowEmojiGallery(!showEmojiGallery);
+                setShowEmojiPicker(false);
+              }}
+              disabled={sendingMedia || (is24hWindowOpen === false && isWhatsAppChannel)}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${showEmojiGallery ? 'text-primary bg-accent' : 'text-muted-foreground hover:text-primary hover:bg-accent'}`}
+              title="Galeria de emojis (imagem)"
+            >
+              <Image className="w-5 h-5" />
+            </button>
+
+            {showEmojiGallery && (
+              <div className="absolute bottom-full left-0 mb-2 w-80 max-w-[85vw] bg-card border border-border rounded-xl shadow-2xl z-[120] overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                <div className="p-2 border-b border-border bg-accent/50 flex justify-between items-center">
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Galeria de Imagens</span>
+                  <button onClick={() => setShowEmojiGallery(false)} className="text-muted-foreground hover:text-foreground">
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="h-72 overflow-y-auto p-2 custom-scrollbar">
+                  {loadingGallery ? (
+                    <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                      Carregando galeria...
+                    </div>
+                  ) : galleryItems.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm text-muted-foreground text-center px-4">
+                      Nenhuma imagem cadastrada na galeria.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {galleryItems.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => handleSendGalleryImage(item)}
+                          className="w-full p-2 rounded-lg border border-border/70 hover:bg-accent transition-colors flex items-center gap-2 text-left"
+                          title={`Enviar ${item.nome || 'imagem'} ao cliente`}
+                          disabled={sendingMedia}
+                        >
+                          <div className="w-12 h-12 rounded-md bg-muted/40 overflow-hidden flex-shrink-0 border border-border/70">
+                            {item.image_url ? (
+                              <img src={item.image_url} alt={item.nome || 'Imagem da galeria'} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">Sem img</div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="gallery-item-name text-sm font-medium truncate">{item.nome || 'Imagem sem nome'}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3659,7 +3833,10 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                   style={{
                     minHeight: '40px',
                     maxHeight: '120px',
-                    height: 'auto'
+                    height: 'auto',
+                    color: '#ffffff',
+                    caretColor: '#ffffff',
+                    WebkitTextFillColor: '#ffffff'
                   }}
                   onInput={(e) => {
                     e.target.style.height = 'auto';

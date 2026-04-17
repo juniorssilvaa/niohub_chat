@@ -686,3 +686,47 @@
 :root:not(.dark) .recharts-cartesian-axis-tick-value {
   fill: #0f172a !important;
 }
+
+/* 7. Campo de mensagem do chat privado deve manter texto branco */
+:root:not(.dark) .private-chat-textarea,
+.dark .private-chat-textarea {
+  color: #ffffff !important;
+  caret-color: #ffffff !important;
+}
+
+:root:not(.dark) .private-chat-textarea::placeholder,
+.dark .private-chat-textarea::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+/* 8. Campo principal de envio (ChatArea) sempre com texto branco */
+:root:not(.dark) #message-input,
+.dark #message-input {
+  color: #ffffff !important;
+  caret-color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+:root:not(.dark) #message-input::placeholder,
+.dark #message-input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+/* 9. Nome da imagem na galeria do chat sempre branco */
+:root:not(.dark) .gallery-item-name,
+.dark .gallery-item-name {
+  color: #ffffff !important;
+}
+
+/* 10. Itens do menu "Novo atendimento" com texto branco */
+:root:not(.dark) .conversation-action-name,
+.dark .conversation-action-name {
+  color: #ffffff !important;
+}
+
+:root:not(.dark) .conversation-action-icon,
+.dark .conversation-action-icon {
+  color: #ffffff !important;
+}

@@ -1112,10 +1112,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                       setShowMenuAtendimento(false);
                       setModalNovoContato(true);
                     }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center space-x-2"
+                    className="conversation-action-item w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center space-x-2"
                   >
-                    <User className="w-4 h-4" />
-                    <span>Novo Contato</span>
+                    <User className="conversation-action-icon w-4 h-4" />
+                    <span className="conversation-action-name">Novo Contato</span>
                   </button>
                   <button
                     onClick={(e) => {
@@ -1123,10 +1123,10 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                       setShowMenuAtendimento(false);
                       setModalContatoExistente(true);
                     }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center space-x-2"
+                    className="conversation-action-item w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center space-x-2"
                   >
-                    <Search className="w-4 h-4" />
-                    <span>Contato Existente</span>
+                    <Search className="conversation-action-icon w-4 h-4" />
+                    <span className="conversation-action-name">Contato Existente</span>
                   </button>
                 </div>
               )}
