@@ -1333,12 +1333,70 @@ class ChatbotEngine:
             except Exception as e:
                 logger.error(f"[ChatbotEngine][Close] Erro ao encerrar atendimento: {e}", exc_info=True)
 
+    @staticmethod
+    def _extract_wamid_from_cloud_response(response: Any) -> Optional[str]:
+        """Extrai wamid da resposta da WhatsApp Cloud API (JSON dict ou string)."""
+        if response is None:
+            return None
+        data = None
+        if isinstance(response, dict):
+            data = response
+        elif isinstance(response, str):
+            try:
+                data = json.loads(response)
+            except (json.JSONDecodeError, TypeError):
+                data = None
+        if isinstance(data, dict):
+            messages = data.get("messages") or []
+            if messages and isinstance(messages[0], dict):
+                mid = messages[0].get("id")
+                if mid:
+                    return str(mid)[:255]
+        if isinstance(response, str):
+            id_patterns = [
+                r'"id":\s*"([^"]+)"',
+                r"'id':\s*'([^']+)'",
+                r'wamid\.[A-Za-z0-9_=+/\-]+',
+            ]
+            for pattern in id_patterns:
+                match = re.search(pattern, response)
+                if match:
+                    raw = match.group(1) if match.lastindex else match.group(0)
+                    return str(raw)[:255]
+        return None
+
+    @staticmethod
+    async def _sync_cloud_wamid_to_message(message_id: Optional[int], response: Any) -> None:
+        """Grava external_id (wamid) na mensagem persistida para replies do cliente resolverem no webhook."""
+        if not message_id:
+            return
+        wamid = ChatbotEngine._extract_wamid_from_cloud_response(response)
+        if not wamid:
+            return
+
+        def _upd():
+            from conversations.models import Message
+            try:
+                m = Message.objects.only("id", "external_id", "additional_attributes").get(pk=message_id)
+            except Message.DoesNotExist:
+                return
+            if m.external_id:
+                return
+            attrs = dict(m.additional_attributes or {})
+            attrs["external_id"] = wamid
+            attrs["whatsapp_message_id"] = wamid
+            m.external_id = wamid
+            m.additional_attributes = attrs
+            m.save(update_fields=["external_id", "additional_attributes"])
+
+        await sync_to_async(_upd)()
 
     @staticmethod
     async def _persist_chatbot_message(conv, content_for_db, msg_btns=None, msg_rows=None):
         """
         Salva a mensagem do chatbot no banco de dados e emite via WebSocket.
         Isso garante que as mensagens apareçam no ChatArea e na auditoria.
+        Retorna a instância Message ou None se falhar.
         """
         try:
             from conversations.models import Message
@@ -1394,8 +1452,10 @@ class ChatbotEngine:
             except Exception as ws_err:
                 logger.warning(f"[ChatbotEngine] Falha no WebSocket broadcast (não crítico): {ws_err}")
 
+            return msg_obj
         except Exception as db_err:
             logger.error(f"[ChatbotEngine] Erro ao salvar mensagem do chatbot no banco: {db_err}", exc_info=True)
+            return None
 
     @staticmethod
     async def send_message_agnostic(conv, text, msg_btns=None, msg_header=None, msg_footer=None, msg_rows=None, msg_btn_text=None, msg_sec_title=None) -> Tuple[bool, Any]:
@@ -1410,7 +1470,7 @@ class ChatbotEngine:
 
         # Persistir no banco ANTES do envio real para garantir exibição instantânea no painel
         # Isso elimina o atraso causado pela latência da API externa
-        await ChatbotEngine._persist_chatbot_message(conv, text, msg_btns, msg_rows)
+        msg_obj = await ChatbotEngine._persist_chatbot_message(conv, text, msg_btns, msg_rows)
 
         success = False
         response = None
@@ -1435,7 +1495,8 @@ class ChatbotEngine:
                     content=text,
                     message_type='text'
                 )
-            
+            if success and msg_obj:
+                await ChatbotEngine._sync_cloud_wamid_to_message(msg_obj.id, response)
             return success, response
 
         # 2. Uazapi
@@ -1551,28 +1612,33 @@ class ChatbotEngine:
                         "sender": {"sender_type": "bot"},
                     }
                 )
+            return msg_obj
         except Exception as db_err:
             logger.error(f"[ChatbotEngine][Galeria] Erro ao persistir imagem: {db_err}", exc_info=True)
+            return None
 
     @staticmethod
     async def send_gallery_image_agnostic(conv, gallery_image, caption='') -> Tuple[bool, Any]:
         inbox = conv.inbox
         provedor = inbox.provedor
         panel_url = await sync_to_async(_copy_provider_gallery_to_conversation_media)(conv, gallery_image)
-        await ChatbotEngine._persist_chatbot_image_message(
+        msg_obj = await ChatbotEngine._persist_chatbot_image_message(
             conv, caption, panel_url, display_file_name=gallery_image.nome
         )
 
         if inbox.channel_id == "whatsapp_cloud_api" or inbox.channel_type == "whatsapp_oficial" or (provedor.integracoes_externas.get('cloud_api_active') is True):
-            return await sync_to_async(send_via_whatsapp_cloud_api)(
+            success, response = await sync_to_async(send_via_whatsapp_cloud_api)(
                 conversation=conv,
                 content=caption or ' ',
                 message_type='image',
                 file_path=gallery_image.imagem.path
             )
+            if success and msg_obj:
+                await ChatbotEngine._sync_cloud_wamid_to_message(msg_obj.id, response)
+            return success, response
 
         base_url = getattr(settings, 'APP_BASE_URL', '').rstrip('/')
-        public_url = f"{base_url}{relative_url}" if base_url else relative_url
+        public_url = f"{base_url}{panel_url}" if base_url else panel_url
         fallback_text = caption or "Imagem enviada"
         return await ChatbotEngine.send_message_agnostic(conv, f"{fallback_text}\n{public_url}")
 

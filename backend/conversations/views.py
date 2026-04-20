@@ -16,6 +16,7 @@ from .serializers import (
     ConversationListSerializer, ConversationUpdateSerializer, MessageSerializer, TeamSerializer, TeamMemberSerializer
 )
 from .services import ConversationNotificationService
+from .message_visibility import apply_agent_message_visibility_filter
 from integrations.asaas_service import AsaasService
 from rest_framework.permissions import AllowAny
 from integrations.models import WhatsAppIntegration
@@ -627,8 +628,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
             # Conversa encontrada no banco local - retornar dados locais
             logger.debug(f"[RETRIEVE] Conversa {conversation_id} encontrada no banco local (status: {conversation.status})")
             
-            # Buscar mensagens do banco local
-            messages = Message.objects.filter(conversation=conversation).order_by('created_at')
+            # Buscar mensagens do banco local (painel: oculta histórico anterior ao retorno ao bot)
+            messages_qs = Message.objects.filter(conversation=conversation).order_by('created_at')
+            messages_qs = apply_agent_message_visibility_filter(messages_qs, conversation, request)
+            messages = list(messages_qs)
             
             # Montar resposta com dados locais
             contact = conversation.contact
@@ -2667,6 +2670,11 @@ class MessageViewSet(viewsets.ModelViewSet):
             try:
                 conversation_id_int = int(conversation_id)
                 queryset = Message.objects.filter(conversation_id=conversation_id_int).prefetch_related('reactions')
+                try:
+                    conv = Conversation.objects.get(pk=conversation_id_int)
+                    queryset = apply_agent_message_visibility_filter(queryset, conv, self.request)
+                except Conversation.DoesNotExist:
+                    pass
             except (ValueError, TypeError):
                 # Se não for um número válido, ignorar o filtro e construir queryset padrão
                 queryset = None
@@ -3787,13 +3795,8 @@ class MessageViewSet(viewsets.ModelViewSet):
                 additional_attrs['reply_to_message_id'] = reply_to_message_id
                 additional_attrs['is_reply'] = True
             
-            # Salvar mensagem no banco
-            # Para PTT (mensagens de voz), não usar caption automático
-            if media_type == 'ptt':
-                content_to_save = caption if caption else "Mensagem de voz"
-            else:
-                # Para outros tipos de mídia, não usar caption automático
-                content_to_save = caption if caption else ""
+            # Salvar mensagem no banco (sem legenda genérica para PTT/áudio: o player já indica o tipo)
+            content_to_save = caption if caption else ""
             
             message = Message.objects.create(
                 conversation=conversation,

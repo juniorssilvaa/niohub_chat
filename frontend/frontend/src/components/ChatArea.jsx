@@ -23,7 +23,8 @@ import {
   Calendar,
   Copy,
   Barcode,
-  Database
+  Database,
+  Smartphone
 } from 'lucide-react';
 import SgpSidebar from './SgpSidebar';
 import axios from 'axios';
@@ -66,8 +67,14 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   const [contactName, setContactName] = useState(conversation.contact?.name);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const highlightClearTimeoutRef = useRef(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const wsRef = useRef(null);
+  /** Sempre a conversa aberta no painel — evita fetch/WS/fallback de outra conversa após troca rápida */
+  const activeConversationIdRef = useRef(null);
+  useEffect(() => {
+    activeConversationIdRef.current = conversation?.id ?? null;
+  }, [conversation?.id]);
   const [loadingProfilePic, setLoadingProfilePic] = useState(false);
   const [showTransferDropdown, setShowTransferDropdown] = useState(false);
   const [agents, setAgents] = useState([]);
@@ -86,6 +93,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState(null);
   const [replyingToMessage, setReplyingToMessage] = useState(null);
+  /** Destaque ao ir até a mensagem citada (clique em "Resposta a:" / "Respondendo a:") */
+  const [highlightTargetMessageId, setHighlightTargetMessageId] = useState(null);
 
   // Estados para gravação de áudio
   const [isRecording, setIsRecording] = useState(false);
@@ -572,6 +581,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   // Função para buscar mensagens
   const fetchMessages = async () => {
     if (!conversation) return;
+    const requestedConversationId = conversation.id;
+    setMessages([]);
     setLoading(true);
     setError('');
     // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
@@ -584,7 +595,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       const maxPages = 20; // Proteção contra loops infinitos (máx 200k mensagens)
 
       while (hasMore && page <= maxPages) {
-        const res = await axios.get(`/api/messages/?conversation=${conversation.id}&page_size=10000&ordering=created_at&page=${page}`, {
+        const res = await axios.get(`/api/messages/?conversation=${requestedConversationId}&page_size=10000&ordering=created_at&page=${page}`, {
           headers: { Authorization: `Token ${token}` }
         });
 
@@ -625,12 +636,19 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         };
       });
 
+      if (Number(activeConversationIdRef.current) !== Number(requestedConversationId)) {
+        return;
+      }
       setMessages(processedMessages);
     } catch (err) {
-      setError('Erro ao carregar mensagens.');
-      console.error('Erro ao buscar mensagens:', err);
+      if (Number(activeConversationIdRef.current) === Number(requestedConversationId)) {
+        setError('Erro ao carregar mensagens.');
+        console.error('Erro ao buscar mensagens:', err);
+      }
     } finally {
-      setLoading(false);
+      if (Number(activeConversationIdRef.current) === Number(requestedConversationId)) {
+        setLoading(false);
+      }
     }
   };
 
@@ -728,6 +746,14 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   // Buscar mensagens ao abrir conversa
   useEffect(() => {
     fetchMessages();
+  }, [conversation?.id]);
+
+  useEffect(() => {
+    if (highlightClearTimeoutRef.current) {
+      window.clearTimeout(highlightClearTimeoutRef.current);
+      highlightClearTimeoutRef.current = null;
+    }
+    setHighlightTargetMessageId(null);
   }, [conversation?.id]);
 
   // Função para marcar mensagem como lida no WhatsApp
@@ -942,6 +968,31 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
           if (data.type === 'message' || data.type === 'chat_message' || data.type === 'message_created' || data.type === 'message_received') {
             if (data.message) {
+              const __expectedConv = activeConversationIdRef.current;
+              const __mc = data.message.conversation;
+              const __incomingConv =
+                __mc != null
+                  ? typeof __mc === 'object' && __mc != null
+                    ? Number(__mc.id)
+                    : Number(__mc)
+                  : data.conversation_id != null
+                    ? Number(data.conversation_id)
+                    : null;
+              const __wsConvMismatch =
+                __incomingConv != null &&
+                !Number.isNaN(__incomingConv) &&
+                __expectedConv != null &&
+                !Number.isNaN(Number(__expectedConv)) &&
+                Number(__expectedConv) !== __incomingConv;
+              if (__wsConvMismatch) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn('[WebSocket] Ignorando mensagem de outra conversa', {
+                    incoming: __incomingConv,
+                    active: __expectedConv,
+                  });
+                }
+              }
+              if (!__wsConvMismatch) {
               // Atualizar nome do contato se vier no payload da mensagem
               if (data.message.contact_name && data.message.contact_name.trim()) {
                 setContactName(data.message.contact_name.trim());
@@ -959,6 +1010,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               }
 
               setMessages(currentMessages => {
+                if (
+                  __incomingConv != null &&
+                  !Number.isNaN(__incomingConv) &&
+                  activeConversationIdRef.current != null &&
+                  Number(activeConversationIdRef.current) !== __incomingConv
+                ) {
+                  return currentMessages;
+                }
+
                 // VERIFICAÇÃO DE DUPLICATAS (ID real ou temp_id)
                 const messageExists = currentMessages.some(m => 
                   (m.id && m.id === data.message.id) || 
@@ -970,6 +1030,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                     console.log(`[WebSocket] Mensagem ${data.message.id} já existe no estado. Ignorando.`);
                   }
                   return currentMessages;
+                }
+
+                const cutoffIso = conversation?.additional_attributes?.agent_chat_visible_from;
+                if (cutoffIso && data.message?.created_at) {
+                  const tMsg = new Date(data.message.created_at).getTime();
+                  const tCut = new Date(cutoffIso).getTime();
+                  if (!Number.isNaN(tMsg) && !Number.isNaN(tCut) && tMsg < tCut) {
+                    return currentMessages;
+                  }
                 }
 
                 if (process.env.NODE_ENV === 'development') {
@@ -1077,6 +1146,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                     new Date(a.created_at) - new Date(b.created_at)
                   );
               });
+              }
             }
           }
 
@@ -1195,6 +1265,19 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
             if (onConversationUpdate) {
               onConversationUpdate(updatedConversation);
+            }
+
+            const visCut = updatedConversation?.additional_attributes?.agent_chat_visible_from;
+            if (visCut) {
+              setMessages((prev) =>
+                prev.filter((m) => {
+                  if (!m.created_at) return true;
+                  const tm = new Date(m.created_at).getTime();
+                  const tc = new Date(visCut).getTime();
+                  if (Number.isNaN(tm) || Number.isNaN(tc)) return true;
+                  return tm >= tc;
+                })
+              );
             }
           }
 
@@ -1409,6 +1492,43 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     setShouldAutoScroll(atBottom);
   };
 
+  const scrollToReplyTarget = (replyToMessageId) => {
+    const rid =
+      replyToMessageId != null && replyToMessageId !== ''
+        ? Number(replyToMessageId)
+        : NaN;
+    if (!Number.isFinite(rid)) return;
+    const root = scrollContainerRef.current;
+    if (!root) return;
+    const el = root.querySelector(`[data-chat-message-id="${rid}"]`);
+    if (!el) {
+      toast.info('Mensagem original não está carregada ou não foi encontrada.');
+      return;
+    }
+    if (highlightClearTimeoutRef.current) {
+      window.clearTimeout(highlightClearTimeoutRef.current);
+      highlightClearTimeoutRef.current = null;
+    }
+    setShouldAutoScroll(false);
+    setHighlightTargetMessageId(null);
+    requestAnimationFrame(() => {
+      setHighlightTargetMessageId(rid);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      highlightClearTimeoutRef.current = window.setTimeout(() => {
+        setHighlightTargetMessageId(null);
+        highlightClearTimeoutRef.current = null;
+      }, 2800);
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (highlightClearTimeoutRef.current) {
+        window.clearTimeout(highlightClearTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (shouldAutoScroll) {
       scrollToBottom();
@@ -1480,6 +1600,8 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     });
     pendingMessagesRef.current.add(messageKey);
 
+    const sendConversationId = conversation.id;
+
     try {
       // Otimização: Usar os dados do usuário já presentes na prop 'user'
       const userName = user?.first_name || user?.username || 'Usuário';
@@ -1491,7 +1613,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
       // Preparar payload para envio
       const payload = {
-        conversation_id: conversation.id,
+        conversation_id: sendConversationId,
         content: formattedMessage
       };
 
@@ -1512,6 +1634,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       setTimeout(() => {
         // CORREÇÃO: Usar pendingMessagesRef.current em vez do estado pendingMessages
         // para evitar o problema de "stale closure" no setTimeout
+        if (Number(activeConversationIdRef.current) !== Number(sendConversationId)) {
+          pendingMessagesRef.current.delete(messageKey);
+          setPendingMessages(prev => {
+            const next = new Set(prev);
+            next.delete(messageKey);
+            return next;
+          });
+          return;
+        }
         if (pendingMessagesRef.current.has(messageKey)) {
           console.warn(`[WebSocket] Mensagem "${messageKey.substring(0, 20)}..." não recebida via WS após 2s, usando fallback da API.`);
           
@@ -1870,6 +2001,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     setError('');
     setSendingMedia(true);
     const token = localStorage.getItem('token');
+    const sendMediaConversationId = conversation.id;
 
     // Iniciando envio de mídia
 
@@ -1910,7 +2042,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       }
 
       const formData = new FormData();
-      formData.append('conversation_id', conversation.id);
+      formData.append('conversation_id', sendMediaConversationId);
       formData.append('media_type', mediaType);
       formData.append('file', file);
       // Para PTT (mensagens de voz), não enviar caption
@@ -1939,6 +2071,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
       //  Se o WebSocket não funcionar, adicionar mensagem do response
       setTimeout(() => {
+        if (Number(activeConversationIdRef.current) !== Number(sendMediaConversationId)) {
+          return;
+        }
         if (response.data && response.data.id) {
           setMessages(currentMessages => {
             const messageExists = currentMessages.some(m => m.id === response.data.id);
@@ -2944,6 +3079,10 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               const isSystemMessage = msg.additional_attributes?.system_message || msg.content?.includes('Conversa atribuída para');
               const isResumoSuporte = msg.additional_attributes?.tipo === 'resumo_suporte' || msg.additional_attributes?.apenas_atendentes;
               const isLarge = isLargeMessage(content);
+              const isAgentAudioPlaceholderText =
+                !isCustomer &&
+                (msg.message_type === 'audio' || msg.message_type === 'ptt') &&
+                (content || '').trim() === 'Mensagem de voz';
 
               // Determinar se a mensagem tem mídia
               const hasImage = attachmentList.some(att => att.file_type === 'image') ||
@@ -2955,28 +3094,70 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
               const hasDocument = attachmentList.some(att => att.file_type === 'file') ||
                 (msg.message_type === 'document' && msg.file_url);
 
+              /** Eco smb_message_echoes: texto/mídia enviados pelo WhatsApp Business no celular */
+              const showWhatsAppPhoneSentBadge =
+                !isCustomer &&
+                msg.additional_attributes?.source === 'whatsapp_business_app';
+
+              const isReplyHighlight =
+                highlightTargetMessageId != null &&
+                Number(highlightTargetMessageId) === Number(msg.id);
+
               // Debug: logar dados da mensagem
               if (msg.message_type === 'image' || attachmentList.some(att => att.file_type === 'image')) {
                 // Debug removido
               }
 
               return (
-                <div key={msg.id} className={`flex ${getMessageAlignment(msg, content)} group mb-4 min-w-0`}>
+                <div
+                  key={msg.id}
+                  data-chat-message-id={msg.id}
+                  className={`flex ${getMessageAlignment(msg, content)} group mb-4 min-w-0`}
+                >
                   <div className={`max-w-[70%] min-w-0 ${getMessageOrder(msg, content)}`}>
-                    <div className={`
-                  px-5 py-3 shadow-sm
+                    <div
+                      className={`
+                  relative px-5 py-3 shadow-sm rounded-2xl
+                  ${isReplyHighlight ? 'ring-2 ring-amber-400 dark:ring-amber-300 z-[1]' : ''}
                   ${isCustomer
-                        ? 'bg-[#4A5568] text-white rounded-2xl'  // Mensagens recebidas (cliente)
+                        ? 'bg-[#4A5568] text-white'  // Mensagens recebidas (cliente)
                         : isResumoSuporte
-                          ? 'bg-[#FFF9C4] text-[#856404] rounded-2xl border border-[#FFE69C]'  // Resumo suporte - amarelo fraco
+                          ? 'bg-[#FFF9C4] text-[#856404] border border-[#FFE69C]'  // Resumo suporte - amarelo fraco
                           : isAI || isBot || isSystemMessage
-                            ? 'bg-[#2196F3] text-white rounded-2xl'  // IA / bot / sistema
-                            : 'bg-[#2196F3] text-white rounded-2xl'  // Mensagens do agente (envio) - igual ao exemplo
+                            ? 'bg-[#2196F3] text-white'  // IA / bot / sistema
+                            : 'bg-[#2196F3] text-white'  // Mensagens do agente (envio) - igual ao exemplo
                       }
-                `}>
-                      {/* Resposta a mensagem anterior */}
+                `}
+                    >
+                      {isReplyHighlight && (
+                        <div
+                          className={`pointer-events-none absolute top-3 bottom-3 w-[3px] rounded-full bg-amber-300 shadow-[0_0_14px_rgba(252,211,77,0.95)] z-[2] animate-pulse ${
+                            isCustomer ? 'left-2' : 'right-2'
+                          }`}
+                          aria-hidden
+                        />
+                      )}
+                      {/* Resposta a mensagem anterior — clique leva até a mensagem citada */}
                       {msg.additional_attributes?.is_reply && (
-                        <div className={`mb-2 p-2 rounded-lg text-xs ${isCustomer ? 'bg-white/30' : 'bg-black/10'} opacity-75`}>
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          title="Ir para a mensagem citada"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            scrollToReplyTarget(msg.additional_attributes?.reply_to_message_id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              scrollToReplyTarget(msg.additional_attributes?.reply_to_message_id);
+                            }
+                          }}
+                          className={`mb-2 p-2 rounded-lg text-xs cursor-pointer select-none transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+                            isCustomer ? 'bg-white/30' : 'bg-black/10'
+                          } opacity-90`}
+                        >
                           <div className="font-medium">{isCustomer ? 'Resposta a:' : 'Respondendo a:'}</div>
                           <div className="truncate">
                             {msg.additional_attributes.reply_to_content || 'Mensagem anterior'}
@@ -3383,6 +3564,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
                       {/* Conteúdo da mensagem (Texto) */}
                       {content && 
+                       !isAgentAudioPlaceholderText &&
                        !(msg.additional_attributes?.is_invoice || 
                         (content && content.includes('dados para pagamento de sua fatura'))) && (
                         <div className="whitespace-pre-wrap break-words break-all" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
@@ -3464,43 +3646,49 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                         )
                       )}
 
-                      {/* Timestamp e ações */}
-                      <div className={`flex items-center justify-end mt-1`}>
-                        <div className={`flex items-center space-x-2 text-xs ${isCustomer ? 'text-muted-foreground' : 'text-white'}`}>
-                          <span>
+                      {/* Timestamp (canto inferior esquerdo da bolha) + status e ações à direita */}
+                      <div className="flex w-full min-w-0 items-center justify-between gap-2 mt-1">
+                        <div
+                          className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-left text-xs ${isCustomer ? 'text-muted-foreground' : 'text-white'}`}
+                        >
+                          <span className="inline-flex items-center gap-1 shrink-0">
                             {new Date(msg.created_at || msg.timestamp).toLocaleString('pt-BR', {
                               hour: '2-digit',
                               minute: '2-digit',
                               day: '2-digit',
                               month: '2-digit'
                             })}
+                            {showWhatsAppPhoneSentBadge && (
+                              <Smartphone
+                                className={`h-3.5 w-3.5 shrink-0 opacity-90 ${isCustomer ? '' : 'text-white'}`}
+                                title="Enviado pelo WhatsApp no celular (fora do painel NioChat)"
+                                aria-label="Enviado pelo WhatsApp no celular"
+                              />
+                            )}
                           </span>
                           {msg.isTemporary && (
                             <span className="opacity-60">Enviando...</span>
                           )}
-                          {/* Status de leitura para mensagens enviadas pelo agente (apenas WhatsApp) */}
-                          {!isCustomer && isWhatsAppChannel &&
-
-                            !msg.isTemporary && (
-                              <MessageStatusIcon
-                                key={`status-${msg.id}-${msg.additional_attributes?.last_status || 'pending'}`}
-                                message={msg}
-                              />
-                            )}
                         </div>
-
-                        {/* Botões de ação para todas as mensagens (cliente e agente) */}
-                        <div className="flex items-center space-x-1 mt-2">
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          {!isCustomer && isWhatsAppChannel && !msg.isTemporary && (
+                            <MessageStatusIcon
+                              key={`status-${msg.id}-${msg.additional_attributes?.last_status || 'pending'}`}
+                              message={msg}
+                            />
+                          )}
                           <button
+                            type="button"
                             onClick={() => openReactionPicker(msg)}
-                            className={`p-1 hover:bg-white/20 rounded-full text-xs ${isCustomer ? 'hover:bg-black/10' : ''}`}
+                            className={`rounded-full p-1 text-xs hover:bg-white/20 ${isCustomer ? 'hover:bg-black/10' : ''}`}
                             title="Reagir à mensagem"
                           >
                             😊
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleReplyToMessage(msg)}
-                            className={`p-1 hover:bg-white/20 rounded-full text-xs ${isCustomer ? 'hover:bg-black/10' : ''}`}
+                            className={`rounded-full p-1 text-xs hover:bg-white/20 ${isCustomer ? 'hover:bg-black/10' : ''}`}
                             title="Responder mensagem"
                           >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

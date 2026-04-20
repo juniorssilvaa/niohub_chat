@@ -1,6 +1,50 @@
 {
-  "current_version": "2.35.0",
+  "current_version": "2.36.0",
   "versions": [
+    {
+      "version": "2.36.0",
+      "version_type": "patch",
+      "date": "2026-04-19",
+      "title": "Respostas citadas, filtros em Conversas, chat e áudios do celular",
+      "changes": [
+        {
+          "type": "feature",
+          "module": "Conversas",
+          "title": "Novo sistema de filtros na aba Conversas",
+          "description": "Filtros da lista de conversas revisados para localizar atendimentos com mais rapidez e clareza (estado, canal, equipe e critérios combinados conforme disponível no painel)."
+        },
+        {
+          "type": "improvement",
+          "module": "Atendimento",
+          "title": "ChatArea mais estável e legível",
+          "description": "Melhorias na área de mensagens: sincronização ao trocar de conversa, indicador de envio pelo WhatsApp no celular e ajustes de layout para leitura e ações (responder, mídia, status)."
+        },
+        {
+          "type": "fix",
+          "module": "WhatsApp & Áudio",
+          "title": "Reproduzir áudios e voz enviados pelo celular (WhatsApp Business)",
+          "description": "Agora é possível reproduzir no painel áudios e mensagens de voz enviados pelo WhatsApp Business no celular, com a mídia baixada e associada corretamente ao eco oficial da Meta. Corrigido também o texto placeholder indevido que atrapalhava a leitura da conversa."
+        },
+        {
+          "type": "fix",
+          "module": "WhatsApp & Integrações",
+          "title": "Citação correta quando o cliente responde ao agente ou ao chatbot",
+          "description": "O painel exibia a resposta do cliente sem a prévia da mensagem citada. Agora o wamid retornado pela Cloud API é gravado nas mensagens enviadas pelo motor do chatbot e o webhook localiza a mensagem original também por atributos legados, preenchendo “Resposta a:” e o conteúdo citado."
+        },
+        {
+          "type": "feature",
+          "module": "Atendimento",
+          "title": "Ir para a mensagem citada com um clique",
+          "description": "Ao clicar no bloco “Resposta a:” ou “Respondendo a:”, a conversa rola até a mensagem referenciada e destaca com anel e barra luminosa pulsante para o atendente localizar o contexto rapidamente."
+        },
+        {
+          "type": "fix",
+          "module": "Chatbot",
+          "title": "Envio de imagem da galeria (URL no fallback)",
+          "description": "Correção do link público ao enviar imagem da galeria quando o canal não usa exclusivamente a Cloud API oficial, evitando referência incorreta à URL da mídia."
+        }
+      ]
+    },
     {
       "version": "2.35.0",
       "version_type": "minor",

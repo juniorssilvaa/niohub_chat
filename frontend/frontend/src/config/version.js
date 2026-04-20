@@ -1,9 +1,9 @@
 // Este arquivo é atualizado automaticamente pelo sistema de versionamento
 // Não edite manualmente!
 
-export const APP_VERSION = '2.34.0';
+export const APP_VERSION = '2.36.0';
 export const APP_NAME = 'NIO HUB';
-export const BUILD_DATE = '2026-04-16';
+export const BUILD_DATE = '2026-04-19';
 
 // Informações adicionais da versão
 export const VERSION_INFO = {

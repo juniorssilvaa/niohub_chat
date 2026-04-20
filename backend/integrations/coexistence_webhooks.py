@@ -24,6 +24,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.conf import settings
+from django.db.models import Q
 from datetime import datetime
 import requests
 
@@ -519,6 +520,25 @@ def process_message_echoes(waba_id: str, value: dict):
                 return
             
             provedor = whatsapp_integration.provedor
+            # Canal necessário para inbox, download de mídia e token da Graph API
+            canal = (
+                Canal.objects.filter(
+                    tipo="whatsapp_oficial",
+                    phone_number_id=phone_number_id,
+                    provedor=provedor,
+                ).first()
+                or Canal.objects.filter(
+                    tipo="whatsapp_oficial",
+                    provedor=provedor,
+                    ativo=True,
+                ).first()
+            )
+            if not canal:
+                logger.warning(
+                    f"[WhatsAppWebhook][Echo] Canal WhatsApp não encontrado "
+                    f"(phone_number_id={phone_number_id}, provedor={provedor.id})"
+                )
+                return
         
         for echo in message_echoes:
             message_id = echo.get("id")
@@ -624,6 +644,50 @@ def process_message_echoes(waba_id: str, value: dict):
             if existing_message:
                 continue
             
+            additional_attrs_echo = {
+                "source": "whatsapp_business_app",
+                "waba_id": waba_id,
+                "phone_number_id": phone_number_id,
+            }
+            original_file_name = file_name
+            # Eco da Meta traz `id` da mídia, não URL — baixar como nas mensagens recebidas
+            if message_type in ["image", "audio", "video", "document"] and file_url and canal:
+                try:
+                    local_url, meta_saved = download_whatsapp_media(
+                        file_url, canal, conversation.id, original_file_name or message_type
+                    )
+                    if local_url:
+                        url_parts = local_url.rstrip("/").split("/")
+                        if len(url_parts) >= 2:
+                            file_name = url_parts[-1]
+                        file_url = local_url
+                        if meta_saved:
+                            additional_attrs_echo["local_file_url"] = local_url
+                            additional_attrs_echo["whatsapp_file_url"] = meta_saved.get(
+                                "whatsapp_download_url"
+                            )
+                            mime_type = meta_saved.get("mime_type")
+                            additional_attrs_echo["mime_type"] = mime_type
+                            additional_attrs_echo["file_size"] = meta_saved.get("file_size")
+                            additional_attrs_echo["sha256"] = meta_saved.get("sha256")
+                            if message_type == "audio" and mime_type:
+                                if mime_type == "audio/ogg" or "ogg" in mime_type.lower():
+                                    additional_attrs_echo["is_voice_message"] = True
+                                    additional_attrs_echo["audio_type"] = "voice"
+                                else:
+                                    additional_attrs_echo["is_voice_message"] = False
+                                    additional_attrs_echo["audio_type"] = "basic"
+                        logger.info(f"[WhatsAppWebhook][Echo] Mídia baixada: {local_url}")
+                    else:
+                        logger.warning(
+                            f"[WhatsAppWebhook][Echo] Falha ao baixar mídia (media_id={file_url}) "
+                            f"conv={conversation.id}"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"[WhatsAppWebhook][Echo] Erro ao baixar mídia: {e}", exc_info=True
+                    )
+            
             try:
                 # Converter timestamp Unix para datetime com timezone do Django (America/Belem)
                 # O timestamp da Meta vem em UTC (Unix timestamp)
@@ -647,15 +711,11 @@ def process_message_echoes(waba_id: str, value: dict):
                 file_url=file_url,
                 file_name=file_name,
                 created_at=message_timestamp,
-                additional_attributes={
-                    "source": "whatsapp_business_app",
-                    "waba_id": waba_id,
-                    "phone_number_id": phone_number_id
-                }
+                additional_attributes=additional_attrs_echo,
             )
     
     except Exception as e:
-        pass
+        logger.exception(f"[WhatsAppWebhook][Echo] Erro ao processar message_echoes: {e}")
 
 
 def process_history_sync(waba_id: str, value: dict):
@@ -1081,6 +1141,9 @@ def process_incoming_messages(waba_id: str, value: dict):
             # Se a conversa já existia mas estava fechada ou em closing, reabrir (Reset Completo)
             if conversation.status in ["closed", "resolved", "finalizada", "closing"]:
                 now = timezone.now()
+                from conversations.message_visibility import mark_conversation_new_bot_session
+                # Antes de mudar status: zera memória da IA e marca corte de histórico para o painel
+                mark_conversation_new_bot_session(conversation)
                 conversation.status = "snoozed"
                 conversation.team = ia_team
                 conversation.assignee = None
@@ -1242,11 +1305,17 @@ def process_incoming_messages(waba_id: str, value: dict):
             
             if context_message_id:
                 logger.info(f"[WhatsAppWebhook] Resposta contextual detectada - context_message_id (wamid): {context_message_id}")
-                # Buscar a mensagem original que está sendo respondida pelo external_id (wamid)
-                original_message = Message.objects.filter(
-                    external_id=context_message_id,
-                    conversation=conversation
-                ).first()
+                # Buscar a mensagem original (wamid em external_id ou em additional_attributes legado)
+                original_message = (
+                    Message.objects.filter(conversation=conversation)
+                    .filter(
+                        Q(external_id=context_message_id)
+                        | Q(additional_attributes__external_id=context_message_id)
+                        | Q(additional_attributes__whatsapp_message_id=context_message_id)
+                    )
+                    .order_by("-id")
+                    .first()
+                )
                 
                 if original_message:
                     reply_to_message_id = original_message.id
@@ -1348,7 +1417,6 @@ def process_incoming_messages(waba_id: str, value: dict):
             # IMPORTANTE: Salvar mensagem no Redis para que a IA possa acessar o histórico
             if content and message_obj.is_from_customer:
                 try:
-                    from core.redis_memory_service import redis_memory_service
                     # Centralizado: usar o service único que gerencia o isolamento
                     redis_memory_service.add_message_to_conversation_sync(
                         provedor_id=provedor.id,
@@ -1771,7 +1839,6 @@ def call_ai_and_respond_whatsapp(conversation, contact, provedor, content: str, 
         )
         
         # Salvar resposta da IA no Redis
-        from core.redis_memory_service import redis_memory_service
         redis_memory_service.add_message_to_conversation_sync(
             provedor_id=provedor.id,
             conversation_id=conversation.id,

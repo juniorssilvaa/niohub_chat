@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Users, AlertTriangle, Flame, HelpCircle, Clock, MoreVertical, Bot, MessageCircle, User, X, Volume2, Timer, FileText, Image as ImageIcon, Film, UserCheck, ArrowRightLeft, CheckCircle2, Inbox, Headset, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
 import { useTheme } from '../hooks/useTheme';
 import chatBgPattern from '../assets/chat-bg-pattern.svg';
@@ -157,6 +158,53 @@ export default function ConversasDashboard() {
   const [hasInitialized, setHasInitialized] = useState(false);
   const [providerConfig, setProviderConfig] = useState(null);
 
+  /** Filtros do quadro (atendente / equipe) */
+  const [filterAssigneeId, setFilterAssigneeId] = useState('');
+  const [filterTeamId, setFilterTeamId] = useState('');
+  const [filterUsersList, setFilterUsersList] = useState([]);
+  const [filterTeamsList, setFilterTeamsList] = useState([]);
+  const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
+
+  const getConversationTeamId = (conv) => {
+    if (conv?.team?.id != null) return Number(conv.team.id);
+    const assigned = conv?.additional_attributes?.assigned_team;
+    if (assigned?.id != null) return Number(assigned.id);
+    return null;
+  };
+
+  useEffect(() => {
+    if (!authReady) return undefined;
+    let cancelled = false;
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    const headers = token ? { Authorization: `Token ${token}` } : {};
+
+    (async () => {
+      setFilterOptionsLoading(true);
+      try {
+        const [usersRes, teamsRes] = await Promise.all([
+          axios.get('/api/users/?provedor=me', { headers }),
+          axios.get('/api/teams/', { headers }),
+        ]);
+        if (cancelled) return;
+        const users = usersRes.data?.results ?? usersRes.data ?? [];
+        const teams = teamsRes.data?.results ?? teamsRes.data ?? [];
+        setFilterUsersList(Array.isArray(users) ? users : []);
+        setFilterTeamsList(Array.isArray(teams) ? teams : []);
+      } catch {
+        if (!cancelled) {
+          setFilterUsersList([]);
+          setFilterTeamsList([]);
+        }
+      } finally {
+        if (!cancelled) setFilterOptionsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady]);
+
   useEffect(() => {
     const fetchProviderConfig = async () => {
       try {
@@ -236,6 +284,61 @@ export default function ConversasDashboard() {
     }
     // Se tem assignee humano, está em atendimento (independente de equipe ou status open/in_progress)
     return hasHumanAssignee(conv);
+  };
+
+  /** Filtro atendente/equipe: aplica-se só a fila e em atendimento (fase humana). Automação usa sempre a lista completa. */
+  const conversasFiltroHumano = useMemo(() => {
+    const needAssignee = filterAssigneeId !== '';
+    const needTeam = filterTeamId !== '';
+    if (!needAssignee && !needTeam) return conversas;
+
+    const assigneeIdNum = needAssignee ? Number(filterAssigneeId) : null;
+    const teamIdNum = needTeam ? Number(filterTeamId) : null;
+
+    return conversas.filter((conv) => {
+      if (needAssignee) {
+        if (Number.isNaN(assigneeIdNum) || conv?.assignee?.id == null) return false;
+        if (Number(conv.assignee.id) !== assigneeIdNum) return false;
+      }
+      if (needTeam) {
+        if (Number.isNaN(teamIdNum)) return false;
+        const ct = getConversationTeamId(conv);
+        if (ct == null || ct !== teamIdNum) return false;
+      }
+      return true;
+    });
+  }, [conversas, filterAssigneeId, filterTeamId]);
+
+  const hasActiveBoardFilters = filterAssigneeId !== '' || filterTeamId !== '';
+
+  const displayCounts = useMemo(() => {
+    if (!hasActiveBoardFilters) return counts;
+    const ia = conversas.filter(isComIA).length;
+    const fila = conversasFiltroHumano.filter(isEmEspera).length;
+    const atendimento = conversasFiltroHumano.filter(isEmAtendimento).length;
+    return { ia, fila, atendimento };
+  }, [hasActiveBoardFilters, conversas, conversasFiltroHumano, counts]);
+
+  const filterScopeBits = useMemo(() => {
+    const bits = [];
+    if (filterAssigneeId) {
+      const u = filterUsersList.find((x) => String(x.id) === String(filterAssigneeId));
+      const name = u
+        ? [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.username || `Usuário #${u.id}`
+        : 'Atendente';
+      bits.push(name);
+    }
+    if (filterTeamId) {
+      const t = filterTeamsList.find((x) => String(x.id) === String(filterTeamId));
+      bits.push(t?.name || 'Equipe');
+    }
+    return bits;
+  }, [filterAssigneeId, filterTeamId, filterUsersList, filterTeamsList]);
+
+  /** Só fila e em atendimento exibem o escopo no título; automação é sempre global (chatbot). */
+  const metricCardHeading = (baseLabel, scopeHumanCards) => {
+    if (!scopeHumanCards || !hasActiveBoardFilters || filterScopeBits.length === 0) return baseLabel;
+    return `${baseLabel} · ${filterScopeBits.join(' · ')}`;
   };
 
   // Função para verificar autenticação (mesma lógica do ConversationList)
@@ -733,9 +836,9 @@ export default function ConversasDashboard() {
         } catch (statsErr) {
           console.error('Erro ao buscar estatísticas do dashboard:', statsErr);
           // Fallback para contagem local se a API falhar
-          const ia = filteredConversas.filter(isComIA).length;
-          const fila = filteredConversas.filter(isEmEspera).length;
-          const atendimento = filteredConversas.filter(isEmAtendimento).length;
+          const ia = conversasData.filter(isComIA).length;
+          const fila = conversasData.filter(isEmEspera).length;
+          const atendimento = conversasData.filter(isEmAtendimento).length;
           setCounts({ ia, fila, atendimento });
         }
       } catch (e) {
@@ -1313,7 +1416,7 @@ export default function ConversasDashboard() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Conversas</h1>
+      <h1 className="text-2xl font-bold mb-6 text-card-foreground">Conversas</h1>
 
       {/* Verificação de autenticação */}
       {!hasInitialized ? (
@@ -1349,16 +1452,19 @@ export default function ConversasDashboard() {
       ) : (
         <>
           {/* Dashboard de Métricas — cards sóbrios com acento */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-0">
             <div className="relative overflow-hidden rounded-2xl border border-zinc-700/70 bg-zinc-900/95 p-6 shadow-xl shadow-black/25 ring-1 ring-white/[0.04] transition-all duration-300 hover:border-zinc-600 hover:ring-white/[0.07]">
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-500/[0.08] via-transparent to-violet-600/[0.06]" />
               <div className="pointer-events-none absolute left-0 top-0 h-full w-1 rounded-l-2xl bg-gradient-to-b from-cyan-400 to-violet-500 opacity-90" />
               <div className="relative flex items-start justify-between gap-4 pl-2">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-                    {providerConfig?.chatbot_mode ? 'Automação' : 'Inteligência Artificial'}
+                  <p
+                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400 leading-snug line-clamp-3"
+                    title={metricCardHeading(providerConfig?.chatbot_mode ? 'Automação' : 'Inteligência Artificial', false)}
+                  >
+                    {metricCardHeading(providerConfig?.chatbot_mode ? 'Automação' : 'Inteligência Artificial', false)}
                   </p>
-                  <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-white">{counts.ia}</p>
+                  <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-white">{displayCounts.ia}</p>
                   <p className="mt-1.5 text-xs text-zinc-500">Fluxo automático sem atendente</p>
                 </div>
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-cyan-300">
@@ -1376,8 +1482,13 @@ export default function ConversasDashboard() {
               <div className="pointer-events-none absolute left-0 top-0 h-full w-1 rounded-l-2xl bg-gradient-to-b from-amber-400 to-orange-500 opacity-90" />
               <div className="relative flex items-start justify-between gap-4 pl-2">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Fila de espera</p>
-                  <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-white">{counts.fila}</p>
+                  <p
+                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400 leading-snug line-clamp-3"
+                    title={metricCardHeading('Fila de espera', true)}
+                  >
+                    {metricCardHeading('Fila de espera', true)}
+                  </p>
+                  <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-white">{displayCounts.fila}</p>
                   <p className="mt-1.5 text-xs text-zinc-500">Aguardando atendente humano</p>
                 </div>
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-amber-300">
@@ -1391,13 +1502,75 @@ export default function ConversasDashboard() {
               <div className="pointer-events-none absolute left-0 top-0 h-full w-1 rounded-l-2xl bg-gradient-to-b from-emerald-400 to-teal-600 opacity-90" />
               <div className="relative flex items-start justify-between gap-4 pl-2">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Em atendimento</p>
-                  <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-white">{counts.atendimento}</p>
+                  <p
+                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400 leading-snug line-clamp-3"
+                    title={metricCardHeading('Em atendimento', true)}
+                  >
+                    {metricCardHeading('Em atendimento', true)}
+                  </p>
+                  <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-white">{displayCounts.atendimento}</p>
                   <p className="mt-1.5 text-xs text-zinc-500">Com agente atribuído</p>
                 </div>
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-emerald-300">
                   <Headset className="h-7 w-7" strokeWidth={1.75} />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filtros entre métricas e colunas do quadro */}
+          <div className="mb-8 mt-2 flex flex-col gap-4 border-t border-zinc-700/70 pt-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 lg:max-w-md">
+              {hasActiveBoardFilters ? (
+                <p className="text-xs text-zinc-500">
+                  Automação mostra todas as conversas no fluxo do chatbot. Fila e em atendimento respeitam atendente/equipe.
+                </p>
+              ) : (
+                <p className="text-xs text-zinc-600">
+                  Filtre por atendente e/ou equipe para focar a fila e o atendimento humano no quadro abaixo.
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Atendente</span>
+                <Select
+                  value={filterAssigneeId === '' ? 'all' : String(filterAssigneeId)}
+                  onValueChange={(v) => setFilterAssigneeId(v === 'all' ? '' : v)}
+                  disabled={filterOptionsLoading}
+                >
+                  <SelectTrigger className="w-full min-w-[200px] border-zinc-600 bg-zinc-900/80 sm:w-[220px]">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os atendentes</SelectItem>
+                    {filterUsersList.map((u) => (
+                      <SelectItem key={u.id} value={String(u.id)}>
+                        {[u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.username || `Usuário #${u.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Equipe</span>
+                <Select
+                  value={filterTeamId === '' ? 'all' : String(filterTeamId)}
+                  onValueChange={(v) => setFilterTeamId(v === 'all' ? '' : v)}
+                  disabled={filterOptionsLoading}
+                >
+                  <SelectTrigger className="w-full min-w-[200px] border-zinc-600 bg-zinc-900/80 sm:w-[220px]">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as equipes</SelectItem>
+                    {filterTeamsList.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name || `Equipe #${t.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -1499,7 +1672,7 @@ export default function ConversasDashboard() {
               <h3 className="text-lg font-semibold text-card-foreground mb-4">Em Espera</h3>
               <div className="flex-1 overflow-y-auto pr-2">
                 <div className="space-y-3">
-                  {conversas.filter(isEmEspera).map((conv) => (
+                  {conversasFiltroHumano.filter(isEmEspera).map((conv) => (
                     <div key={conv.id} className="bg-background rounded-xl p-4 relative status-border-espera shadow-sm border border-border/50 transition-all hover:shadow-lg hover:bg-muted/10 group">
                       <div className="flex items-start gap-3">
                         <div className="relative">
@@ -1587,7 +1760,7 @@ export default function ConversasDashboard() {
               <h3 className="text-lg font-semibold text-card-foreground mb-4">Em Atendimento</h3>
               <div className="flex-1 overflow-y-auto pr-2">
                 <div className="space-y-3">
-                  {conversas.filter(isEmAtendimento).map((conv) => (
+                  {conversasFiltroHumano.filter(isEmAtendimento).map((conv) => (
                     <div key={conv.id} className="bg-background rounded-xl p-4 relative status-border-atendimento shadow-sm border border-border/50 transition-all hover:shadow-lg hover:bg-muted/10 group">
                       <div className="flex items-start gap-3">
                         <div className="relative">

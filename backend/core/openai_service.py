@@ -11,6 +11,7 @@ REGRA DE OURO: A IA DEVE USAR APENAS REDIS COMO MEMÓRIA
 import os
 import logging
 import asyncio
+from datetime import timezone as dt_timezone
 import re
 import json
 import hashlib
@@ -19,6 +20,7 @@ from typing import Dict, Any, List, Optional
 from asgiref.sync import async_to_sync, sync_to_async
 from django.conf import settings
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from .models import Provedor, SystemConfig
 from .redis_memory_service import redis_memory_service, normalize_phone_number
@@ -27,6 +29,46 @@ from .ai_response_formatter import AIResponseFormatter
 from .deterministic_fatura_flow import try_handle_fatura_flow
 
 logger = logging.getLogger(__name__)
+
+
+def _filter_ai_context_by_visible_cutoff(history_items, conversation):
+    """
+    Remove mensagens do contexto da IA anteriores a agent_chat_visible_from
+    (evita repetir respostas de transferência/fila de um ciclo encerrado).
+    """
+    if not conversation or not history_items:
+        return history_items
+    cutoff_iso = (getattr(conversation, "additional_attributes", None) or {}).get("agent_chat_visible_from")
+    if not cutoff_iso:
+        return history_items
+    dt_cut = parse_datetime(str(cutoff_iso).replace("Z", "+00:00"))
+    if not dt_cut:
+        return history_items
+    if timezone.is_naive(dt_cut):
+        dt_cut = timezone.make_aware(dt_cut, timezone.get_current_timezone())
+    dt_cut_utc = dt_cut.astimezone(dt_timezone.utc)
+
+    def _item_time(item):
+        ts = item.get("timestamp")
+        if not ts:
+            return None
+        try:
+            dt = parse_datetime(str(ts).replace("Z", "+00:00"))
+            if dt and timezone.is_naive(dt):
+                dt = timezone.make_aware(dt, dt_timezone.utc)
+            return dt
+        except Exception:
+            return None
+
+    filtered = []
+    for item in history_items:
+        t = _item_time(item)
+        if t is None:
+            continue
+        if t >= dt_cut_utc:
+            filtered.append(item)
+    return filtered
+
 
 class OpenAIService:
     """
@@ -227,7 +269,17 @@ class OpenAIService:
             mem = await redis_memory_service.get_ai_memory(provedor.id, conversation_id, channel, contact_phone)
             conversation_state = mem["state"]
             history_items = (mem.get("context") or [])[-15:]
-            
+            # Usar conversa do banco para o marco de sessão (objeto do contexto pode estar desatualizado)
+            conv_for_cutoff = None
+            if contexto and contexto.get("conversation"):
+                try:
+                    from conversations.models import Conversation as ConvModel
+
+                    conv_for_cutoff = await sync_to_async(ConvModel.objects.get)(pk=conversation_id)
+                except Exception:
+                    conv_for_cutoff = contexto.get("conversation")
+                history_items = _filter_ai_context_by_visible_cutoff(history_items, conv_for_cutoff)
+
             # Identificar se já houve interação da IA
             has_ai_interaction = any(msg.get('role') == 'assistant' for msg in history_items)
             

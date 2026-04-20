@@ -228,7 +228,7 @@ export default function ConversationAudit({ provedorId }) {
           // Buscar contagem de mensagens
           let messageCount = 0;
           try {
-            const messagesResponse = await axios.get(`/api/messages/?conversation=${conv.conversation_id}`, {
+            const messagesResponse = await axios.get(`/api/messages/?conversation=${conv.conversation_id}&for_audit=1`, {
               headers: { Authorization: `Token ${token}` }
             });
 
@@ -284,7 +284,7 @@ export default function ConversationAudit({ provedorId }) {
       const token = localStorage.getItem('token');
 
       // Buscar dados completos da conversa do endpoint que busca do Supabase
-      const response = await axios.get(`/api/conversations/${conversationId}/`, {
+      const response = await axios.get(`/api/conversations/${conversationId}/?for_audit=1`, {
         headers: { Authorization: `Token ${token}` }
       });
 

@@ -110,6 +110,33 @@ def store_previous_status(sender, instance, **kwargs):
         # Não armazenar nada no cache para novas conversas
         pass
 
+
+@receiver(pre_save, sender=Conversation)
+def stamp_agent_chat_visible_from_on_return_to_bot(sender, instance, **kwargs):
+    """
+    Quando a conversa volta ao bot (snoozed) sem atendente, após fase humana ou encerrada,
+    marca agent_chat_visible_from para o painel não listar mensagens de ciclos anteriores.
+    """
+    if not instance.pk:
+        return
+    try:
+        old = Conversation.objects.get(pk=instance.pk)
+    except Conversation.DoesNotExist:
+        return
+
+    from_states = ("open", "pending", "closed", "resolved", "finalizada", "closing", "encerrada", "ended")
+    if (
+        instance.status == "snoozed"
+        and not instance.assignee_id
+        and old.status in from_states
+    ):
+        from django.utils import timezone as dj_tz
+
+        attrs = dict(instance.additional_attributes or {})
+        attrs["agent_chat_visible_from"] = dj_tz.now().isoformat()
+        instance.additional_attributes = attrs
+
+
 @receiver(post_save, sender=Conversation)
 def notify_conversation_change(sender, instance, created, **kwargs):
     """
@@ -246,4 +273,4 @@ def cleanup_inbox_on_canal_delete(sender, instance, **kwargs):
             inbox.delete()
 
     except Exception as e:
-        logger.error(f"[CascadeDelete] Erro ao limpar inboxes para o canal {instance.id}: {e}")
+        logger.error(f"[CascadeDelete] Erro ao limpar inboxes para o canal {instance.id}: {e}")
