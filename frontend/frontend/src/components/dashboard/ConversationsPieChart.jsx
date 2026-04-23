@@ -9,11 +9,11 @@ export default function ConversationsPieChart({ data, title = "Distribuição" }
   const css = typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null;
   const getVar = (v, fb) => (css ? css.getPropertyValue(v).trim() : '') || fb;
   const palette = [
-    getVar('--chart-1', '#3b82f6'),
-    getVar('--chart-2', '#10b981'),
-    getVar('--chart-3', '#f59e0b'),
-    getVar('--chart-4', '#ef4444'),
-    getVar('--chart-5', '#8b5cf6')
+    getVar('--chart-1', '#4b32d3'),
+    getVar('--chart-2', '#4dd0e1'),
+    getVar('--chart-3', '#8bc34a'),
+    getVar('--chart-4', '#fb8c00'),
+    getVar('--chart-5', '#d81b60'),
   ];
   const accent = getVar('--nc-accent', palette[0]);
   const muted = getVar('--nc-muted', '#94a3b8');
@@ -22,18 +22,17 @@ export default function ConversationsPieChart({ data, title = "Distribuição" }
     const n = (name || '').toLowerCase();
     
     // Cores para Status das Conversas
-    if (n.includes('atendiment')) return '#10b981'; // Verde
-    if (n.includes('esper')) return '#f59e0b'; // Laranja  
-    if (n.includes('autom')) return '#2d5eff'; // Azul (IA)
-    if (n.includes('chatbot')) return '#2d5eff';
-    if (n.includes('demais') || n.includes('outros encerr')) return '#94a3b8';
-    if (n.includes('finalizad') || n.includes('resolvida')) return '#94a3b8'; // Cinza
-    
-    // Cores para Canais de Atendimento
-    if (n.includes('whatsapp')) return '#10b981'; // Verde (WhatsApp)
-    if (n.includes('telegram')) return '#06b6d4'; // Azul ciano (Telegram)
-    if (n.includes('web')) return '#8b5cf6'; // Roxo (Web)
-    if (n.includes('email')) return '#f59e0b'; // Laranja (Email)
+    if (n.includes('atendiment')) return '#2e7d32';
+    if (n.includes('esper')) return '#fbc02d';
+    if (n.includes('autom')) return '#4b32d3';
+    if (n.includes('chatbot')) return '#4b32d3';
+    if (n.includes('demais') || n.includes('outros encerr')) return '#757575';
+    if (n.includes('finalizad') || n.includes('resolvida')) return '#757575';
+
+    if (n.includes('whatsapp')) return '#2e7d32';
+    if (n.includes('telegram')) return '#4dd0e1';
+    if (n.includes('web')) return '#7b1fa2';
+    if (n.includes('email')) return '#fb8c00';
     
     return palette[index % palette.length];
   };

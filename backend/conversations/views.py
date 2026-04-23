@@ -16,7 +16,7 @@ from .serializers import (
     ConversationListSerializer, ConversationUpdateSerializer, MessageSerializer, TeamSerializer, TeamMemberSerializer
 )
 from .services import ConversationNotificationService
-from .message_visibility import apply_agent_message_visibility_filter
+from .message_visibility import apply_agent_message_visibility_filter, waiting_queue_content_redacted_for_agent
 from integrations.asaas_service import AsaasService
 from rest_framework.permissions import AllowAny
 from integrations.models import WhatsAppIntegration
@@ -590,7 +590,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             
             # 3. Conversas do Bot (se tiver permissão ou fallback)
             has_no_special_permissions = not any(p in user_permissions for p in ['view_ai_conversations', 'view_team_unassigned'])
-            if 'view_ai_conversations' in user_permissions:
+            if 'view_ai_conversations' in user_permissions or 'view_chatbot_conversations' in user_permissions:
                 ai_convs = provider_queryset.filter(waiting_for_agent=False, assignee__isnull=True)
             else:
                 ai_convs = Conversation.objects.none()
@@ -647,6 +647,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
             result = {
                 'id': conversation.id,
                 'status': conversation.status,
+                'waiting_for_agent': conversation.waiting_for_agent,
+                'panel_waiting_content_hidden': waiting_queue_content_redacted_for_agent(request, conversation),
                 'created_at': conversation.created_at.isoformat() if conversation.created_at else None,
                 'updated_at': conversation.updated_at.isoformat() if conversation.updated_at else None,
                 'last_message_at': conversation.last_message_at.isoformat() if conversation.last_message_at else None,
@@ -1694,100 +1696,125 @@ class ConversationViewSet(viewsets.ModelViewSet):
     def assign(self, request, pk=None):
         """Atribuir conversa para o usuário atual. Otimizado para concorrência."""
         from django.db import transaction
-        try:
-            with transaction.atomic():
+        from django.db.utils import OperationalError
+        import time
+
+        max_retries = 3
+        retry_delay_seconds = 0.12
+
+        for attempt in range(max_retries):
+            try:
+                with transaction.atomic():
                 # Lock na conversa para evitar que múltiplos agentes se atribuam simultaneamente
                 # CORREÇÃO: Usar select_for_update() sem select_related() para evitar erro com outer joins
                 # Carregar relacionamentos depois do lock
-                conversation = Conversation.objects.select_for_update().get(pk=pk)
+                    conversation = Conversation.objects.select_for_update().get(pk=pk)
                 # Pré-carregar relacionamentos necessários (lazy loading)
-                _ = conversation.inbox
-                if conversation.inbox:
-                    _ = conversation.inbox.provedor
-                _ = conversation.contact
-                user = request.user
+                    _ = conversation.inbox
+                    if conversation.inbox:
+                        _ = conversation.inbox.provedor
+                    _ = conversation.contact
+                    user = request.user
                 
                 # Verificar permissões
-                if not self._can_manage_conversation(user, conversation):
-                    return Response({'error': 'Sem permissão para atribuir esta conversa'}, status=403)
+                    if not self._can_manage_conversation(user, conversation):
+                        return Response({'error': 'Você não possui permissão para atribuir este atendimento.'}, status=403)
                 
                 # Se já está atribuída ao próprio usuário, retornar sucesso
-                if conversation.assignee_id == user.id and conversation.status == 'open':
-                    serializer = ConversationSerializer(conversation)
-                    return Response({'success': True, 'conversation': serializer.data})
+                    if conversation.assignee_id == user.id and conversation.status == 'open':
+                        serializer = ConversationSerializer(conversation)
+                        return Response({
+                            'success': True,
+                            'message': 'Este atendimento já estava atribuído para você.',
+                            'conversation': serializer.data
+                        })
 
                 # Verificar se a conversa já está fechada
-                if conversation.status in ['closed', 'closing']:
-                    return Response({'error': f'Não é possível atribuir uma conversa {conversation.status}'}, status=400)
+                    if conversation.status in ['closed', 'closing']:
+                        return Response({'error': 'Não é possível atribuir um atendimento já encerrado.'}, status=400)
                 
                 # Atribuir conversa
-                conversation.assignee = user
-                conversation.status = 'open'
-                conversation.waiting_for_agent = True
-                conversation.updated_at = timezone.now()
-                conversation.save()
+                    conversation.assignee = user
+                    conversation.status = 'open'
+                    conversation.waiting_for_agent = True
+                    conversation.updated_at = timezone.now()
+                    conversation.save()
                 
                 # Registrar auditoria
-                from core.models import AuditLog
-                AuditLog.objects.create(
-                    user=user,
-                    action='conversation_assigned',
-                    ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
-                    details=f"Conversa atribuída para {user.get_full_name() or user.username}",
-                    provedor=conversation.inbox.provedor,
-                    conversation_id=conversation.id,
-                    contact_name=conversation.contact.name,
-                    channel_type=conversation.inbox.channel_type
-                )
+                    from core.models import AuditLog
+                    AuditLog.objects.create(
+                        user=user,
+                        action='conversation_assigned',
+                        ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
+                        details=f"Conversa atribuída para {user.get_full_name() or user.username}",
+                        provedor=conversation.inbox.provedor,
+                        conversation_id=conversation.id,
+                        contact_name=conversation.contact.name,
+                        channel_type=conversation.inbox.channel_type
+                    )
                 
                 # Adicionar mensagem de sistema
-                Message.objects.create(
-                    conversation=conversation,
-                    content=f"Conversa atribuída para {user.get_full_name() or user.username}",
-                    message_type='text',
-                    is_from_customer=False,
-                    additional_attributes={
-                        'system_message': True,
-                        'action': 'conversation_assigned',
-                        'assigned_to': user.id
-                    }
-                )
+                    Message.objects.create(
+                        conversation=conversation,
+                        content=f"Conversa atribuída para {user.get_full_name() or user.username}",
+                        message_type='text',
+                        is_from_customer=False,
+                        additional_attributes={
+                            'system_message': True,
+                            'action': 'conversation_assigned',
+                            'assigned_to': user.id
+                        }
+                    )
                 
                 # Tentar enviar mensagem de atribuição (se houver) - fora da transação principal para não travar
                 # Mas aqui como é transação pequena, mantemos.
-                if user.assignment_message and user.assignment_message.strip():
-                    try:
-                        channel_type = conversation.inbox.channel_type
-                        formatted_content = self._format_message_with_agent_name(user.assignment_message, user, channel_type)
+                    if user.assignment_message and user.assignment_message.strip():
+                        try:
+                            channel_type = conversation.inbox.channel_type
+                            formatted_content = self._format_message_with_agent_name(user.assignment_message, user, channel_type)
                         
-                        # Criar mensagem de atribuição
-                        Message.objects.create(
-                            conversation=conversation,
-                            content=user.assignment_message,
-                            message_type='text',
-                            is_from_customer=False,
-                            additional_attributes={
-                                'system_message': False,
-                                'action': 'assignment_message',
-                                'sent_by': user.id
-                            }
-                        )
+                            # Criar mensagem de atribuição
+                            Message.objects.create(
+                                conversation=conversation,
+                                content=user.assignment_message,
+                                message_type='text',
+                                is_from_customer=False,
+                                additional_attributes={
+                                    'system_message': False,
+                                    'action': 'assignment_message',
+                                    'sent_by': user.id
+                                }
+                            )
                         
-                        # Lógica de envio real (simplificada aqui para brevidade, mas deve seguir o original)
-                        # ... lógica de envio via integrations ...
-                    except Exception as e:
-                        logger.error(f"Erro ao enviar msg atribuição: {e}")
+                            # Lógica de envio real (simplificada aqui para brevidade, mas deve seguir o original)
+                            # ... lógica de envio via integrations ...
+                        except Exception as e:
+                            logger.error(f"Erro ao enviar msg atribuição: {e}")
 
                 # Serializar e retornar
-                serializer = ConversationSerializer(conversation)
-                return Response({
-                    'success': True,
-                    'message': f'Conversa atribuída para {user.get_full_name() or user.username}',
-                    'conversation': serializer.data
-                })
-        except Exception as e:
-            logger.error(f"Erro ao atribuir conversa: {e}", exc_info=True)
-            return Response({'error': str(e)}, status=500)
+                    serializer = ConversationSerializer(conversation)
+                    return Response({
+                        'success': True,
+                        'message': f'Conversa atribuída para {user.get_full_name() or user.username}',
+                        'conversation': serializer.data
+                    })
+            except OperationalError as e:
+                # SQLite em desenvolvimento pode bloquear sob concorrência curta.
+                # Fazemos tentativas rápidas antes de retornar erro ao usuário.
+                if 'database is locked' in str(e).lower() and attempt < max_retries - 1:
+                    time.sleep(retry_delay_seconds * (attempt + 1))
+                    continue
+                logger.error(f"Erro de banco ao atribuir conversa: {e}", exc_info=True)
+                return Response(
+                    {'error': 'Não foi possível concluir a atribuição neste momento. Tente novamente em instantes.'},
+                    status=503
+                )
+            except Exception as e:
+                logger.error(f"Erro ao atribuir conversa: {e}", exc_info=True)
+                return Response(
+                    {'error': 'Não foi possível atribuir o atendimento agora. Tente novamente em instantes.'},
+                    status=500
+                )
 
     @action(detail=True, methods=['post'])
     def close_conversation_agent(self, request, pk=None):
@@ -2714,7 +2741,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                     base_queryset = Message.objects.filter(conversation__inbox__provedor_id__in=provedores_equipes).prefetch_related('reactions')
                     
                     # Filtrar baseado nas permissões
-                    if 'view_ai_conversations' in user_permissions:
+                    if 'view_ai_conversations' in user_permissions or 'view_chatbot_conversations' in user_permissions:
                         # Pode ver mensagens de conversas com IA
                         ai_messages = base_queryset.filter(
                             conversation__status='snoozed'

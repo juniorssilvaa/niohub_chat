@@ -560,6 +560,12 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
   };
 
   const fetchTimeoutRef = useRef(null);
+  /** Após o primeiro ciclo de fetch (sucesso ou erro), permite alinhar seleção com a aba ativa. */
+  const conversationsListFetchedRef = useRef(false);
+
+  useEffect(() => {
+    conversationsListFetchedRef.current = false;
+  }, [provedorId, authReady]);
 
   // Função para buscar conversas com debounce
   const fetchConversations = async (forceRefresh = false) => {
@@ -653,6 +659,7 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
           setLoading(false);
         }
         fetchTimeoutRef.current = null;
+        conversationsListFetchedRef.current = true;
       }
     }, 300);
   };
@@ -941,6 +948,26 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     return waitingForAgent === false || status === 'snoozed' || status === 'chatbot';
   };
 
+  const isVisibleInWaitingTab = (conversation) => {
+    if (hasHumanAssignee(conversation)) return false;
+
+    const assignedUser = conversation.additional_attributes?.assigned_user;
+    const assignedTeam = conversation.additional_attributes?.assigned_team;
+    const currentUserId = user?.id != null ? String(user.id) : null;
+    const currentTeamId = user?.team?.id != null ? String(user.team.id) : null;
+
+    // Se há destino explícito de transferência, só mostra para o destinatário.
+    if (assignedUser?.id != null) {
+      return currentUserId != null && String(assignedUser.id) === currentUserId;
+    }
+    if (assignedTeam?.id != null) {
+      return currentTeamId != null && String(assignedTeam.id) === currentTeamId;
+    }
+
+    // Fila geral (sem destino específico) continua visível na aba Espera.
+    return isWaitingConversation(conversation);
+  };
+
   // Definir abas baseado nas permissões
   const getAvailableTabs = () => {
     const activeConversations = conversations.filter(c => {
@@ -965,20 +992,16 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     tabs.push({
       id: 'unassigned',
       label: 'Espera',
-      count: activeConversations.filter(c => {
-        const assignedUser = c.additional_attributes?.assigned_user;
-        const assignedTeam = c.additional_attributes?.assigned_team;
-
-        if (isWaitingConversation(c)) return true;
-        if (!hasHumanAssignee(c) && assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString())) return true;
-        if (!hasHumanAssignee(c) && assignedTeam && user && user.team && assignedTeam.id === user.team.id) return true;
-
-        return false;
-      }).length,
+      count: activeConversations.filter(c => isVisibleInWaitingTab(c)).length,
     });
 
+    const canViewAutomationConversations =
+      isProviderAdmin ||
+      userPermissions.includes('view_ai_conversations') ||
+      userPermissions.includes('view_chatbot_conversations');
+
     // Aba Na Automação para admin do provedor (ou com permissão explícita).
-    if (isProviderAdmin || userPermissions.includes('view_ai_conversations')) {
+    if (canViewAutomationConversations) {
       tabs.push({
         id: 'automation',
         label: 'Automação',
@@ -1000,41 +1023,32 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     }
   }, [tabs, activeTab]);
 
-  // Filtrar conversas baseado na aba ativa e termo de busca
-  const filteredConversations = useMemo(() => {
+  // Conversas visíveis na aba atual (sem busca) — usado para alinhar o painel do chat com a lista
+  const tabFilteredConversations = useMemo(() => {
     let filtered = conversations.filter(c => {
       const status = getConversationStatus(c);
       return !isClosedStatus(status);
     });
 
-    // Filtrar por aba
     if (activeTab === 'automation') {
-      // Mostrar conversas em automação/IA (tempo real)
-      filtered = filtered.filter(c => {
-        return isAutomationConversation(c);
-      });
+      filtered = filtered.filter(c => isAutomationConversation(c));
     } else if (activeTab === 'mine') {
-      // Mostrar conversas atribuídas ao usuário atual (qualquer status)
       filtered = filtered.filter(c => {
         const a = c.assignee;
         if (!a || !user) return false;
         return (a.id?.toString() === user.id?.toString()) || (a.username && a.username === user.username);
       });
     } else if (activeTab === 'unassigned') {
-      // Mostrar fila de espera + transferências sem atendente para usuário/equipe
-      filtered = filtered.filter(c => {
-        const assignedUser = c.additional_attributes?.assigned_user;
-        const assignedTeam = c.additional_attributes?.assigned_team;
-
-        if (isWaitingConversation(c)) return true;
-        if (!hasHumanAssignee(c) && assignedUser && user && (assignedUser.id === user.id || assignedUser.id === user.id.toString())) return true;
-        if (!hasHumanAssignee(c) && assignedTeam && user && user.team && assignedTeam.id === user.team.id) return true;
-
-        return false;
-      });
+      filtered = filtered.filter(c => isVisibleInWaitingTab(c));
     }
 
-    // Filtrar por termo de busca
+    return filtered;
+  }, [conversations, activeTab, user]);
+
+  // Filtrar conversas baseado na aba ativa e termo de busca
+  const filteredConversations = useMemo(() => {
+    let filtered = tabFilteredConversations;
+
     if (searchTerm && searchTerm.trim().length >= 2) {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(c => {
@@ -1049,7 +1063,16 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
     }
 
     return filtered;
-  }, [conversations, activeTab, searchTerm, user?.id, userPermissions]);
+  }, [tabFilteredConversations, searchTerm]);
+
+  useEffect(() => {
+    if (!conversationsListFetchedRef.current || !selectedConversation?.id) return;
+    const sid = String(selectedConversation.id);
+    const stillInActiveTab = tabFilteredConversations.some((c) => String(c.id) === sid);
+    if (!stillInActiveTab) {
+      onConversationUpdate?.(null);
+    }
+  }, [tabFilteredConversations, selectedConversation?.id, onConversationUpdate]);
 
   return (
     <div className="w-64 flex-shrink-0 border-r border-border bg-background flex flex-col h-full">
@@ -1320,12 +1343,12 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                         {conversation.contact?.name || 'Contato sem nome'}
                       </h3>
                       <span className={`text-xs ${selectedConversation?.id === conversation.id ? 'text-topbar-foreground/70' : 'text-muted-foreground'}`}>
-                        {conversation.last_message?.created_at ?
-                          new Date(conversation.last_message.created_at).toLocaleTimeString('pt-BR', {
+                        {!conversation.last_message?.panel_waiting_content_hidden && conversation.last_message?.created_at
+                          ? new Date(conversation.last_message.created_at).toLocaleTimeString('pt-BR', {
                             hour: '2-digit',
                             minute: '2-digit'
-                          }) : ''
-                        }
+                          })
+                          : ''}
                       </span>
                     </div>
 
@@ -1333,6 +1356,9 @@ const ConversationList = memo(({ onConversationSelect, selectedConversation, pro
                       {(() => {
                         const msg = conversation.last_message;
                         if (!msg) return 'Nenhuma mensagem';
+                        if (msg.panel_waiting_content_hidden) {
+                          return 'Conteúdo oculto até atribuir o atendimento';
+                        }
 
                         // PRIORIDADE: Mostrar o tipo de mídia na barra lateral sempre que for uma mídia
                         // (Mesmo que tenha legenda, o usuário quer ver o tipo aqui)

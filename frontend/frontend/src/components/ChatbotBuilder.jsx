@@ -701,7 +701,7 @@ const ChatbotBuilder = () => {
                 </div>
             </div>
 
-            <div className="flex-1 flex overflow-hidden relative">
+            <div className="flex-1 flex flex-col overflow-hidden relative">
                 {!currentFlow ? (
                     <div className="flex-1 flex items-center justify-center p-6">
                         <motion.div
@@ -727,7 +727,7 @@ const ChatbotBuilder = () => {
                         </motion.div>
                     </div>
                 ) : (
-                    <>
+                    <div className="flex flex-1 min-h-0 w-full flex-row overflow-hidden relative">
                         {/* Context Menu */}
                         <AnimatePresence>
                             {contextMenu.show && (
@@ -777,7 +777,7 @@ const ChatbotBuilder = () => {
                                                                 sectionTitle: type === 'menu' ? 'Selecione uma opção' : (type === 'planos' ? 'Nossos Planos' : ''),
                                                                 headerText: type === 'menu' ? 'MENU' : (type === 'planos' ? 'PLANOS' : ''),
                                                                 footerText: (type === 'menu' || type === 'planos') ? 'Clique para selecionar' : '',
-                                                                rows: type === 'menu' ? [{ id: 'row_' + Date.now(), title: 'Opção 1', description: '' }] : (type === 'planos' ? availablePlanos.map(p => ({ id: 'plano_' + p.id, title: p.nome, description: `${p.velocidade_download}Mbps - R$ ${p.preco}` })) : []),
+                                                                rows: type === 'menu' ? [{ id: 'row_' + Date.now(), title: 'Opção 1', description: '', teamId: '' }] : (type === 'planos' ? availablePlanos.map(p => ({ id: 'plano_' + p.id, title: p.nome, description: `${p.velocidade_download}Mbps - R$ ${p.preco}` })) : []),
                                                                 galleryImageId: type === 'galeria' ? '' : undefined,
                                                                 galleryImageUrl: type === 'galeria' ? '' : undefined,
                                                                 maxInvalidAttempts: type === 'menu' ? 3 : undefined,
@@ -822,10 +822,8 @@ const ChatbotBuilder = () => {
                             onMouseMove={handleCanvasMouseMove}
                             onMouseUp={handleCanvasMouseUp}
                             onContextMenu={handleCanvasContextMenu}
-                            className={`flex-1 overflow-hidden relative select-none bg-[linear-gradient(180deg,#2b313c_0%,#262c36_100%)] ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+                            className={`flex-1 min-w-0 min-h-0 overflow-hidden relative select-none bg-[linear-gradient(180deg,#2b313c_0%,#262c36_100%)] ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
                             onClick={() => {
-                                setSelectedNode(null);
-                                setIsEditorOpen(false);
                                 setContextMenu({ show: false, x: 0, y: 0, type: null, targetId: null });
                             }}
                         >
@@ -960,26 +958,36 @@ const ChatbotBuilder = () => {
 
                         </div>
 
-                        {/* Property Sidepanel */}
+                        {/* Painel de propriedades: coluna à direita (não empilha sob o card no canvas) */}
                         <AnimatePresence>
                             {selectedNode && isEditorOpen && (
-                                <motion.div
-                                    initial={{ x: 400 }}
-                                    animate={{ x: 0 }}
-                                    exit={{ x: 400 }}
-                                    className="w-96 bg-card border-l border-border z-50 shadow-lg flex flex-col"
+                                <motion.aside
+                                    initial={{ x: 28, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    exit={{ x: 28, opacity: 0 }}
+                                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="flex w-[min(22rem,100%)] sm:w-96 shrink-0 flex-col border-l border-border bg-card z-50 h-full max-h-full shadow-[-12px_0_32px_-8px_rgba(0,0,0,0.18)] dark:shadow-[-12px_0_40px_-8px_rgba(0,0,0,0.45)]"
                                 >
-                                    <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
-                                        <div>
-                                            <h3 className="font-semibold text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Configuração</h3>
-                                            <p className="text-sm font-bold text-foreground">Editor de Propriedades</p>
+                                    <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 bg-muted/25 shrink-0">
+                                        <div className="min-w-0">
+                                            <h3 className="font-semibold text-[9px] uppercase tracking-widest text-muted-foreground">Bloco</h3>
+                                            <p className="text-sm font-bold text-foreground truncate pr-2">
+                                                {nodes.find(n => n.id === selectedNode)?.data?.label || NODE_TYPES[nodes.find(n => n.id === selectedNode)?.type]?.label || 'Propriedades'}
+                                            </p>
                                         </div>
-                                        <button onClick={() => setSelectedNode(null)} className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" type="button" aria-label="Fechar editor">
-                                            <X size={20} />
+                                        <button
+                                            onClick={() => { setSelectedNode(null); setIsEditorOpen(false); }}
+                                            className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+                                            type="button"
+                                            aria-label="Fechar editor"
+                                        >
+                                            <X size={18} />
                                         </button>
                                     </div>
 
-                                    <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                                    <div className="px-4 py-4 space-y-5 flex-1 min-h-0 overflow-y-auto overscroll-contain">
                                         <div>
                                             <div className="flex items-center justify-between mb-3">
                                                 <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Nome do Bloco (Apelido)</label>
@@ -997,12 +1005,12 @@ const ChatbotBuilder = () => {
                                             <p className="text-[9px] text-muted-foreground mt-2 px-0.5">Este nome serve para você se organizar no canvas.</p>
                                         </div>
 
-                                        {/* Configurações de Inatividade (Global por Nó) */}
-                                        {nodes.find(n => n.id === selectedNode)?.type !== 'start' && (
+                                        {/* Configurações de Inatividade (Global do Fluxo - no bloco Início) */}
+                                        {nodes.find(n => n.id === selectedNode)?.type === 'start' && (
                                             <div className="p-4 bg-muted/25 border border-border rounded-xl space-y-4">
                                                 <div className="flex items-center gap-2">
                                                     <Clock size={16} className="text-muted-foreground shrink-0" />
-                                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Configurações de Inatividade</label>
+                                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Inatividade Global do Fluxo</label>
                                                 </div>
 
                                                 <div className="grid grid-cols-2 gap-4">
@@ -1011,8 +1019,8 @@ const ChatbotBuilder = () => {
                                                         <input
                                                             type="number"
                                                             min="1"
-                                                            value={nodes.find(n => n.id === selectedNode)?.data.inactivityTime || ''}
-                                                            onChange={(e) => updateNodeData(selectedNode, { inactivityTime: e.target.value })}
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.globalInactivityTime || ''}
+                                                            onChange={(e) => updateNodeData(selectedNode, { globalInactivityTime: e.target.value })}
                                                             placeholder="Ex: 5"
                                                             className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-xs font-medium outline-none text-foreground focus:ring-2 focus:ring-primary/35 focus:border-primary"
                                                         />
@@ -1021,8 +1029,8 @@ const ChatbotBuilder = () => {
                                                     <div>
                                                         <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Ação</label>
                                                         <select
-                                                            value={nodes.find(n => n.id === selectedNode)?.data.timeoutAction || 'nothing'}
-                                                            onChange={(e) => updateNodeData(selectedNode, { timeoutAction: e.target.value })}
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.globalTimeoutAction || 'nothing'}
+                                                            onChange={(e) => updateNodeData(selectedNode, { globalTimeoutAction: e.target.value })}
                                                             className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-xs font-medium outline-none text-foreground focus:ring-2 focus:ring-primary/35 focus:border-primary"
                                                         >
                                                             <option value="nothing">Nenhuma</option>
@@ -1031,27 +1039,27 @@ const ChatbotBuilder = () => {
                                                         </select>
                                                     </div>
                                                 </div>
-
-                                                {nodes.find(n => n.id === selectedNode)?.data.timeoutAction === 'transfer' && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, y: -10 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        className="space-y-2"
-                                                    >
-                                                        <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Equipe de Destino</label>
-                                                        <select
-                                                            value={nodes.find(n => n.id === selectedNode)?.data.timeoutTeam || ''}
-                                                            onChange={(e) => updateNodeData(selectedNode, { timeoutTeam: e.target.value })}
-                                                            className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-xs font-medium outline-none text-foreground focus:ring-2 focus:ring-primary/35 focus:border-primary"
-                                                        >
-                                                            <option value="">Selecione a equipe...</option>
-                                                            {availableTeams.map(team => (
-                                                                <option key={team.id} value={team.id}>{team.name}</option>
-                                                            ))}
-                                                        </select>
-                                                        <p className="text-[9px] text-muted-foreground italic">A conversa será enviada para esta equipe se o cliente não responder.</p>
-                                                    </motion.div>
+                                                {(nodes.find(n => n.id === selectedNode)?.data.globalTimeoutAction || 'nothing') === 'transfer' && (
+                                                    <div>
+                                                        <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+                                                            Mensagem ao transferir por inatividade
+                                                        </label>
+                                                        <textarea
+                                                            rows={3}
+                                                            value={nodes.find(n => n.id === selectedNode)?.data.globalTimeoutTransferMessage || ''}
+                                                            onChange={(e) => updateNodeData(selectedNode, { globalTimeoutTransferMessage: e.target.value })}
+                                                            placeholder={'Ex.: Você ficou sem responder e foi encaminhado para {nome_equipe}.'}
+                                                            className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-xs outline-none text-foreground focus:ring-2 focus:ring-primary/35 focus:border-primary resize-y"
+                                                        />
+                                                        <p className="text-[9px] text-muted-foreground mt-1.5">
+                                                            Deixe em branco para usar o texto padrão. Use <span className="font-mono">{'{nome_equipe}'}</span> ou <span className="font-mono">{'{team_name}'}</span> onde quiser o nome da equipe.
+                                                        </p>
+                                                    </div>
                                                 )}
+                                                <p className="text-[9px] text-muted-foreground italic">
+                                                    Vale para todo o fluxo. Para a equipe na transferência por inatividade, defina
+                                                    &quot;Equipe (timeout)&quot; em cada opção do menu interativo quando fizer sentido; senão o sistema tenta inferir pelo caminho do fluxo.
+                                                </p>
                                             </div>
                                         )}
 
@@ -1232,6 +1240,24 @@ const ChatbotBuilder = () => {
                                                                     }}
                                                                     className="w-full bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-4 py-2 text-[10px] font-medium outline-none focus:border-primary"
                                                                 />
+                                                                <div>
+                                                                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Equipe (timeout / roteamento)</label>
+                                                                    <select
+                                                                        value={row.teamId != null && row.teamId !== '' ? String(row.teamId) : ''}
+                                                                        onChange={(e) => {
+                                                                            const currentRows = [...(nodes.find(n => n.id === selectedNode)?.data.rows || [])];
+                                                                            currentRows[idx].teamId = e.target.value || '';
+                                                                            updateNodeData(selectedNode, { rows: currentRows });
+                                                                        }}
+                                                                        className="w-full bg-white dark:bg-background border border-slate-200 dark:border-border rounded-xl px-3 py-2 text-[10px] font-bold outline-none focus:border-primary"
+                                                                    >
+                                                                        <option value="">Inferir pelo fluxo (padrão)</option>
+                                                                        {availableTeams.filter(team => team?.is_active !== false).map(team => (
+                                                                            <option key={team.id} value={team.id}>{team.name}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <p className="text-[8px] text-slate-500 mt-1">Usada na transferência por inatividade global e como prioridade sobre inferência automática.</p>
+                                                                </div>
                                                             </div>
                                                         ))}
 
@@ -1242,7 +1268,8 @@ const ChatbotBuilder = () => {
                                                                     currentRows.push({
                                                                         id: 'row_' + Date.now(),
                                                                         title: 'Nova Opção',
-                                                                        description: ''
+                                                                        description: '',
+                                                                        teamId: ''
                                                                     });
                                                                     updateNodeData(selectedNode, { rows: currentRows });
                                                                 }}
@@ -1789,21 +1816,21 @@ const ChatbotBuilder = () => {
                                         </div>
                                     </div>
 
-                                    <div className="p-6 border-t border-border bg-muted/10">
+                                    <div className="px-4 py-3 border-t border-border bg-muted/10 shrink-0">
                                         <button
                                             type="button"
                                             onClick={() => deleteNode(selectedNode)}
-                                            className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 text-xs font-semibold uppercase tracking-widest transition-colors"
+                                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 text-[11px] font-semibold uppercase tracking-widest transition-colors"
                                         >
-                                            <Trash2 size={16} />
-                                            Remover este bloco
+                                            <Trash2 size={15} />
+                                            Remover bloco
                                         </button>
                                     </div>
-                                </motion.div>
+                                </motion.aside>
                             )
                             }
                         </AnimatePresence>
-                    </>
+                    </div>
                 )}
             </div>
 

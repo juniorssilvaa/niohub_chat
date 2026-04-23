@@ -37,33 +37,33 @@ export default function ResponseTimeChart({ data }) {
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="hsl(var(--border))" />
+              <CartesianGrid stroke="var(--border)" />
               <XAxis 
                 dataKey="time" 
-                stroke="hsl(var(--muted-foreground))" 
+                stroke="var(--muted-foreground)" 
                 tickLine={false} 
-                axisLine={{stroke:"hsl(var(--border))"}} 
+                axisLine={{ stroke: "var(--border)" }} 
                 fontSize={11}
               />
               <YAxis 
-                stroke="hsl(var(--muted-foreground))" 
+                stroke="var(--muted-foreground)" 
                 tickLine={false} 
-                axisLine={{stroke:"hsl(var(--border))"}} 
+                axisLine={{ stroke: "var(--border)" }} 
                 fontSize={11}
               />
               <Tooltip 
-                cursor={{ fill: "hsl(var(--muted) / 0.1)" }}
+                cursor={{ fill: "color-mix(in srgb, var(--muted) 14%, transparent)" }}
                 contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  color: 'hsl(var(--foreground))'
+                  backgroundColor: "var(--card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  color: "var(--foreground)",
                 }}
               />
               <defs>
                 <linearGradient id="ncTempo" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.9}/>
-                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                  <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.95}/>
+                  <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.35}/>
                 </linearGradient>
               </defs>
               <Bar dataKey="tempo" fill="url(#ncTempo)" radius={[2,2,0,0]} />

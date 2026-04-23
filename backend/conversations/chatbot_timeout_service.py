@@ -1,12 +1,46 @@
 import threading
 import time
 import logging
+from typing import Optional
 from datetime import timedelta
 from django.utils import timezone
 from django.db import close_old_connections, transaction
 import os
 
 logger = logging.getLogger(__name__)
+
+
+def _format_inactivity_transfer_message(template: Optional[str], team) -> str:
+    """Mensagem ao cliente após timeout global. Placeholders: {nome_equipe}, {team_name}, {{nome_equipe}}, {{team_name}}."""
+    t = (template or "").strip()
+    team_name = getattr(team, "name", None) or ""
+    if not t:
+        if team:
+            return (
+                "Como você ficou um tempo sem responder, seu atendimento foi encaminhado automaticamente "
+                f"para o setor *{team_name}*."
+            )
+        return (
+            "Como você ficou um tempo sem responder, seu atendimento foi encaminhado automaticamente "
+            "para nossa equipe humana."
+        )
+    out = (
+        t.replace("{nome_equipe}", team_name)
+        .replace("{team_name}", team_name)
+        .replace("{{nome_equipe}}", team_name)
+        .replace("{{team_name}}", team_name)
+    )
+    return out
+
+
+def _canal_pk_from_inbox_for_flow(conv) -> Optional[int]:
+    """ChatbotFlow.canal aponta para core.Canal.id; Inbox guarda esse id em channel_id (string)."""
+    ch = getattr(getattr(conv, "inbox", None), "channel_id", None) or ""
+    s = str(ch).strip()
+    if s.isdigit():
+        return int(s)
+    return None
+
 
 class ChatbotTimeoutService:
     """
@@ -85,39 +119,44 @@ class ChatbotTimeoutService:
                         if not node_id:
                             continue
 
-                        # 3. Buscar fluxo ativo
-                        flow = ChatbotFlow.objects.filter(
-                            provedor_id=provedor_id,
-                            canal_id=conv.inbox_id
-                        ).first() or ChatbotFlow.objects.filter(
-                            provedor_id=provedor_id,
-                            canal__isnull=True
-                        ).order_by('-updated_at').first()
+                        # 3. Buscar fluxo ativo (mesma lógica do ChatbotEngine: Canal.id, não Inbox.id)
+                        canal_pk = _canal_pk_from_inbox_for_flow(conv)
+                        flow = None
+                        if canal_pk:
+                            flow = ChatbotFlow.objects.filter(
+                                provedor_id=provedor_id,
+                                canal_id=canal_pk,
+                            ).order_by('-updated_at').first()
+                        if not flow:
+                            flow = ChatbotFlow.objects.filter(
+                                provedor_id=provedor_id,
+                                canal__isnull=True,
+                            ).order_by('-updated_at').first()
 
                         if not flow:
                             continue
 
-                        # 4. Encontrar o nó atual
-                        node = next((n for n in flow.nodes if n.get('id') == node_id), None)
-                        if not node or not node.get('data'):
+                        # 4. Ler timeout GLOBAL definido no nó inicial do fluxo
+                        start_node = next((n for n in (flow.nodes or []) if n.get('type') == 'start'), None)
+                        if not start_node:
                             continue
 
-                        node_data = node.get('data')
-                        inactivity_minutes = node_data.get('inactivityTime')
-                        timeout_action = node_data.get('timeoutAction', 'nothing')
+                        start_data = start_node.get('data', {}) or {}
+                        inactivity_minutes = start_data.get('globalInactivityTime')
+                        timeout_action = start_data.get('globalTimeoutAction', 'nothing')
                         
                         if not inactivity_minutes or timeout_action == 'nothing':
                             continue
 
-                        # 5. Calcular tempo de inatividade
-                        last_msg_time = conv.last_message_at or conv.updated_at
-                        if state.get("updated_at"):
-                            try:
-                                state_time = timezone.datetime.fromisoformat(state["updated_at"].replace('Z', '+00:00'))
-                                if state_time > last_msg_time:
-                                    last_msg_time = state_time
-                            except:
-                                pass
+                        # 5. Inatividade = tempo sem resposta do cliente.
+                        # last_message_at inclui envios do bot e impede o timeout; usar última mensagem do cliente.
+                        last_msg_time = (
+                            conv.last_user_message_at
+                            or conv.last_message_at
+                            or conv.updated_at
+                        )
+                        if not last_msg_time:
+                            continue
 
                         threshold = last_msg_time + timedelta(minutes=int(inactivity_minutes))
                         
@@ -131,28 +170,39 @@ class ChatbotTimeoutService:
                                     continue
 
                                 if timeout_action == 'transfer':
-                                    team_id = node_data.get('timeoutTeam')
-                                    if team_id:
-                                        team = Team.objects.filter(id=team_id).first()
-                                        if team:
-                                            conv.status = 'pending'
-                                            conv.team = team
-                                            conv.assignee = None
-                                            conv.waiting_for_agent = True
-                                            conv.save(update_fields=['status', 'team', 'assignee', 'waiting_for_agent'])
-                                            
-                                            # Notificar o cliente
-                                            try:
-                                                async_to_sync(ChatbotEngine.send_message_agnostic)(
-                                                    conv=conv, 
-                                                    text="Como você está um tempo sem responder, estou transferindo seu atendimento para nossa equipe humana poder te ajudar melhor."
-                                                )
-                                            except Exception as e:
-                                                logger.warning(f"Falha ao enviar aviso de transferência (conv {conv.id}): {e}")
-                                                
-                                            # Limpar memória para o bot não interferir
-                                            redis_memory_service.clear_memory_sync(provedor_id, conv.id, conv.inbox.channel_type, conv.contact.phone)
-                                            logger.info(f"✅ [TIMEOUT] Conv {conv.id} transferida para equipe {team.name}")
+                                    flow_context = state.get("flow_context", {}) if isinstance(state, dict) else {}
+                                    preferred_team_id = flow_context.get("last_routing_team_id")
+                                    team = None
+                                    if preferred_team_id:
+                                        try:
+                                            team = Team.objects.filter(
+                                                id=int(preferred_team_id),
+                                                provedor_id=provedor_id,
+                                                is_active=True
+                                            ).first()
+                                        except (TypeError, ValueError):
+                                            team = None
+
+                                    conv.status = 'pending'
+                                    conv.team = team
+                                    conv.assignee = None
+                                    conv.waiting_for_agent = True
+                                    conv.save(update_fields=['status', 'team', 'assignee', 'waiting_for_agent'])
+                                    
+                                    # Notificar o cliente (texto configurável no nó Início: globalTimeoutTransferMessage)
+                                    try:
+                                        custom_tpl = start_data.get("globalTimeoutTransferMessage")
+                                        msg = _format_inactivity_transfer_message(custom_tpl, team)
+                                        async_to_sync(ChatbotEngine.send_message_agnostic)(conv=conv, text=msg)
+                                    except Exception as e:
+                                        logger.warning(f"Falha ao enviar aviso de transferência (conv {conv.id}): {e}")
+                                        
+                                    # Limpar memória para o bot não interferir
+                                    redis_memory_service.clear_memory_sync(provedor_id, conv.id, conv.inbox.channel_type, conv.contact.phone)
+                                    if team:
+                                        logger.info(f"✅ [TIMEOUT] Conv {conv.id} transferida para equipe {team.name} (origem do fluxo).")
+                                    else:
+                                        logger.info(f"✅ [TIMEOUT] Conv {conv.id} transferida para fila humana (sem equipe inferida).")
 
                                 elif timeout_action == 'close':
                                     try:

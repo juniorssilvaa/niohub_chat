@@ -61,13 +61,22 @@ import ReactDOM from 'react-dom';
 // ];
 
 const PERMISSIONS = [
-  { key: 'view_ai_conversations', label: 'Ver atendimentos com IA' },
-  { key: 'view_assigned_conversations', label: 'Ver apenas atendimentos atribuídos a mim' },
-  { key: 'view_team_unassigned', label: 'Ver atendimentos não atribuídos da minha equipe' },
-  { key: 'manage_contacts', label: 'Gerenciar contatos' },
+  { key: 'view_chatbot_conversations', label: 'Ver atendimentos em automação (chatbot/IA)' },
+  { key: 'view_waiting_history_before_assignment', label: 'Ver histórico completo da conversa em Espera antes de atribuir' },
   // { key: 'manage_reports', label: 'Gerenciar relatórios' },
   // { key: 'manage_knowledge_base', label: 'Gerenciar base de conhecimento' },
 ];
+
+/** Remove a permissão legada `view_ai_conversations` (mesmo efeito que chatbot/IA) e preserva acesso via `view_chatbot_conversations`. */
+function normalizeUserPermissions(perms) {
+  const list = Array.isArray(perms) ? [...perms] : [];
+  const hadLegacy = list.includes('view_ai_conversations');
+  const next = list.filter((p) => p !== 'view_ai_conversations');
+  if (hadLegacy && !next.includes('view_chatbot_conversations')) {
+    next.push('view_chatbot_conversations');
+  }
+  return next;
+}
 
 const getUserRole = () => {
   // Tenta pegar do localStorage (ajuste se receber via prop)
@@ -122,6 +131,7 @@ const UserManagement = ({ provedorId }) => {
   const [editUserLastName, setEditUserLastName] = useState('');
   const [editUserUsername, setEditUserUsername] = useState('');
   const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserType, setEditUserType] = useState('agent');
   const userRole = getUserRole();
   const initialAddUserForm = {
     first_name: '',
@@ -261,7 +271,8 @@ const UserManagement = ({ provedorId }) => {
         last_name: editUserLastName,
         username: editUserUsername,
         email: editUserEmail,
-        permissions: editUserPermissions
+        user_type: editUserType,
+        permissions: normalizeUserPermissions(editUserPermissions)
       }, {
         headers: { Authorization: `Token ${token}` }
       });
@@ -269,7 +280,15 @@ const UserManagement = ({ provedorId }) => {
       // Atualizar a lista de usuários
       const updatedUsers = usersState.map(user =>
         user.id === selectedUser.id
-          ? { ...user, first_name: editUserName, last_name: editUserLastName, username: editUserUsername, email: editUserEmail, permissions: editUserPermissions }
+          ? {
+            ...user,
+            first_name: editUserName,
+            last_name: editUserLastName,
+            username: editUserUsername,
+            email: editUserEmail,
+            user_type: editUserType,
+            permissions: normalizeUserPermissions(editUserPermissions)
+          }
           : user
       );
       setUsersState(updatedUsers);
@@ -343,7 +362,7 @@ const UserManagement = ({ provedorId }) => {
         user_type: addUserForm.user_type,
         provedor_id: addUserForm.provedor_id,
         is_active: addUserForm.is_active,
-        permissions: addUserForm.permissions
+        permissions: normalizeUserPermissions(addUserForm.permissions)
       }, {
         headers: { Authorization: `Token ${token}` }
       });
@@ -381,11 +400,12 @@ const UserManagement = ({ provedorId }) => {
 
   const handleEditUser = (user) => {
     setSelectedUser(user);
-    setEditUserPermissions(user.permissions || []);
+    setEditUserPermissions(normalizeUserPermissions(user.permissions || []));
     setEditUserName(user.first_name || '');
     setEditUserLastName(user.last_name || '');
     setEditUserUsername(user.username || '');
     setEditUserEmail(user.email || '');
+    setEditUserType(user.user_type || 'agent');
     setShowEditModal(true);
     setShowMenuId(null);
   };
@@ -478,6 +498,7 @@ const UserManagement = ({ provedorId }) => {
     setEditUserLastName('');
     setEditUserUsername('');
     setEditUserEmail('');
+    setEditUserType('agent');
   };
 
   // Sempre resetar o formulário ao abrir o modal
@@ -807,6 +828,18 @@ const UserManagement = ({ provedorId }) => {
                       onChange={(e) => setEditUserEmail(e.target.value)}
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Função</label>
+                  <select
+                    className="niochat-input w-full"
+                    value={editUserType}
+                    onChange={(e) => setEditUserType(e.target.value)}
+                  >
+                    <option value="agent">Atendente</option>
+                    <option value="admin">Admin</option>
+                    {userRole === 'superadmin' && <option value="superadmin">Super Admin</option>}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Permissões</label>

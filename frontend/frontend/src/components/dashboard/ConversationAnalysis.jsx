@@ -188,10 +188,10 @@ export default function ConversationAnalysis({ provedorId }) {
                         </Pie>
                         <Tooltip 
                           contentStyle={{
-                            backgroundColor: 'hsl(var(--popover))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                            color: 'hsl(var(--popover-foreground))'
+                            backgroundColor: "var(--popover)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "8px",
+                            color: "var(--popover-foreground)",
                           }}
                           formatter={(value, name) => [
                             `${value} conversas`,
@@ -246,10 +246,10 @@ export default function ConversationAnalysis({ provedorId }) {
                       <YAxis hide />
                       <Tooltip 
                         contentStyle={{
-                          backgroundColor: 'hsl(var(--popover))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '8px',
-                          color: 'hsl(var(--popover-foreground))'
+                          backgroundColor: "var(--popover)",
+                          border: "1px solid var(--border)",
+                          borderRadius: "8px",
+                          color: "var(--popover-foreground)",
                         }}
                         formatter={(value, name) => [
                           `${value} conversas`,
@@ -259,7 +259,7 @@ export default function ConversationAnalysis({ provedorId }) {
                       />
                       <Bar 
                         dataKey="volume" 
-                        fill="#10b981" 
+                        fill="var(--niochat-bar-neutral)" 
                         radius={[2, 2, 0, 0]}
                         maxBarSize={40}
                       />

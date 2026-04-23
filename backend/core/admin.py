@@ -22,7 +22,8 @@ class UserPermissionsForm(forms.ModelForm):
         if 'permissions' in self.fields:
             # Definir as opções de permissões disponíveis
             PERMISSIONS_CHOICES = [
-                ('view_ai_conversations', 'Ver atendimentos com IA'),
+                ('view_chatbot_conversations', 'Ver atendimentos em automação (chatbot/IA)'),
+                ('view_waiting_history_before_assignment', 'Ver histórico completo em espera antes de atribuir'),
                 ('view_assigned_conversations', 'Ver apenas atendimentos atribuídos a mim'),
                 ('view_team_unassigned', 'Ver atendimentos não atribuídos da minha equipe'),
                 ('manage_contacts', 'Gerenciar contatos'),
@@ -203,7 +204,9 @@ class UserAdmin(BaseUserAdmin):
         if obj.permissions:
             # Mapear códigos para nomes legíveis
             permission_names = {
-                'view_ai_conversations': 'Atendimentos IA',
+                'view_ai_conversations': 'Atendimentos automação (legado)',
+                'view_chatbot_conversations': 'Atendimentos automação',
+                'view_waiting_history_before_assignment': 'Histórico completo em espera',
                 'view_assigned_conversations': 'Atendimentos atribuídos',
                 'view_team_unassigned': 'Atendimentos equipe',
                 'manage_contacts': 'Contatos',

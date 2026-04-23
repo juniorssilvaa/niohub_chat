@@ -109,10 +109,10 @@ export default function DashboardCharts() {
   // Cores personalizadas por provedor
   const getProvedorColor = (nomeProvedor) => {
     const cores = {
-      'MEGA FIBRA': '#3B82F6',    // Azul
-      'GIGA BOM': '#10B981',      // Verde
-      'ASNET': '#F59E0B',         // Laranja
-      'default': '#8B5CF6'        // Roxo padrão
+      'MEGA FIBRA': '#4b32d3',
+      'GIGA BOM': '#2e7d32',
+      'ASNET': '#fb8c00',
+      default: '#4dd0e1',
     };
     return cores[nomeProvedor] || cores.default;
   };
@@ -206,7 +206,7 @@ export default function DashboardCharts() {
     datasets: [{
       label: 'Provedores',
       data: [statsData.provedoresAtivos, statsData.provedoresInativos],
-      backgroundColor: ['#10B981', '#EF4444'],
+      backgroundColor: ['#2E7D32', '#D32F2F'],
       borderWidth: 0,
       borderRadius: 8,
     }]
@@ -253,7 +253,7 @@ export default function DashboardCharts() {
     datasets: [{
         label: 'Canais',
       data: Object.values(statsData.canaisPorProvedor),
-      backgroundColor: ['#25D366', '#0088CC', '#E4405F', '#EA4335', '#833AB4', '#FF6B35'],
+      backgroundColor: ['#4b32d3', '#4dd0e1', '#8bc34a', '#fb8c00', '#d81b60', '#4d5154'],
       borderWidth: 0,
       borderRadius: 8,
     }]

@@ -1,6 +1,26 @@
 {
-  "current_version": "2.36.0",
+  "current_version": "2.37.0",
   "versions": [
+    {
+      "version": "2.37.0",
+      "version_type": "patch",
+      "date": "2026-04-23",
+      "title": "Permissões e fluxo com inatividade global",
+      "changes": [
+        {
+          "type": "improvement",
+          "module": "Usuários e Permissões",
+          "title": "Administradores podem gerenciar permissões dos atendentes",
+          "description": "Agora os administradores podem atribuir e remover permissões dos atendentes de forma centralizada, com mais controle sobre o acesso às funcionalidades."
+        },
+        {
+          "type": "improvement",
+          "module": "Fluxo de Atendimento",
+          "title": "Tempo de inatividade global no fluxo",
+          "description": "O tempo de inatividade passou a ser global para todo o fluxo. Agora é necessário configurar apenas as equipes de destino nos menus interativos."
+        }
+      ]
+    },
     {
       "version": "2.36.0",
       "version_type": "patch",

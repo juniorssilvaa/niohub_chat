@@ -130,6 +130,47 @@ class ChatbotEngine:
         return re.sub(r"\s+", " ", str(value or "").strip()).lower()
 
     @staticmethod
+    def _infer_team_id_from_path(start_node_id: Optional[str], nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]], max_depth: int = 12) -> Optional[int]:
+        """
+        Inferência de equipe por caminho: a partir do nó atual, procura o primeiro
+        nó de transferência direta (transferMode=direct + teamId).
+        """
+        if not start_node_id:
+            return None
+
+        node_map = {str(n.get('id')): n for n in (nodes or []) if n.get('id')}
+        visited = set()
+
+        def _walk(node_id: str, depth: int) -> Optional[int]:
+            if depth > max_depth or node_id in visited:
+                return None
+            visited.add(node_id)
+
+            node = node_map.get(str(node_id))
+            if not node:
+                return None
+
+            if node.get('type') == 'transfer':
+                data = node.get('data', {}) or {}
+                if data.get('transferMode', 'choice') == 'direct' and data.get('teamId'):
+                    try:
+                        return int(data.get('teamId'))
+                    except (TypeError, ValueError):
+                        return None
+
+            outgoing = [e for e in (edges or []) if str(e.get('source')) == str(node_id)]
+            for edge in outgoing:
+                target = edge.get('target')
+                if not target:
+                    continue
+                found = _walk(str(target), depth + 1)
+                if found:
+                    return found
+            return None
+
+        return _walk(str(start_node_id), 0)
+
+    @staticmethod
     def _resolve_interactive_selection(node: Dict[str, Any], message_content: str) -> Optional[str]:
         """
         Resolve seleção digitada em nós interativos (menu/botões) para o ID da opção.
@@ -354,81 +395,97 @@ class ChatbotEngine:
                 )
             )
 
-            if is_interactive_node and not button_id and message_content:
-                resolved_button_id = ChatbotEngine._resolve_interactive_selection(current_node, message_content)
-                if resolved_button_id:
-                    button_id = resolved_button_id
-                    logger.info(f"[ChatbotEngine] Seleção textual mapeada para botão/row id: {button_id}")
-                else:
-                    from conversations.models import Conversation
-                    conv = await sync_to_async(Conversation.objects.select_related('inbox', 'inbox__provedor', 'contact').get)(id=conversation_id)
+            stripped_in = (message_content or "").strip()
 
-                    max_attempts = int(current_node_data.get('maxInvalidAttempts') or 3)
-                    invalid_msg = current_node_data.get('invalidOptionMessage') or "Opção inválida. Por favor, selecione uma opção do menu."
-                    limit_msg = current_node_data.get('maxInvalidAttemptsMessage') or "Não consegui identificar a opção informada. Vou reenviar o menu para você."
+            async def _handle_invalid_interactive_attempt():
+                """Áudio/imagem/texto fora do menu: incrementa tentativas e aplica ação do provedor ao limite."""
+                from conversations.models import Conversation
 
-                    attempts = dict(current_state.get('invalid_option_attempts') or {})
-                    node_attempts = int(attempts.get(current_node_id, 0)) + 1
-                    attempts[current_node_id] = node_attempts
+                conv = await sync_to_async(Conversation.objects.select_related('inbox', 'inbox__provedor', 'contact').get)(
+                    id=conversation_id
+                )
+                max_attempts = int(current_node_data.get('maxInvalidAttempts') or 3)
+                invalid_msg = current_node_data.get('invalidOptionMessage') or (
+                    "Opção inválida. Toque em um item da lista ou digite o título exatamente como aparece no menu."
+                )
+                limit_msg = current_node_data.get('maxInvalidAttemptsMessage') or (
+                    "Não consegui identificar a opção informada. Vou reenviar o menu para você."
+                )
+
+                attempts = dict(current_state.get('invalid_option_attempts') or {})
+                node_attempts = int(attempts.get(current_node_id, 0)) + 1
+                attempts[current_node_id] = node_attempts
+                current_state['invalid_option_attempts'] = attempts
+                await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
+
+                if node_attempts >= max_attempts:
+                    attempts[current_node_id] = 0
                     current_state['invalid_option_attempts'] = attempts
                     await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
+                    await ChatbotEngine.send_message_agnostic(conv=conv, text=limit_msg)
 
-                    if node_attempts >= max_attempts:
-                        attempts[current_node_id] = 0
-                        current_state['invalid_option_attempts'] = attempts
-                        await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
-                        await ChatbotEngine.send_message_agnostic(conv=conv, text=limit_msg)
+                    after_action = (current_node_data.get('maxInvalidAction') or 'repeat_menu').strip()
+                    after_team_id = current_node_data.get('maxInvalidActionTeamId')
 
-                        after_action = (current_node_data.get('maxInvalidAction') or 'repeat_menu').strip()
-                        after_team_id = current_node_data.get('maxInvalidActionTeamId')
+                    if after_action == 'transfer_direct' and after_team_id:
+                        from conversations.models import Team
+                        team = await sync_to_async(Team.objects.filter(
+                            id=after_team_id,
+                            provedor=conv.inbox.provedor,
+                            is_active=True
+                        ).first)()
+                        if team:
+                            conv.status = 'pending'
+                            conv.team = team
+                            conv.assignee = None
+                            conv.waiting_for_agent = True
+                            await sync_to_async(conv.save)()
+                            await redis_memory_service.clear_memory(provedor_id, conversation_id, "whatsapp", "unknown")
+                            return True, f"Tentativas esgotadas; transferido para {team.name}"
 
-                        if after_action == 'transfer_direct' and after_team_id:
-                            from conversations.models import Team
-                            team = await sync_to_async(Team.objects.filter(
-                                id=after_team_id,
-                                provedor=conv.inbox.provedor,
-                                is_active=True
-                            ).first)()
-                            if team:
-                                conv.status = 'pending'
-                                conv.team = team
-                                conv.assignee = None
-                                conv.waiting_for_agent = True
-                                await sync_to_async(conv.save)()
-                                await redis_memory_service.clear_memory(provedor_id, conversation_id, "whatsapp", "unknown")
-                                return True, f"Tentativas esgotadas; transferido para {team.name}"
-
-                        if after_action == 'transfer_choice':
-                            from conversations.models import Team
-                            teams = await sync_to_async(list)(
-                                Team.objects.filter(provedor=conv.inbox.provedor, is_active=True).exclude(name="IA")
+                    if after_action == 'transfer_choice':
+                        from conversations.models import Team
+                        teams = await sync_to_async(list)(
+                            Team.objects.filter(provedor=conv.inbox.provedor, is_active=True).exclude(name="IA")
+                        )
+                        if teams:
+                            rows = [{
+                                'id': f'team_{t.id}',
+                                'title': t.name[:24],
+                                'description': (t.description or 'Falar com atendente')[:72]
+                            } for t in teams[:10]]
+                            await ChatbotEngine.send_message_agnostic(
+                                conv=conv,
+                                text="Nao consegui identificar sua opcao. Selecione o setor desejado:",
+                                msg_rows=rows,
+                                msg_btn_text="Ver Setores",
+                                msg_sec_title="Setores Disponiveis"
                             )
-                            if teams:
-                                rows = [{
-                                    'id': f'team_{t.id}',
-                                    'title': t.name[:24],
-                                    'description': (t.description or 'Falar com atendente')[:72]
-                                } for t in teams[:10]]
-                                await ChatbotEngine.send_message_agnostic(
-                                    conv=conv,
-                                    text="Nao consegui identificar sua opcao. Selecione o setor desejado:",
-                                    msg_rows=rows,
-                                    msg_btn_text="Ver Setores",
-                                    msg_sec_title="Setores Disponiveis"
-                                )
-                                current_state['chatbot_node_id'] = f'transfer_select_{current_node_id}'
-                                await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
-                                return True, "Tentativas esgotadas; aguardando escolha de equipe"
+                            current_state['chatbot_node_id'] = f'transfer_select_{current_node_id}'
+                            await redis_memory_service.update_ai_state(provedor_id, conversation_id, current_state, "whatsapp", "unknown")
+                            return True, "Tentativas esgotadas; aguardando escolha de equipe"
 
-                        await ChatbotEngine.execute_node(provedor_id, conversation_id, current_node, flow)
-                        return True, "Tentativas inválidas atingidas; menu reenviado"
+                    await ChatbotEngine.execute_node(provedor_id, conversation_id, current_node, flow)
+                    return True, "Tentativas inválidas atingidas; menu reenviado"
 
-                    await ChatbotEngine.send_message_agnostic(
-                        conv=conv,
-                        text=f"{invalid_msg} (Tentativa {node_attempts}/{max_attempts})"
-                    )
-                    return True, "Aguardando opção válida do menu"
+                await ChatbotEngine.send_message_agnostic(
+                    conv=conv,
+                    text=f"{invalid_msg} (Tentativa {node_attempts}/{max_attempts})"
+                )
+                return True, "Aguardando opção válida do menu"
 
+            if is_interactive_node and not button_id:
+                if stripped_in:
+                    resolved_button_id = ChatbotEngine._resolve_interactive_selection(current_node, stripped_in)
+                    if resolved_button_id:
+                        button_id = resolved_button_id
+                        logger.info(f"[ChatbotEngine] Seleção textual mapeada para botão/row id: {button_id}")
+                if not button_id:
+                    # Áudio, foto, sticker, texto que não bate com nenhuma opção, ou vazio
+                    res = await _handle_invalid_interactive_attempt()
+                    return res
+
+            edge = None
             # Tentar encontrar o próximo nó
             # 1. Se for clique em botão (button_id), tentar achar aresta que combine com o handle
             if button_id:
@@ -442,18 +499,51 @@ class ChatbotEngine:
                     edges_from_current = [e for e in edges if e.get('source') == current_node_id]
                     handles = [e.get('sourceHandle') for e in edges_from_current]
                     logger.warning(f"[ChatbotEngine) SEM MATCH de handle para {button_id}. Handles no nó {current_node_id}: {handles}")
-                    
-                    # Fallback Inteligente:
-                    # 1. Tentar aresta sem handle (default)
-                    # 2. Se houver apenas uma aresta, usamos ela (compatibilidade)
-                    edge = next((e for e in edges_from_current if not e.get('sourceHandle')), None)
-                    if not edge and len(edges_from_current) == 1:
-                        edge = edges_from_current[0]
+                    # Em menu/lista/planos ou mensagem com botões: NÃO seguir por aresta "sem handle"
+                    # (isso enviava o cliente para um ramo aleatório ao mandar áudio/foto ou id inválido).
+                    if is_interactive_node:
+                        edge = edges_from_current[0] if len(edges_from_current) == 1 else None
+                    else:
+                        edge = next((e for e in edges_from_current if not e.get('sourceHandle')), None)
+                        if not edge and len(edges_from_current) == 1:
+                            edge = edges_from_current[0]
                     
                     if edge:
                         logger.info(f"[ChatbotEngine] Usando fallback para: {edge.get('target')}")
                     else:
-                        logger.error(f"[ChatbotEngine] Ambiguidade de roteamento! {len(edges_from_current)} saídas mas nenhuma bate com {button_id}")
+                        logger.error(
+                            f"[ChatbotEngine] Ambiguidade de roteamento! {len(edges_from_current)} saídas "
+                            f"mas nenhuma bate com {button_id}"
+                        )
+                        # Cliente tocou numa linha que existe no menu (WhatsApp) mas o fluxo não tem aresta — não travar.
+                        row_valid = None
+                        if current_node and current_node.get("type") == "menu":
+                            row_valid = next(
+                                (r for r in (current_node_data.get("rows") or []) if r.get("id") == button_id),
+                                None,
+                            )
+                        if row_valid:
+                            logger.warning(
+                                f"[ChatbotEngine] Opção de menu válida sem aresta no builder (corrija o fluxo): {button_id}"
+                            )
+                            from conversations.models import Conversation
+
+                            conv = await sync_to_async(
+                                Conversation.objects.select_related(
+                                    "inbox", "inbox__provedor", "contact"
+                                ).get
+                            )(id=conversation_id)
+                            await ChatbotEngine.send_message_agnostic(
+                                conv=conv,
+                                text="Não consegui seguir com essa opção agora. Por favor, escolha outra opção no menu abaixo.",
+                            )
+                            await ChatbotEngine.execute_node(
+                                provedor_id, conversation_id, current_node, flow
+                            )
+                            return True, "Menu reenviado (aresta ausente para opção válida)"
+                        if is_interactive_node:
+                            res = await _handle_invalid_interactive_attempt()
+                            return res
                         return None, "Ambiguidade de roteamento"
             else:
                 logger.info(f"[ChatbotEngine] Mensagem de texto simples. Buscando aresta padrão (sem handle).")
@@ -461,6 +551,10 @@ class ChatbotEngine:
                 edge = next((e for e in edges if e.get('source') == current_node_id and not e.get('sourceHandle')), None)
                 if not edge:
                     edge = next((e for e in edges if e.get('source') == current_node_id), None)
+
+            if is_interactive_node and button_id and not edge:
+                res = await _handle_invalid_interactive_attempt()
+                return res
             
             if edge:
                 # === NOVO: Capturar título da opção selecionada (botão ou menu) ===
@@ -488,7 +582,54 @@ class ChatbotEngine:
                             elif 'AMBOS' in titulo or 'AMBAS' in titulo: flow_context['tipo_pagamento'] = 'ambos'
                             
                             logger.info(f"[ChatbotEngine] OPÇÃO ESCOLHIDA (Menu): {row.get('title')} | tipo_pagamento mapped: {flow_context.get('tipo_pagamento')}")
-                    
+
+                    inferred_team_id = None
+                    if button_id and current_node.get('type') == 'message':
+                        btn_pick = next(
+                            (b for b in (current_node_data.get('buttons') or []) if b.get('id') == button_id),
+                            None,
+                        )
+                        if btn_pick:
+                            raw_tid = btn_pick.get('teamId') or btn_pick.get('routingTeamId')
+                            if raw_tid not in (None, '', 'null'):
+                                try:
+                                    inferred_team_id = int(raw_tid)
+                                except (TypeError, ValueError):
+                                    inferred_team_id = None
+                                if inferred_team_id:
+                                    logger.info(
+                                        f"[ChatbotEngine] last_routing_team_id={inferred_team_id} "
+                                        f"(definido no botão) conv={conversation_id}"
+                                    )
+                    elif button_id and current_node.get('type') == 'menu':
+                        row_pick = next(
+                            (r for r in (current_node_data.get('rows') or []) if r.get('id') == button_id),
+                            None,
+                        )
+                        if row_pick:
+                            raw_tid = row_pick.get('teamId') or row_pick.get('routingTeamId')
+                            if raw_tid not in (None, '', 'null'):
+                                try:
+                                    inferred_team_id = int(raw_tid)
+                                except (TypeError, ValueError):
+                                    inferred_team_id = None
+                                if inferred_team_id:
+                                    logger.info(
+                                        f"[ChatbotEngine] last_routing_team_id={inferred_team_id} "
+                                        f"(definido na linha do menu) conv={conversation_id}"
+                                    )
+                    if inferred_team_id is None:
+                        inferred_team_id = ChatbotEngine._infer_team_id_from_path(
+                            edge.get('target'), nodes, edges
+                        )
+                        if inferred_team_id:
+                            logger.info(
+                                f"[ChatbotEngine] last_routing_team_id={inferred_team_id} inferido no caminho "
+                                f"para conv={conversation_id}"
+                            )
+                    if inferred_team_id:
+                        flow_context['last_routing_team_id'] = int(inferred_team_id)
+
                     current_state['flow_context'] = flow_context
                     attempts = dict(current_state.get('invalid_option_attempts') or {})
                     attempts[current_node_id] = 0

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Contact, Inbox, Conversation, Message, Team, TeamMember, CSATFeedback, CSATRequest, MessageReaction
 from core.serializers import UserSerializer, LabelSerializer
+from .message_visibility import waiting_queue_content_redacted_for_agent
 
 
 
@@ -416,6 +417,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
     is_24h_window_open = serializers.SerializerMethodField()
+    panel_waiting_content_hidden = serializers.SerializerMethodField()
 
     
     class Meta:
@@ -423,12 +425,30 @@ class ConversationListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'contact', 'inbox', 'assignee', 'team', 'status',
             'labels', 'additional_attributes', 'last_message_at', 'created_at',
-            'last_message', 'unread_count', 'is_24h_window_open'
+            'last_message', 'unread_count', 'is_24h_window_open',
+            'waiting_for_agent', 'panel_waiting_content_hidden',
         ]
 
         read_only_fields = ['id', 'last_message_at', 'created_at']
     
+    def get_panel_waiting_content_hidden(self, obj):
+        request = self.context.get('request')
+        if not request:
+            return False
+        return waiting_queue_content_redacted_for_agent(request, obj)
+
     def get_last_message(self, obj):
+        request = self.context.get('request')
+        if request and waiting_queue_content_redacted_for_agent(request, obj):
+            return {
+                'id': None,
+                'content': '',
+                'message_type': 'text',
+                'is_from_customer': False,
+                'panel_waiting_content_hidden': True,
+                'created_at': None,
+                'additional_attributes': {},
+            }
         # Otimização: usar prefetch se disponível (evita query extra)
         if hasattr(obj, 'last_message_prefetched') and obj.last_message_prefetched:
             return MessageSerializer(obj.last_message_prefetched[0]).data

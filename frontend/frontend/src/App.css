@@ -46,8 +46,8 @@
   --nc-border: var(--border);
   --nc-muted: var(--muted-foreground);
   --nc-accent: var(--primary);
-  --nc-success: var(--chart-2);
-  --nc-danger: var(--chart-4);
+  --nc-success: var(--niochat-success);
+  --nc-danger: var(--niochat-danger);
 
   /* Topbar Theme Mapping */
   --color-topbar: var(--topbar-background);
@@ -56,103 +56,112 @@
 
 :root {
   --radius: 0.5rem;
-  /* SGP Theme Colors (aplicado globalmente) */
-  --background: #f4f6f8;
-  --foreground: #1f2937;
+  /* Paleta referência painel ONU / dashboard claro: fundo #F0F2F5, cards #FFF, status verde #2E7D32 / vermelho #D32F2F / âmbar #FBC02D, violeta principal #4B32D3, gráficos teal/verde/laranja/magenta */
+  --background: #f0f2f5;
+  --foreground: #333333;
   --card: #ffffff;
-  --card-foreground: #1f2937;
+  --card-foreground: #333333;
   --popover: #ffffff;
-  --popover-foreground: #1f2937;
-  --primary: #0d70b3;
+  --popover-foreground: #333333;
+  --primary: #4b32d3;
   --primary-foreground: #ffffff;
-  --secondary: #e9edf2;
-  --secondary-foreground: #1f2937;
-  --muted: #eef2f5;
-  --muted-foreground: #5f6b7a;
-  --accent: rgba(13, 112, 179, 0.12);
-  --accent-foreground: #1f2937;
-  --destructive: #ef4444;
-  --border: #d5dbe3;
-  --input: #d5dbe3;
-  --ring: #0d70b3;
-  --chart-1: #0d70b3;
-  --chart-2: #10b981;
-  --chart-3: #f59e0b;
-  --chart-4: #ef4444;
-  --chart-5: #8b5cf6;
+  --secondary: #e8ecf1;
+  --secondary-foreground: #333333;
+  --muted: #eef1f5;
+  --muted-foreground: #757575;
+  --accent: rgba(75, 50, 211, 0.12);
+  --accent-foreground: #333333;
+  --destructive: #d32f2f;
+  --border: #e0e4ea;
+  --input: #e0e4ea;
+  --ring: #4b32d3;
+  --chart-1: #4b32d3;
+  --chart-2: #4dd0e1;
+  --chart-3: #8bc34a;
+  --chart-4: #fb8c00;
+  --chart-5: #d81b60;
   --sidebar: #ffffff;
-  --sidebar-foreground: #1f2937;
-  --sidebar-primary: #0d70b3;
+  --sidebar-foreground: #333333;
+  --sidebar-primary: #4b32d3;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e9edf2;
-  --sidebar-accent-foreground: #1f2937;
-  --sidebar-border: #d5dbe3;
-  --sidebar-ring: #0d70b3;
+  --sidebar-accent: #e8ecf1;
+  --sidebar-accent-foreground: #333333;
+  --sidebar-border: #e0e4ea;
+  --sidebar-ring: #4b32d3;
 
   /* Topbar Colors */
   --topbar-background: #ffffff;
-  --topbar-foreground: #1f2937;
+  --topbar-foreground: #333333;
 
-  /* Custom NioChat Colors */
-  --niochat-primary: #3b82f6;
-  --niochat-secondary: #f8f9fa;
-  --niochat-accent: #10b981;
-  --niochat-warning: #f59e0b;
-  --niochat-danger: #ef4444;
-  --niochat-success: #10b981;
-  --niochat-info: #06b6d4;
+  /* Custom NioChat Colors (alinhados ao dashboard de referência) */
+  --niochat-primary: #4b32d3;
+  --niochat-secondary: #f0f2f5;
+  --niochat-accent: #4dd0e1;
+  --niochat-warning: #fbc02d;
+  --niochat-danger: #d32f2f;
+  --niochat-success: #2e7d32;
+  --niochat-info: #4dd0e1;
+  --niochat-bar-neutral: #4d5154;
+  --niochat-api-badge: #1b5e20;
 
   /* Label Colors */
-  --label-yellow: #fbbf24;
-  --label-blue: #3b82f6;
-  --label-red: #ef4444;
-  --label-green: #10b981;
-  --label-purple: #8b5cf6;
-  --label-orange: #f97316;
+  --label-yellow: #fbc02d;
+  --label-blue: #4b32d3;
+  --label-red: #d32f2f;
+  --label-green: #2e7d32;
+  --label-purple: #7b1fa2;
+  --label-orange: #fb8c00;
 }
 
 .dark {
-  --background: #212121;
-  --foreground: #F5F7FA;
-  --card: #2F3238;
-  --card-foreground: #F5F7FA;
-  --popover: #2F3238;
-  --popover-foreground: #F5F7FA;
-  --primary: #0D70B3;
+  --background: #1c1f26;
+  --foreground: #f5f7fa;
+  --card: #252830;
+  --card-foreground: #f5f7fa;
+  --popover: #252830;
+  --popover-foreground: #f5f7fa;
+  --primary: #7c6deb;
   --primary-foreground: #ffffff;
-  --secondary: #353A40;
-  --secondary-foreground: #F5F7FA;
-  --muted: #2A2A2A;
-  --muted-foreground: #AEB6C2;
-  --accent: rgba(13, 112, 179, 0.2);
-  --accent-foreground: #F5F7FA;
-  --destructive: #EF4444;
-  --border: #454B53;
-  --input: #454B53;
-  --ring: rgba(13, 112, 179, 0.5);
-  --chart-1: #0D70B3;
-  --chart-2: #22C55E;
-  --chart-3: #F59E0B;
-  --chart-4: #EF4444;
-  --chart-5: #8B5CF6;
-  --sidebar: #353A40;
-  --sidebar-foreground: #F5F7FA;
-  --sidebar-primary: #0D70B3;
+  --secondary: #323640;
+  --secondary-foreground: #f5f7fa;
+  --muted: #2a2d35;
+  --muted-foreground: #aeb6c2;
+  --accent: rgba(124, 109, 235, 0.22);
+  --accent-foreground: #f5f7fa;
+  --destructive: #ef5350;
+  --border: #454b53;
+  --input: #454b53;
+  --ring: rgba(124, 109, 235, 0.55);
+  --chart-1: #7c6deb;
+  --chart-2: #4dd0e1;
+  --chart-3: #9ccc65;
+  --chart-4: #ffb74d;
+  --chart-5: #f06292;
+  --sidebar: #252830;
+  --sidebar-foreground: #f5f7fa;
+  --sidebar-primary: #7c6deb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #4B535E;
-  --sidebar-accent-foreground: #F5F7FA;
-  --sidebar-border: #454B53;
-  --sidebar-ring: rgba(13, 112, 179, 0.5);
-  --nc-bg: #212121;
-  --nc-panel: #2F3238;
-  --nc-success: #22C55E;
-  --nc-danger: #EF4444;
+  --sidebar-accent: #323640;
+  --sidebar-accent-foreground: #f5f7fa;
+  --sidebar-border: #454b53;
+  --sidebar-ring: rgba(124, 109, 235, 0.5);
+  --nc-bg: #1c1f26;
+  --nc-panel: #252830;
+  --nc-success: #66bb6a;
+  --nc-danger: #ef5350;
 
-  --topbar-background: #353A40;
-  --topbar-foreground: #ffffff;
-  
-  /* Yellow Accent from Logo */
-  --niohub-yellow: #F59E0B;
+  --topbar-background: #252830;
+  --topbar-foreground: #f5f7fa;
+
+  --niohub-yellow: #fdd835;
+
+  --niochat-primary: #7c6deb;
+  --niochat-success: #66bb6a;
+  --niochat-danger: #ef5350;
+  --niochat-warning: #fdd835;
+  --niochat-info: #4dd0e1;
+  --niochat-bar-neutral: #78909c;
+  --niochat-api-badge: #43a047;
 }
 
 @layer base {
@@ -471,7 +480,7 @@
 
 .nc-hover:hover {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  border-color: rgba(34, 211, 238, 0.3);
+  border-color: rgba(75, 50, 211, 0.28);
 }
 
 .glass-effect {

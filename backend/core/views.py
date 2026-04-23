@@ -2940,6 +2940,9 @@ class UserMeView(APIView):
                 'first_name': getattr(user, 'first_name', ''),
                 'last_name': getattr(user, 'last_name', ''),
                 'user_type': getattr(user, 'user_type', ''),
+                # Compatibilidade com partes do frontend que ainda usam "role"
+                'role': getattr(user, 'user_type', ''),
+                'permissions': getattr(user, 'permissions', []) if isinstance(getattr(user, 'permissions', []), list) else [],
                 'is_staff': getattr(user, 'is_staff', False),
                 'is_superuser': getattr(user, 'is_superuser', False),
                 'provedor_id': provedor_id,
@@ -3146,6 +3149,10 @@ class UserViewSet(viewsets.ModelViewSet):
             # Agentes só podem atualizar a si mesmos
             if serializer.instance.id != user.id:
                 raise PermissionDenied('Você não tem permissão para atualizar este usuário')
+            # Agente não pode elevar função/permissões nem alterar status/acesso
+            blocked_fields = {'user_type', 'permissions', 'is_active', 'write_provedor_id', 'provedor_id'}
+            if any(field in self.request.data for field in blocked_fields):
+                raise PermissionDenied('Você não tem permissão para alterar função/permissões deste usuário')
         
         serializer.save()
     

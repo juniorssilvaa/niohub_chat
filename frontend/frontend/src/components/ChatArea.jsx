@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Send,
@@ -44,6 +44,20 @@ import { buildMediaUrl } from '../config/environment';
 import { buildWebSocketUrl } from '../utils/websocketUrl';
 import { useTheme } from '../hooks/useTheme';
 
+/** Atendente sem permissão: conversa na espera sem assignee — não exibir conteúdo até atribuir. */
+function isWaitingQueueContentHiddenForAgent(conversation, user) {
+  if (!conversation || !user) return false;
+  if (user.user_type !== 'agent') return false;
+  if (conversation.panel_waiting_content_hidden === true) return true;
+  if (conversation.panel_waiting_content_hidden === false) return false;
+  const perms = Array.isArray(user.permissions) ? user.permissions : [];
+  if (perms.includes('view_waiting_history_before_assignment')) return false;
+  if (conversation.waiting_for_agent !== true) return false;
+  const aid = conversation.assignee?.id ?? conversation.assignee_id;
+  if (aid != null && aid !== '' && !Number.isNaN(Number(aid))) return false;
+  return true;
+}
+
 const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, user }) => {
   const navigate = useNavigate();
   const isDarkTheme = useTheme();
@@ -63,6 +77,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     : true; // Para outros canais, sempre aberta
 
   const [is24hWindowOpen, setIs24hWindowOpen] = useState(initialIs24hWindowOpen);
+  const fetchedStatusConversationIdRef = useRef(null);
   // Estado local para o nome do contato (pode ser atualizado via WebSocket)
   const [contactName, setContactName] = useState(conversation.contact?.name);
   const messagesEndRef = useRef(null);
@@ -75,6 +90,21 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   useEffect(() => {
     activeConversationIdRef.current = conversation?.id ?? null;
   }, [conversation?.id]);
+
+  const conversationRef = useRef(conversation);
+  const userRef = useRef(user);
+  useEffect(() => {
+    conversationRef.current = conversation;
+  }, [conversation]);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const hideWaitingQueueContent = useMemo(
+    () => isWaitingQueueContentHiddenForAgent(conversation, user),
+    [conversation, user]
+  );
+
   const [loadingProfilePic, setLoadingProfilePic] = useState(false);
   const [showTransferDropdown, setShowTransferDropdown] = useState(false);
   const [agents, setAgents] = useState([]);
@@ -675,11 +705,6 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
         if (response.data) {
           const updatedConversation = response.data;
 
-          // Atualizar conversa no componente pai se callback disponível
-          if (onConversationUpdate) {
-            onConversationUpdate(updatedConversation);
-          }
-
           // Atualizar status da janela de 24 horas
           // IMPORTANTE: Sempre usar o valor calculado pelo backend (is_24h_window_open)
           // que busca a mensagem mais recente do cliente e usa o created_at real
@@ -689,7 +714,6 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             // O backend sempre retorna is_24h_window_open calculado corretamente
             // usando o created_at da mensagem mais recente do cliente
             if (updatedConversation.is_24h_window_open !== undefined) {
-              console.log(`[ChatArea] Status da janela atualizado do backend: ${updatedConversation.is_24h_window_open} para conversa ${conversation.id}`);
               setIs24hWindowOpen(updatedConversation.is_24h_window_open);
             } else {
               // Fallback: se não veio do backend, assumir fechada para segurança
@@ -738,15 +762,22 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
     // Buscar conversa atualizada quando a conversa mudar
     // IMPORTANTE: Sempre buscar do backend, não usar valores da prop que podem estar desatualizados
-    if (conversation?.id) {
+    if (conversation?.id && fetchedStatusConversationIdRef.current !== conversation.id) {
+      fetchedStatusConversationIdRef.current = conversation.id;
       fetchConversationStatus();
     }
   }, [conversation?.id]);
 
-  // Buscar mensagens ao abrir conversa
+  // Buscar mensagens ao abrir conversa ou quando deixa de haver bloqueio (ex.: após atribuir)
   useEffect(() => {
     fetchMessages();
-  }, [conversation?.id]);
+  }, [
+    conversation?.id,
+    conversation?.assignee?.id,
+    conversation?.assignee_id,
+    conversation?.waiting_for_agent,
+    conversation?.panel_waiting_content_hidden,
+  ]);
 
   useEffect(() => {
     if (highlightClearTimeoutRef.current) {
@@ -898,31 +929,6 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   useEffect(() => {
     if (!conversation || !conversation.id) return;
 
-    // Validar se a conversa existe antes de conectar
-    const validateConversation = async () => {
-      try {
-        // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-        if (!token) return true; // Permitir tentar mesmo sem token (será bloqueado pelo WebSocket)
-
-        const response = await axios.get(`/api/conversations/${conversation.id}/`, {
-          headers: { Authorization: `Token ${token}` }
-        });
-
-        return response.status === 200;
-      } catch (error) {
-        // Se for 404 ou 403, a conversa pode não existir ou sem permissão
-        // Mas não fechar imediatamente - deixar o WebSocket tentar conectar primeiro
-        // Se o WebSocket também falhar, aí sim fechar
-        if (error.response?.status === 404 || error.response?.status === 403) {
-          // Retornar false mas NÃO fechar ainda - deixar o WebSocket tentar
-          return false;
-        }
-        // Para outros erros (rede, timeout, etc), permitir tentar conectar
-        return true;
-      }
-    };
-
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 10;
     let shouldReconnect = true;
@@ -993,6 +999,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                 }
               }
               if (!__wsConvMismatch) {
+              if (isWaitingQueueContentHiddenForAgent(conversationRef.current, userRef.current)) {
+                return;
+              }
               // Atualizar nome do contato se vier no payload da mensagem
               if (data.message.contact_name && data.message.contact_name.trim()) {
                 setContactName(data.message.contact_name.trim());
@@ -1246,6 +1255,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             // Conversa atualizada via WebSocket
             const updatedConversation = data.conversation || conversation;
 
+            const wasHidden = isWaitingQueueContentHiddenForAgent(conversationRef.current, userRef.current);
+            const nowHidden = isWaitingQueueContentHiddenForAgent(updatedConversation, userRef.current);
+
             // Atualizar status da janela de 24 horas se a conversa foi atualizada
             if (updatedConversation) {
               const channelType = updatedConversation.inbox?.channel_type;
@@ -1265,6 +1277,10 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
             if (onConversationUpdate) {
               onConversationUpdate(updatedConversation);
+            }
+
+            if (wasHidden && !nowHidden) {
+              fetchMessages();
             }
 
             const visCut = updatedConversation?.additional_attributes?.agent_chat_visible_from;
@@ -1335,6 +1351,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                   assignee_id: data.data.assignee_id
                 });
               }
+              fetchMessages();
             }
 
             // Listener para mudanças de provedor (isolamento multi-tenant)
@@ -1371,47 +1388,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       ws.onclose = async (event) => {
         // Códigos de erro que indicam que a conversa não existe ou sem permissão
         // 4001 = Unauthorized, 4003 = Forbidden, 4000 = Internal error (quando conversa não existe)
-        const conversationNotFoundCodes = [4001, 4003, 4000];
-
-        // Se o código indica que a conversa não existe ou sem permissão, validar antes de parar
-        if (conversationNotFoundCodes.includes(event.code)) {
-          // Validar se a conversa realmente não existe
-          const isValid = await validateConversation();
-          if (!isValid) {
-            // Se a validação falhou E o WebSocket também falhou, aí sim limpar
-            // Mas verificar mais uma vez para ter certeza
-            try {
-              // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-              const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-              if (token && conversation && conversation.id) {
-                const response = await axios.get(`/api/conversations/${conversation.id}/`, {
-                  headers: { Authorization: `Token ${token}` },
-                  timeout: 5000 // Timeout curto
-                });
-                if (response.status === 200) {
-                  // Conversa existe, continuar tentando reconectar
-                  return;
-                }
-              }
-            } catch {
-              // Se até agora falhou, realmente não existe ou sem permissão
-              // Limpar conversa inválida do localStorage
-              localStorage.removeItem('selectedConversation');
-              // Notificar componente pai para limpar seleção
-              if (onConversationClose) {
-                onConversationClose();
-              }
-              shouldReconnect = false;
-              reconnectAttempts = MAX_RECONNECT_ATTEMPTS;
-              return;
-            }
+        const fatalCodes = [4001, 4003, 4000];
+        if (fatalCodes.includes(event.code)) {
+          localStorage.removeItem('selectedConversation');
+          if (onConversationClose) {
+            onConversationClose();
           }
-          // Se a conversa existe mas deu erro de permissão no WebSocket, também parar
-          if (event.code === 4001 || event.code === 4003) {
-            shouldReconnect = false;
-            reconnectAttempts = MAX_RECONNECT_ATTEMPTS;
-            return;
-          }
+          shouldReconnect = false;
+          reconnectAttempts = MAX_RECONNECT_ATTEMPTS;
+          return;
         }
 
         // WebSocket desconectado - tentar reconectar apenas se:
@@ -1443,8 +1428,6 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
       // Fechando WebSocket
       if (wsRef.current) {
-        // Log para identificar quando REALMENTE precisamos fechar (mudança de conversa ou unmount)
-        console.log(`[WebSocket] Finalizando conexão para conversa ${conversation?.id || 'atual'}`);
         if (wsRef.current.heartbeatInterval) {
           clearInterval(wsRef.current.heartbeatInterval);
         }
@@ -1571,6 +1554,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
   const handleSendMessage = async () => {
     if (!message.trim() || !conversation) return;
+
+    if (isWaitingQueueContentHiddenForAgent(conversation, user)) {
+      toast.error('Atribua a conversa para enviar mensagens.');
+      return;
+    }
 
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
@@ -1749,6 +1737,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
   // Funções para gravação de áudio
   const startRecording = async () => {
     try {
+      if (isWaitingQueueContentHiddenForAgent(conversation, user)) {
+        toast.error('Atribua a conversa para gravar áudio.');
+        return;
+      }
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('getUserMedia não é suportado neste navegador');
       }
@@ -1844,6 +1837,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
   const sendAudioMessage = async () => {
     if (!audioBlob || !conversation) return;
+
+    if (isWaitingQueueContentHiddenForAgent(conversation, user)) {
+      toast.error('Atribua a conversa para enviar mensagens.');
+      return;
+    }
 
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
@@ -2142,10 +2140,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       if (onConversationUpdate && response.data.conversation) {
         onConversationUpdate(response.data.conversation);
       }
+      fetchMessages();
     } catch (error) {
       console.error('Erro ao atribuir conversa:', error);
       console.error('Detalhes do erro:', error.response?.data);
-      toast.error('Erro ao atribuir conversa. Tente novamente.');
+      const apiMessage = error?.response?.data?.error;
+      const friendlyMessage = typeof apiMessage === 'string' && apiMessage.trim()
+        ? apiMessage
+        : 'Não foi possível atribuir o atendimento agora. Tente novamente em instantes.';
+      toast.error(friendlyMessage);
     }
   };
 
@@ -2734,6 +2737,12 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
     const file = event.target.files[0];
     if (!file) return;
 
+    if (isWaitingQueueContentHiddenForAgent(conversation, user)) {
+      toast.error('Atribua a conversa para enviar arquivos.');
+      event.target.value = '';
+      return;
+    }
+
     // Verificar se a janela de 24 horas está aberta para WhatsApp
     // Se is24hWindowOpen for null, ainda não foi carregado do backend, então permitir
     if (is24hWindowOpen === false && isWhatsAppChannel) {
@@ -3057,7 +3066,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
             </div>
           )}
 
-          {filteredMessages.length === 0 ? (
+          {hideWaitingQueueContent ? (
+            <div className="mx-auto max-w-lg rounded-xl border border-amber-500/35 bg-amber-950/35 px-5 py-6 text-center text-amber-50 shadow-sm">
+              <p className="text-base font-semibold">Conteúdo protegido</p>
+              <p className="mt-2 text-sm leading-relaxed text-amber-100/90">
+                Sem permissão para ver mensagens desta conversa enquanto ela estiver na fila de espera sem atendente.
+                Use <span className="font-medium text-amber-50">Atribuir</span> para assumir o atendimento e visualizar o histórico.
+              </p>
+            </div>
+          ) : filteredMessages.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               <p>Nenhuma mensagem encontrada</p>
             </div>
@@ -3842,7 +3859,7 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
       {/* Input de mensagem */}
       <div className="border-t border-border p-4 bg-card overflow-visible">
         {/* Botão de templates quando janela fechada */}
-        {is24hWindowOpen === false && isWhatsAppChannel && (
+        {!hideWaitingQueueContent && is24hWindowOpen === false && isWhatsAppChannel && (
 
           <div className="mb-3">
             <button
@@ -3867,9 +3884,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           />
           <button
             onClick={() => document.getElementById('file-upload').click()}
-            disabled={sendingMedia || (is24hWindowOpen === false && isWhatsAppChannel)}
+            disabled={hideWaitingQueueContent || sendingMedia || (is24hWindowOpen === false && isWhatsAppChannel)}
             className="p-2 text-muted-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
-            title={(is24hWindowOpen === false && isWhatsAppChannel) ? "Janela de 24 horas fechada" : "Enviar arquivo"}
+            title={hideWaitingQueueContent ? 'Atribua a conversa para enviar arquivos' : (is24hWindowOpen === false && isWhatsAppChannel) ? "Janela de 24 horas fechada" : "Enviar arquivo"}
           >
             <Paperclip className="w-5 h-5" />
           </button>
@@ -3881,10 +3898,10 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                 setShowEmojiPicker(!showEmojiPicker);
                 setShowEmojiGallery(false);
               }}
-              disabled={is24hWindowOpen === false && isWhatsAppChannel}
+              disabled={hideWaitingQueueContent || (is24hWindowOpen === false && isWhatsAppChannel)}
 
               className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${showEmojiPicker ? 'text-primary bg-accent' : 'text-muted-foreground hover:text-primary hover:bg-accent'}`}
-              title="Inserir emoji"
+              title={hideWaitingQueueContent ? 'Atribua a conversa para usar o chat' : 'Inserir emoji'}
             >
               <Smile className="w-5 h-5" />
             </button>
@@ -3920,9 +3937,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
                 setShowEmojiGallery(!showEmojiGallery);
                 setShowEmojiPicker(false);
               }}
-              disabled={sendingMedia || (is24hWindowOpen === false && isWhatsAppChannel)}
+              disabled={hideWaitingQueueContent || sendingMedia || (is24hWindowOpen === false && isWhatsAppChannel)}
               className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${showEmojiGallery ? 'text-primary bg-accent' : 'text-muted-foreground hover:text-primary hover:bg-accent'}`}
-              title="Galeria de emojis (imagem)"
+              title={hideWaitingQueueContent ? 'Atribua a conversa para usar o chat' : 'Galeria de emojis (imagem)'}
             >
               <Image className="w-5 h-5" />
             </button>
@@ -3975,7 +3992,11 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
 
           {/* Input de texto */}
           <div className="flex-1 relative">
-            {is24hWindowOpen === false && isWhatsAppChannel ? (
+            {hideWaitingQueueContent ? (
+              <div className="w-full rounded-lg border border-sky-500/40 bg-sky-950/40 px-3 py-2 text-sm text-sky-100">
+                Atribua esta conversa a você para ver o histórico e enviar mensagens.
+              </div>
+            ) : is24hWindowOpen === false && isWhatsAppChannel ? (
 
               <div className="w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
                 ⚠️ Mais de 24 horas se passaram desde que o cliente respondeu pela última vez. Para enviar mensagens após este período, é necessário usar um modelo de mensagem (template). O cliente precisa entrar em contato primeiro para reabrir a janela de atendimento.
@@ -4051,7 +4072,15 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           </div>
 
           {/* Botão de gravação/envio */}
-          {is24hWindowOpen === false && isWhatsAppChannel ? (
+          {hideWaitingQueueContent ? (
+            <button
+              disabled
+              className="p-2 bg-accent text-accent-foreground rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              title="Atribua a conversa para enviar mensagens"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          ) : is24hWindowOpen === false && isWhatsAppChannel ? (
 
             <button
               disabled
@@ -4083,9 +4112,9 @@ const ChatArea = ({ conversation, onConversationClose, onConversationUpdate, use
           ) : (
             <button
               onClick={message.trim() ? handleSendMessage : startRecording}
-              disabled={sendingMedia}
+              disabled={hideWaitingQueueContent || sendingMedia}
               className="p-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
-              title={message.trim() ? "Enviar mensagem" : "Gravar áudio"}
+              title={hideWaitingQueueContent ? 'Atribua a conversa primeiro' : message.trim() ? "Enviar mensagem" : "Gravar áudio"}
             >
               {sendingMedia ? (
                 <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
