@@ -835,7 +835,7 @@ class FaturaService:
                             "link": link_fatura,
                             "filename": "Fatura.pdf"
                         }
-                    } if (link_fatura and show_pix and show_boleto) else None,
+                        } if (link_fatura and show_boleto) else None,
                     "body": {
                         "text": body_text
                     },

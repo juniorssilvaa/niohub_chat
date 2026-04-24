@@ -1,6 +1,20 @@
 {
-  "current_version": "2.37.0",
+  "current_version": "2.38.0",
   "versions": [
+    {
+      "version": "2.38.0",
+      "version_type": "patch",
+      "date": "2026-04-24",
+      "title": "Boleto com código e PDF em uma única mensagem",
+      "changes": [
+        {
+          "type": "fix",
+          "module": "Pagamentos",
+          "title": "Envio unificado de boleto no WhatsApp",
+          "description": "Agora é possível enviar o código do boleto e o PDF no mesmo card de pagamento, em uma única mensagem, facilitando a experiência do cliente."
+        }
+      ]
+    },
     {
       "version": "2.37.0",
       "version_type": "patch",

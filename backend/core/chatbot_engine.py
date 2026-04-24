@@ -1064,12 +1064,13 @@ class ChatbotEngine:
                     if dados_fatura:
                         # Se encontramos faturas (status=1), enviar ao cliente IMEDIATAMENTE usando o serviço robusto
                         if dados_fatura.get('status') == 1:
-                            # Tentar pegar preferência de pagamento do contexto (dinâmico) ou do nó (estático)
+                            # Preferir configuração explícita do nó SGP.
+                            # Isso evita herdar PIX do contexto quando o bloco está fixado como "Apenas Boleto".
                             tipo_pagamento = (
-                                flow_context.get('tipo_pagamento') or 
-                                flow_context.get('metodo_pagamento') or 
-                                node_data.get('paymentMethod') or 
-                                node_data.get('tipoPagamento') or 
+                                node_data.get('paymentMethod') or
+                                node_data.get('tipoPagamento') or
+                                flow_context.get('tipo_pagamento') or
+                                flow_context.get('metodo_pagamento') or
                                 'pix'
                             )
                             numero_wa = conversation.contact.phone
