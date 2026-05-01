@@ -213,25 +213,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Deploy to Portainer
       env:
-        PORTAINER_URL: https://portainer.niochat.com.br
+        PORTAINER_URL: https://portainer.niohub.com.br
         PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
-        BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
-        FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
-        DRAMATIQ_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dramatiq:latest
-        DOCS_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-docs:latest
+        STACK_NAME: superadmin
+        DEFAULT_ENDPOINT_ID: "1"
       run: |
-        STACKS=$(curl -s -H "X-API-Key: $PORTAINER_API_KEY" "$PORTAINER_URL/api/stacks")
-        STACK_ID=$(echo "$STACKS" | jq -r '.[] | select(.Name=="niochat") | .Id')
-        COMPOSE=$(cat docker-compose.yml \
-          | sed "s|ghcr.io/juniorssilvaa/niochat-backend:latest|$BACKEND_IMAGE|g" \
-          | sed "s|ghcr.io/juniorssilvaa/niochat-frontend:latest|$FRONTEND_IMAGE|g" \
-          | sed "s|ghcr.io/juniorssilvaa/niochat-dramatiq:latest|$DRAMATIQ_IMAGE|g" \
-          | sed "s|ghcr.io/juniorssilvaa/niochat-docs:latest|$DOCS_IMAGE|g")
-        ESCAPED=$(echo "$COMPOSE" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-        curl -s -X PUT \
+        set -euo pipefail
+
+        STACKS=$(curl -sS -H "X-API-Key: $PORTAINER_API_KEY" "$PORTAINER_URL/api/stacks")
+        if ! echo "$STACKS" | jq -e 'type == "array"' >/dev/null 2>&1; then
+          echo "::error::Resposta inválida de /api/stacks (esperado array JSON)."
+          echo "$STACKS"
+          exit 1
+        fi
+
+        STACK_ID=$(echo "$STACKS" | jq -r --arg NAME "$STACK_NAME" '.[] | select(.Name == $NAME) | .Id' | head -n 1)
+        ENDPOINT_ID=$(echo "$STACKS" | jq -r --arg NAME "$STACK_NAME" '.[] | select(.Name == $NAME) | .EndpointId' | head -n 1)
+
+        if [ -z "$STACK_ID" ] || [ "$STACK_ID" = "null" ]; then
+          echo "::error::Stack '$STACK_NAME' não encontrada no Portainer."
+          exit 1
+        fi
+
+        if [ -z "$ENDPOINT_ID" ] || [ "$ENDPOINT_ID" = "null" ]; then
+          ENDPOINT_ID="$DEFAULT_ENDPOINT_ID"
+        fi
+
+        COMPOSE=$(cat superadmin/docker-compose.superadmin.yml)
+        PAYLOAD=$(jq -n --arg content "$COMPOSE" '{StackFileContent: $content}')
+
+        RESPONSE=$(curl -sS -X PUT \
           -H "X-API-Key: $PORTAINER_API_KEY" \
           -H "Content-Type: application/json" \
-          --data "{\"StackFileContent\":\"$ESCAPED\"}" \
-          "$PORTAINER_URL/api/stacks/$STACK_ID?endpointId=1&pullImage=true&forceRecreate=true"
+          --data "$PAYLOAD" \
+          "$PORTAINER_URL/api/stacks/$STACK_ID?endpointId=$ENDPOINT_ID&pullImage=true&forceRecreate=true")
+
+        if echo "$RESPONSE" | jq -e '.message? and (.message | type == "string")' >/dev/null 2>&1; then
+          echo "::warning::Resposta do Portainer: $(echo "$RESPONSE" | jq -r '.message')"
+        fi
