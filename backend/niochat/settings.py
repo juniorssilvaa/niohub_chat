@@ -157,15 +157,35 @@ ASGI_APPLICATION = 'niochat.asgi.application'
 # ============================================
 # DATABASE
 # ============================================
-# Fallback inteligente: SQLite para desenvolvimento, Postgres para produção
-DEFAULT_DB_URL = "sqlite:///" + str(BASE_DIR / "db.sqlite3") if ENVIRONMENT == "development" else "postgresql://niochat_user:password@localhost:5432/niochat"
+# 1) Se POSTGRES_* vier definido (recomendado em Docker/Portainer), usa configuração direta.
+# 2) Caso contrário, mantém compatibilidade com DATABASE_URL.
+POSTGRES_DB = config("POSTGRES_DB", default="")
+POSTGRES_USER = config("POSTGRES_USER", default="")
+POSTGRES_PASSWORD = config("POSTGRES_PASSWORD", default="")
+POSTGRES_HOST = config("POSTGRES_HOST", default="localhost")
+POSTGRES_PORT = config("POSTGRES_PORT", default="5432")
 
-DATABASES = {
-    "default": dj_database_url.config(
-        default=config("DATABASE_URL", default=DEFAULT_DB_URL),
-        conn_max_age=60 if ENVIRONMENT == "production" else 0,
-    )
-}
+if POSTGRES_DB:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": POSTGRES_DB,
+            "USER": POSTGRES_USER,
+            "PASSWORD": POSTGRES_PASSWORD,
+            "HOST": POSTGRES_HOST,
+            "PORT": POSTGRES_PORT,
+            "CONN_MAX_AGE": 60 if ENVIRONMENT == "production" else 0,
+        }
+    }
+else:
+    # Fallback inteligente: SQLite para desenvolvimento, Postgres para produção
+    DEFAULT_DB_URL = "sqlite:///" + str(BASE_DIR / "db.sqlite3") if ENVIRONMENT == "development" else "postgresql://niochat_user:password@localhost:5432/niochat"
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=config("DATABASE_URL", default=DEFAULT_DB_URL),
+            conn_max_age=60 if ENVIRONMENT == "production" else 0,
+        )
+    }
 
 # connect_timeout é uma opção específica do PostgreSQL e causa erro no SQLite
 if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
