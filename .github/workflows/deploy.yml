@@ -184,6 +184,16 @@ jobs:
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin:latest
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin:${{ github.sha }}
 
+    - name: Build & push SUPERADMIN BACKEND
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./superadmin/Dockerfile.backend
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin-backend:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin-backend:${{ github.sha }}
+
     - name: Build & push DRAMATIQ
       uses: docker/build-push-action@v5
       with:

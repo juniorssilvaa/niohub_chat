@@ -87,6 +87,6 @@ docker exec -it superadmin_backend python manage.py createsuperuser
 
 ## Imagens publicadas (GitHub Container Registry)
 
-- `ghcr.io/juniorssilvaa/niohub_chat-backend:latest`
+- `ghcr.io/juniorssilvaa/niohub_chat-superadmin-backend:latest`
 - `ghcr.io/juniorssilvaa/niohub_chat-dramatiq:latest`
 - `ghcr.io/juniorssilvaa/niohub_chat-superadmin:latest`
