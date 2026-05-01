@@ -146,7 +146,7 @@ jobs:
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
-        password: ${{ secrets.GHCR_TOKEN }}
+        password: ${{ secrets.GHCR_TOKEN || github.token }}
 
     - name: Build & push BACKEND
       uses: docker/build-push-action@v5
