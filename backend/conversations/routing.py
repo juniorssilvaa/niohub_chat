@@ -25,6 +25,7 @@ websocket_urlpatterns = [
 
     # Painel por provedor
     re_path(r"^ws/painel/(?P<provedor_id>\w+)/?$", PainelConsumer.as_asgi()),
+    re_path(r"^ws/painel/?$", PainelConsumer.as_asgi()),
 
     # Status do usuário (com ou sem user_id)
     re_path(r"^ws/user/(?P<user_id>\w+)/?$", UserStatusConsumer.as_asgi()),

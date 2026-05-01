@@ -5,6 +5,7 @@ from collections import defaultdict
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.authtoken.models import Token
 from channels.db import database_sync_to_async
+from core.tenant_context import attach_tenant_context_to_scope
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,19 @@ class TokenAuthMiddleware:
         # Apenas processar WebSocket connections
         if scope["type"] != "websocket":
             return await self.inner(scope, receive, send)
+
+        # Resolve contexto de tenant por host/subdomínio (sem bloquear conexão).
+        try:
+            attach_tenant_context_to_scope(scope)
+        except Exception as e:
+            logger.warning("WebSocket tenant context indisponível: %s", e)
+            scope["tenant_context"] = {
+                "host": "",
+                "subdomain": None,
+                "provedor_id": None,
+                "source": "none",
+                "resolved": False,
+            }
 
         # Obter query string
         query_string = scope.get("query_string", b"").decode("utf-8")

@@ -32,7 +32,7 @@ fi
 # Verificar se frontend está rodando
 if ! nc -z localhost 8012 2>/dev/null; then
     echo "⚠️  Frontend não está rodando na porta 8012!"
-    echo "   Inicie o frontend primeiro: cd frontend/frontend && npm run dev"
+    echo "   Inicie o frontend primeiro: cd painel-provedor && pnpm dev"
 fi
 
 echo ""

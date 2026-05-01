@@ -7,25 +7,27 @@ WORKDIR /app
 RUN npm install -g pnpm
 
 # Copiar arquivos principais
-COPY frontend/frontend/package*.json ./
-COPY frontend/frontend/pnpm-lock.yaml ./
+COPY painel-provedor/package*.json ./
+COPY painel-provedor/pnpm-lock.yaml ./
 
 # Instalar dependências
 RUN pnpm install --no-frozen-lockfile
 
-# Copiar todo o frontend
-COPY frontend/frontend/ ./
+# Copiar app painel provedor
+COPY painel-provedor/ ./
 
 # ---------- Variáveis recebidas do GitHub Actions ----------
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_API_URL
 ARG VITE_WS_URL
+ARG VITE_SUPERADMIN_APP_URL
 
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
+ENV VITE_SUPERADMIN_APP_URL=$VITE_SUPERADMIN_APP_URL
 
 # Build do Vite
 RUN pnpm build

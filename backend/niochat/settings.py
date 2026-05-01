@@ -68,6 +68,21 @@ ALLOWED_HOSTS = list(config(
     cast=Csv()
 ))
 
+# Feature flag para resolução de tenant por subdomínio.
+# Safe by default: mantém o comportamento legado até ativar via .env.
+SUBDOMAIN_TENANT_ENABLED = config('SUBDOMAIN_TENANT_ENABLED', default=False, cast=bool)
+SUBDOMAIN_PRIMARY_DOMAINS = list(config(
+    'SUBDOMAIN_PRIMARY_DOMAINS',
+    default='niohub.com.br',
+    cast=Csv()
+))
+SUBDOMAIN_RESERVED_LABELS = list(config(
+    'SUBDOMAIN_RESERVED_LABELS',
+    default='www,api,chat,docs,admin,front,api-local,chat-local,localhost',
+    cast=Csv()
+))
+SUBDOMAIN_TENANT_CACHE_TTL = config('SUBDOMAIN_TENANT_CACHE_TTL', default=300, cast=int)
+
 # ============================================
 # APPS
 # ============================================
@@ -106,6 +121,7 @@ MIDDLEWARE = [
 
     # Custom middlewares
     'niochat.middleware.NgrokHostMiddleware',
+    'niochat.middleware.TenantContextMiddleware',
     'niochat.middleware.PreventAuthRedirectMiddleware',
 
     'django.middleware.common.CommonMiddleware',

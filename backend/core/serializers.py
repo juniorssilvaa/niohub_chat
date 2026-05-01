@@ -14,6 +14,7 @@ class ProvedorSerializer(serializers.ModelSerializer):
     whatsapp_token = serializers.SerializerMethodField()
     meta_config_id = serializers.SerializerMethodField()
     meta_config_id_connect = serializers.SerializerMethodField()
+    subdomain = serializers.SerializerMethodField()
     channels_count = serializers.SerializerMethodField()
     users_count = serializers.SerializerMethodField()
     conversations_count = serializers.SerializerMethodField()
@@ -45,6 +46,10 @@ class ProvedorSerializer(serializers.ModelSerializer):
         """Config ID para conectar um app WhatsApp Business existente"""
         ext = obj.integracoes_externas or {}
         return ext.get('meta_config_id_connect', None)  # Se não configurado, retorna None
+
+    def get_subdomain(self, obj):
+        ext = obj.integracoes_externas or {}
+        return ext.get('subdomain', '')
     
     def get_channels_count(self, obj):
         return obj.canais.filter(ativo=True).count()
@@ -75,6 +80,7 @@ class ProvedorSerializer(serializers.ModelSerializer):
             'whatsapp_token': self.initial_data.get('whatsapp_token', ext.get('whatsapp_token', '')),
             'meta_config_id': self.initial_data.get('meta_config_id', ext.get('meta_config_id', '')),
             'meta_config_id_connect': self.initial_data.get('meta_config_id_connect', ext.get('meta_config_id_connect', '')),
+            'subdomain': self.initial_data.get('subdomain', ext.get('subdomain', '')),
         })
         
         validated_data['integracoes_externas'] = ext
@@ -315,6 +321,7 @@ class SystemConfigSerializer(serializers.ModelSerializer):
     timezone = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     allow_public_signup = serializers.BooleanField(required=False, default=False)
     max_users_per_company = serializers.IntegerField(required=False, default=10)
+    hetzner_api_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     google_api_key = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     openai_transcription_api_key = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     asaas_access_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -348,7 +355,7 @@ class SystemConfigSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'key', 'value', 'description', 'is_active', 
             'created_at', 'updated_at', 'sgp_app', 'sgp_token', 
-            'sgp_url', 'google_api_key', 'openai_transcription_api_key',
+            'sgp_url', 'hetzner_api_token', 'google_api_key', 'openai_transcription_api_key',
             'asaas_access_token', 'asaas_webhook_auth_token', 'asaas_sandbox',
             'billing_channel_enabled', 'billing_whatsapp_token', 'billing_whatsapp_phone_number_id',
             'billing_whatsapp_waba_id', 'billing_days_before_due',             'billing_reminder_due_offsets',
@@ -360,7 +367,7 @@ class SystemConfigSerializer(serializers.ModelSerializer):
             'billing_whatsapp_use_template', 'billing_whatsapp_template_name', 'billing_whatsapp_template_language',
             # Campos do frontend
             'site_name', 'contact_email', 'default_language', 'timezone',
-            'allow_public_signup', 'max_users_per_company', 'google_api_key', 'openai_transcription_api_key',
+            'allow_public_signup', 'max_users_per_company', 'hetzner_api_token', 'google_api_key', 'openai_transcription_api_key',
             'asaas_access_token', 'asaas_webhook_auth_token', 'asaas_sandbox',
             'billing_channel_enabled', 'billing_whatsapp_token', 'billing_whatsapp_phone_number_id',
             'billing_whatsapp_waba_id', 'billing_days_before_due', 'billing_reminder_due_offsets',
@@ -390,6 +397,7 @@ class SystemConfigSerializer(serializers.ModelSerializer):
                     'timezone': 'America/Sao_Paulo',
                     'allow_public_signup': False,
                     'max_users_per_company': 10,
+                    'hetzner_api_token': '',
                     'google_api_key': '',
                     'openai_transcription_api_key': '',
                     'sgp_app': '',
@@ -515,6 +523,7 @@ class SystemConfigSerializer(serializers.ModelSerializer):
             data.setdefault('sgp_app', getattr(instance, 'sgp_app', '') or '')
             data.setdefault('sgp_token', getattr(instance, 'sgp_token', '') or '')
             data.setdefault('sgp_url', getattr(instance, 'sgp_url', '') or '')
+            data.setdefault('hetzner_api_token', getattr(instance, 'hetzner_api_token', '') or '')
             data.setdefault('key', getattr(instance, 'key', 'system_config'))
             data.setdefault('value', getattr(instance, 'value', '{}'))
             data.setdefault('description', getattr(instance, 'description', ''))
@@ -540,7 +549,8 @@ class SystemConfigSerializer(serializers.ModelSerializer):
                 'openai_transcription_api_key': '',
                 'sgp_app': '',
                 'sgp_token': '',
-                'sgp_url': ''
+                'sgp_url': '',
+                'hetzner_api_token': ''
             }
     
     def update(self, instance, validated_data):
@@ -587,9 +597,17 @@ class SystemConfigSerializer(serializers.ModelSerializer):
         logger.info(f"[SERIALIZER] openai_transcription_api_key final: {openai_transcription_api_key[:30] if openai_transcription_api_key else None}... (tamanho: {len(openai_transcription_api_key) if openai_transcription_api_key else 0})")
         
         # Extrair asaas_access_token e asaas_sandbox
+        hetzner_api_token = validated_data.pop('hetzner_api_token', None)
         asaas_access_token = validated_data.pop('asaas_access_token', None)
         asaas_webhook_auth_token = validated_data.pop('asaas_webhook_auth_token', None)
         asaas_sandbox = validated_data.pop('asaas_sandbox', None)
+
+        # Se hetzner_api_token não está em validated_data, tentar buscar de initial_data
+        if hetzner_api_token is None and hasattr(self, 'initial_data'):
+            hetzner_api_token = self.initial_data.get('hetzner_api_token')
+
+        if hetzner_api_token == '':
+            hetzner_api_token = None
         
         # Se asaas_access_token não está em validated_data, tentar buscar de initial_data
         if asaas_access_token is None and hasattr(self, 'initial_data'):
@@ -642,6 +660,10 @@ class SystemConfigSerializer(serializers.ModelSerializer):
             logger.warning("[SERIALIZER] google_api_key é None - não será atualizado")
 
         # Salvar asaas_access_token e asaas_sandbox no modelo
+        if hetzner_api_token is not None:
+            validated_data['hetzner_api_token'] = hetzner_api_token
+            instance.hetzner_api_token = hetzner_api_token
+
         if asaas_access_token is not None:
             validated_data['asaas_access_token'] = asaas_access_token
             instance.asaas_access_token = asaas_access_token
@@ -707,6 +729,10 @@ class SystemConfigSerializer(serializers.ModelSerializer):
             updated_instance.openai_transcription_api_key = openai_transcription_api_key
             updated_instance.save(update_fields=['openai_transcription_api_key'])
             logger.info(f"[SERIALIZER] openai_transcription_api_key salvo com sucesso após save explícito")
+
+        if hetzner_api_token is not None and updated_instance.hetzner_api_token != hetzner_api_token:
+            updated_instance.hetzner_api_token = hetzner_api_token
+            updated_instance.save(update_fields=['hetzner_api_token'])
         
         return updated_instance
 

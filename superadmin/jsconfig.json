@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"],
+      "@niochat/*": ["../painel-provedor/src/*"]
+    }
+  }
+}

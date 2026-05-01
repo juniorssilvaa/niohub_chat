@@ -260,6 +260,7 @@ class SystemConfig(models.Model):
     sgp_app = models.CharField(max_length=200, null=True, blank=True, verbose_name='SGP App')
     sgp_token = models.CharField(max_length=500, null=True, blank=True, verbose_name='SGP Token')
     sgp_url = models.URLField(null=True, blank=True, verbose_name='SGP URL')
+    hetzner_api_token = models.TextField(null=True, blank=True, verbose_name='Hetzner API Token')
     google_api_key = models.CharField(max_length=255, null=True, blank=True, verbose_name='Google API Key')
     openai_transcription_api_key = models.CharField(max_length=255, null=True, blank=True, verbose_name='OpenAI Transcription API Key', help_text='Chave da API OpenAI exclusivamente para transcrição de áudio. Não será usada para geração de respostas.')
     

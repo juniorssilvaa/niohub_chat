@@ -9,13 +9,18 @@ class ProviderConfigView(APIView):
     def get(self, request):
         user = request.user
         provedor = None
+        tenant_provedor_id = getattr(request, "tenant_provedor_id", None)
+
+        # Quando subdomínio estiver ativo e resolvido, prioriza o tenant context.
+        if tenant_provedor_id:
+            provedor = Provedor.objects.filter(id=tenant_provedor_id, is_active=True).first()
         
         # Tentar encontrar o provedor do usuário
         # Verificar se o usuário tem atributo 'provedor' (ForeignKey)
-        if hasattr(user, 'provedor') and user.provedor:
+        if not provedor and hasattr(user, 'provedor') and user.provedor:
             provedor = user.provedor
         # Verificar se o usuário tem atributo 'provedor_id'
-        elif hasattr(user, 'provedor_id') and user.provedor_id:
+        elif not provedor and hasattr(user, 'provedor_id') and user.provedor_id:
              provedor = Provedor.objects.filter(id=user.provedor_id).first()
         
         # Se não encontrou diretamente, tentar via admins (relação ManyToMany)

@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.parsers import MultiPartParser, FormParser
 from core.authentication import LoggedTokenAuthentication
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404
 from django.db import models
 from django.conf import settings
@@ -26,6 +26,7 @@ import asyncio
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 import json
+import re
 import tempfile
 import traceback
 from conversations.models import Contact, Conversation, Message, Inbox
@@ -52,6 +53,7 @@ from pathlib import Path
 
 
 from django.views.decorators.http import require_http_methods
+from core.tenant_context import resolve_tenant_context_for_request
 
 @require_http_methods(["GET", "HEAD"])
 def health_view(request):
@@ -64,6 +66,18 @@ def health_view(request):
         content_type="application/json", 
         status=200
     )
+
+
+@require_http_methods(["GET", "HEAD"])
+def tenant_context_view(request):
+    """
+    Endpoint de diagnóstico para validar resolução de tenant por host/subdomínio.
+    Não altera autorização nem roteamento existente.
+    """
+    context_data = getattr(request, "tenant_context", None)
+    if not context_data:
+        context_data = resolve_tenant_context_for_request(request).as_dict()
+    return JsonResponse(context_data, status=200)
 
 
 @require_http_methods(["GET"])
@@ -5250,7 +5264,8 @@ class SystemConfigView(APIView):
                         'openai_transcription_api_key': '',
                         'sgp_app': '',
                         'sgp_token': '',
-                        'sgp_url': ''
+                        'sgp_url': '',
+                        'hetzner_api_token': ''
                     })
             
             # Garantir que o objeto existe antes de serializar
@@ -5271,7 +5286,8 @@ class SystemConfigView(APIView):
                     'openai_transcription_api_key': '',
                     'sgp_app': '',
                     'sgp_token': '',
-                    'sgp_url': ''
+                    'sgp_url': '',
+                    'hetzner_api_token': ''
                 })
             
             try:
@@ -5319,6 +5335,7 @@ class SystemConfigView(APIView):
                 'sgp_app': '',
                 'sgp_token': '',
                 'sgp_url': '',
+                'hetzner_api_token': '',
                 'error': 'Erro ao carregar configurações completas'
             }, status=200)  # Retornar 200 mesmo com erro parcial para não quebrar o frontend
     
@@ -5572,6 +5589,221 @@ class ProvedorViewSet(viewsets.ModelViewSet):
             )
         
         return queryset.order_by('-created_at')
+
+    def _get_vps_pool(self):
+        hetzner_pool = self._get_hetzner_vps_pool()
+        if hetzner_pool:
+            return hetzner_pool
+
+        raw_pool = getattr(settings, 'PROVIDER_VPS_POOL', None)
+        pool = []
+        if isinstance(raw_pool, list):
+            for item in raw_pool:
+                if not isinstance(item, dict):
+                    continue
+                key = str(item.get('key') or '').strip()
+                if not key:
+                    continue
+                try:
+                    max_providers = int(item.get('max_providers') or 3)
+                except (TypeError, ValueError):
+                    max_providers = 3
+                if max_providers < 1:
+                    max_providers = 1
+                pool.append({
+                    'key': key,
+                    'label': str(item.get('label') or key).strip(),
+                    'api_url': str(item.get('api_url') or '').strip(),
+                    'max_providers': max_providers,
+                })
+        if not pool:
+            pool = [{
+                'key': 'legacy-main',
+                'label': 'VPS Principal (Legado)',
+                'api_url': '',
+                'max_providers': 3,
+            }]
+        return pool
+
+    def _get_hetzner_vps_pool(self):
+        """Busca VPS reais da Hetzner usando token salvo no SystemConfig."""
+        try:
+            config = SystemConfig.objects.filter(key='system_config').first() or SystemConfig.objects.first()
+        except Exception:
+            config = SystemConfig.objects.first()
+
+        token = str(getattr(config, 'hetzner_api_token', '') or '').strip() if config else ''
+        if not token:
+            return []
+
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/json',
+        }
+        endpoint = 'https://api.hetzner.cloud/v1/servers'
+        page = 1
+        pool = []
+        max_pages = 10
+
+        for _ in range(max_pages):
+            try:
+                response = requests.get(
+                    endpoint,
+                    headers=headers,
+                    params={'page': page, 'per_page': 50},
+                    timeout=12,
+                )
+            except Exception as exc:
+                logger.warning(f'[VPS_POOL] Falha ao conectar na API da Hetzner: {exc}')
+                return []
+
+            if response.status_code != 200:
+                logger.warning(f'[VPS_POOL] Hetzner retornou HTTP {response.status_code}: {response.text[:200]}')
+                return []
+
+            payload = response.json() if response.content else {}
+            servers = payload.get('servers') or []
+
+            for server in servers:
+                server_id = server.get('id')
+                if not server_id:
+                    continue
+
+                name = str(server.get('name') or f'server-{server_id}').strip()
+                status = str(server.get('status') or '').strip()
+
+                datacenter = server.get('datacenter') or {}
+                location = datacenter.get('location') or {}
+                datacenter_name = str(datacenter.get('name') or '').strip()
+                zone = str(location.get('network_zone') or location.get('name') or '').strip()
+
+                public_net = server.get('public_net') or {}
+                ipv4 = (public_net.get('ipv4') or {}).get('ip') or ''
+                ipv6 = (public_net.get('ipv6') or {}).get('ip') or ''
+
+                labels = server.get('labels') or {}
+                api_url = ''
+                max_providers = 3
+                if isinstance(labels, dict):
+                    api_url = str(labels.get('niochat_api_url') or labels.get('api_url') or '').strip()
+                    custom_max = labels.get('niochat_max_providers')
+                    if custom_max not in (None, ''):
+                        try:
+                            parsed = int(custom_max)
+                            if parsed > 0:
+                                max_providers = parsed
+                        except (TypeError, ValueError):
+                            pass
+
+                suffix_parts = [part for part in [zone, datacenter_name] if part]
+                suffix = f" ({' / '.join(suffix_parts)})" if suffix_parts else ''
+
+                pool.append({
+                    'key': f'hetzner-{server_id}',
+                    'label': f'{name}{suffix}',
+                    'api_url': api_url,
+                    'max_providers': max_providers,
+                    'provider': 'hetzner',
+                    'server_id': server_id,
+                    'status': status,
+                    'ipv4': ipv4,
+                    'ipv6': ipv6,
+                })
+
+            pagination = (payload.get('meta') or {}).get('pagination') or {}
+            next_page = pagination.get('next_page')
+            if not next_page:
+                break
+            try:
+                page = int(next_page)
+            except (TypeError, ValueError):
+                break
+
+        return pool
+
+    def _resolve_base_domain(self):
+        primary_domains = getattr(settings, 'SUBDOMAIN_PRIMARY_DOMAINS', []) or []
+        base_domain = str(primary_domains[0]).strip().lower() if primary_domains else 'niohub.com.br'
+        return base_domain or 'niohub.com.br'
+
+    def _normalize_subdomain(self, raw_value):
+        value = str(raw_value or '').strip().lower()
+        value = re.sub(r'^https?://', '', value)
+        value = value.rstrip('/')
+        return value
+
+    def _count_providers_for_vps(self, vps_key, exclude_id=None):
+        count = 0
+        for provedor in Provedor.objects.all().only('id', 'integracoes_externas'):
+            if exclude_id and provedor.id == exclude_id:
+                continue
+            ext = provedor.integracoes_externas or {}
+            if isinstance(ext, dict) and str(ext.get('vps_key') or '').strip() == vps_key:
+                count += 1
+        return count
+
+    def _subdomain_exists(self, subdomain, exclude_id=None):
+        for provedor in Provedor.objects.all().only('id', 'integracoes_externas'):
+            if exclude_id and provedor.id == exclude_id:
+                continue
+            ext = provedor.integracoes_externas or {}
+            current = ''
+            if isinstance(ext, dict):
+                current = self._normalize_subdomain(ext.get('subdomain'))
+            if current and current == subdomain:
+                return True
+        return False
+
+    def _validate_and_prepare_provisioning(self, serializer, *, instance=None):
+        request_data = self.request.data if isinstance(self.request.data, dict) else {}
+        ext = {}
+        if instance and isinstance(instance.integracoes_externas, dict):
+            ext.update(instance.integracoes_externas)
+
+        incoming_ext = serializer.validated_data.get('integracoes_externas')
+        if isinstance(incoming_ext, dict):
+            ext.update(incoming_ext)
+
+        requested_vps_key = request_data.get('vps_key')
+        requested_subdomain = request_data.get('subdomain')
+
+        if requested_vps_key is not None:
+            ext['vps_key'] = requested_vps_key
+        if requested_subdomain is not None:
+            ext['subdomain'] = requested_subdomain
+
+        vps_key = str(ext.get('vps_key') or '').strip()
+        subdomain = self._normalize_subdomain(ext.get('subdomain'))
+
+        if not vps_key:
+            raise ValidationError({'vps_key': 'Selecione uma VPS para este provedor.'})
+        if not subdomain:
+            raise ValidationError({'subdomain': 'Informe o subdomínio completo do provedor.'})
+
+        base_domain = self._resolve_base_domain()
+        expected_suffix = f".{base_domain}"
+        subdomain_regex = re.compile(rf'^[a-z0-9][a-z0-9-]*\.{re.escape(base_domain)}$')
+
+        if not subdomain.endswith(expected_suffix) or not subdomain_regex.match(subdomain):
+            raise ValidationError({'subdomain': f'Subdomínio inválido. Use o formato "cliente-x.{base_domain}".'})
+
+        pool = self._get_vps_pool()
+        selected_vps = next((item for item in pool if item['key'] == vps_key), None)
+        if not selected_vps:
+            raise ValidationError({'vps_key': 'A VPS selecionada não é válida.'})
+
+        providers_count = self._count_providers_for_vps(vps_key, exclude_id=getattr(instance, 'id', None))
+        if providers_count >= selected_vps['max_providers']:
+            raise ValidationError({'vps_key': f'A VPS "{selected_vps["label"]}" atingiu o limite de {selected_vps["max_providers"]} provedores.'})
+
+        if self._subdomain_exists(subdomain, exclude_id=getattr(instance, 'id', None)):
+            raise ValidationError({'subdomain': f'O subdomínio "{subdomain}" já está em uso.'})
+
+        ext['vps_key'] = selected_vps['key']
+        ext['vps_label'] = selected_vps['label']
+        ext['vps_api_url'] = selected_vps.get('api_url', '')
+        ext['subdomain'] = subdomain
+        serializer.validated_data['integracoes_externas'] = ext
     
     def perform_create(self, serializer):
         user = self.request.user
@@ -5581,7 +5813,8 @@ class ProvedorViewSet(viewsets.ModelViewSet):
         user_type = getattr(user, 'user_type', None)
         if user_type != 'superadmin':
             raise PermissionDenied('Apenas superadmin pode criar provedores')
-            
+
+        self._validate_and_prepare_provisioning(serializer)
         provedor = serializer.save()
         
         # Setup Automático Asaas se houver CPF/CNPJ
@@ -5630,6 +5863,7 @@ class ProvedorViewSet(viewsets.ModelViewSet):
         
         # Superadmin pode atualizar tudo
         if user.user_type == 'superadmin':
+            self._validate_and_prepare_provisioning(serializer, instance=instance)
             serializer.save()
             return
         
@@ -5644,6 +5878,12 @@ class ProvedorViewSet(viewsets.ModelViewSet):
             'admins',  # Gerenciamento de admins (apenas superadmin)
             'is_active'  # Ativação/desativação do provedor (apenas superadmin)
         }
+        request_data = self.request.data if isinstance(self.request.data, dict) else {}
+        incoming_ext = request_data.get('integracoes_externas')
+        if 'vps_key' in request_data or 'subdomain' in request_data:
+            raise PermissionDenied('Apenas superadmin pode alterar VPS ou subdomínio do provedor.')
+        if isinstance(incoming_ext, dict) and ('vps_key' in incoming_ext or 'subdomain' in incoming_ext):
+            raise PermissionDenied('Apenas superadmin pode alterar VPS ou subdomínio do provedor.')
         # Admins podem atualizar TODOS os outros campos, incluindo:
         # - Dados básicos (nome, site_oficial, endereco)
         # - Configurações de IA (nome_agente_ia, estilo_personalidade, personalidade, modo_falar, informacoes_extras)
@@ -5663,6 +5903,26 @@ class ProvedorViewSet(viewsets.ModelViewSet):
         
         # Permitir atualização de todos os outros campos
         serializer.save()
+
+    @action(detail=False, methods=['get'], url_path='vps-pool')
+    def vps_pool(self, request):
+        user = request.user
+        if getattr(user, 'user_type', None) != 'superadmin':
+            return Response({'detail': 'Apenas superadmin pode consultar o pool de VPS.'}, status=status.HTTP_403_FORBIDDEN)
+
+        pool = self._get_vps_pool()
+        response = []
+        for item in pool:
+            providers_count = self._count_providers_for_vps(item['key'])
+            response.append({
+                'key': item['key'],
+                'label': item['label'],
+                'api_url': item.get('api_url', ''),
+                'max_providers': item['max_providers'],
+                'providers_count': providers_count,
+                'available_slots': max(0, item['max_providers'] - providers_count),
+            })
+        return Response(response, status=status.HTTP_200_OK)
     
     def perform_destroy(self, instance):
         user = self.request.user

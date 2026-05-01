@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: juniorssilvaa/niochat
+  IMAGE_NAME: juniorssilvaa/niohub_chat
 
 jobs:
   test:
@@ -83,7 +83,7 @@ jobs:
 
     - name: Node dependencies
       run: |
-        cd frontend/frontend
+        cd painel-provedor
         pnpm install --no-frozen-lockfile
 
     - name: Run backend tests
@@ -101,14 +101,26 @@ jobs:
         python manage.py migrate
         python manage.py test
 
-    - name: Build frontend
+    - name: Build frontend (painel provedor)
+      env:
+        VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        VITE_API_URL: "https://api.niohub.com.br/api"
+        VITE_WS_URL: "wss://api.niohub.com.br/ws"
+        VITE_SUPERADMIN_APP_URL: ${{ secrets.VITE_SUPERADMIN_APP_URL }}
+      run: |
+        cd painel-provedor
+        pnpm install --no-frozen-lockfile
+        pnpm build
+
+    - name: Build Superadmin app
       env:
         VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         VITE_API_URL: "https://api.niohub.com.br/api"
         VITE_WS_URL: "wss://api.niohub.com.br/ws"
       run: |
-        cd frontend/frontend
+        cd superadmin
         pnpm install --no-frozen-lockfile
         pnpm build
 
@@ -157,6 +169,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
           VITE_API_URL=https://api.niohub.com.br/api
           VITE_WS_URL=wss://api.niohub.com.br/ws
+          VITE_SUPERADMIN_APP_URL=${{ secrets.VITE_SUPERADMIN_APP_URL }}
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ github.sha }}

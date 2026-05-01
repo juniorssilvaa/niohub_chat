@@ -6,6 +6,7 @@ from django.utils.deprecation import MiddlewareMixin
 from django.http import HttpRequest, HttpResponse
 from django.conf import settings
 import logging
+from core.tenant_context import attach_tenant_context_to_request
 
 logger = logging.getLogger(__name__)
 
@@ -159,3 +160,26 @@ class PreventAuthRedirectMiddleware(MiddlewareMixin):
                 )
         
         return response
+
+
+class TenantContextMiddleware(MiddlewareMixin):
+    """
+    Resolve o tenant por subdomínio sem forçar bloqueios.
+    Mantém compatibilidade com o fluxo atual por provedor_id.
+    """
+
+    def process_request(self, request: HttpRequest):
+        try:
+            attach_tenant_context_to_request(request)
+        except Exception as exc:
+            logger.warning("Falha ao resolver tenant context: %s", exc)
+            request.tenant_context = {
+                "host": "",
+                "subdomain": None,
+                "provedor_id": None,
+                "source": "none",
+                "resolved": False,
+            }
+            request.tenant_provedor_id = None
+            request.tenant_subdomain = None
+        return None

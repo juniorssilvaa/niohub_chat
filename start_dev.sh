@@ -48,11 +48,13 @@ fi
 
 # Instalar dependências do frontend
 echo "📦 Instalando dependências do frontend..."
-cd ../frontend/frontend
+cd ../painel-provedor
 if ! command -v pnpm &> /dev/null; then
     echo "📦 Instalando pnpm..."
     npm install -g pnpm
 fi
+pnpm install
+cd ../superadmin
 pnpm install
 
 echo ""
@@ -64,12 +66,17 @@ echo "Terminal 1 - Backend Django:"
 echo "  cd backend"
 echo "  python manage.py runserver 0.0.0.0:8000"
 echo ""
-echo "Terminal 2 - Frontend React:"
-echo "  cd frontend/frontend"
+echo "Terminal 2 - Painel provedor (Vite):"
+echo "  cd painel-provedor"
+echo "  pnpm dev"
+echo ""
+echo "Terminal 3 - Superadmin (Vite, porta 8013):"
+echo "  cd superadmin"
 echo "  pnpm dev"
 echo ""
 echo "🌐 Acesse:"
-echo "  Frontend: http://localhost:5173"
+echo "  Painel provedor: http://localhost:8012 (vite.dev.js)"
+echo "  Superadmin:      http://localhost:8013"
 echo "  Backend:  http://localhost:8000"
 echo "  Admin:    http://localhost:8000/admin"
 echo "" 

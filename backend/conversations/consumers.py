@@ -536,7 +536,20 @@ class PainelConsumer(TokenAuthMixin, SafeConsumerMixin, AsyncWebsocketConsumer):
                 return
 
             self.user = user
-            requested_provedor_id = self.scope["url_route"]["kwargs"]["provedor_id"]
+            route_kwargs = self.scope.get("url_route", {}).get("kwargs", {})
+            tenant_context = self.scope.get("tenant_context", {}) or {}
+            requested_provedor_id = route_kwargs.get("provedor_id")
+
+            # Fallback seguro para preparar suporte a subdomínio:
+            # 1) usa tenant_context resolvido por host (quando habilitado),
+            # 2) usa provedor direto do usuário para manter compatibilidade.
+            if not requested_provedor_id:
+                requested_provedor_id = tenant_context.get("provedor_id")
+            if not requested_provedor_id:
+                requested_provedor_id = await self.get_user_default_provedor_id(user)
+            if not requested_provedor_id:
+                await self.close(code=4003)  # Forbidden
+                return
 
             # Validar que o usuário tem acesso ao provedor
             has_access = await self.check_provedor_access(requested_provedor_id, user)
@@ -556,6 +569,20 @@ class PainelConsumer(TokenAuthMixin, SafeConsumerMixin, AsyncWebsocketConsumer):
 
         except Exception as e:
             await self.close(code=4000)  # Internal error
+
+    @database_sync_to_async
+    def get_user_default_provedor_id(self, user):
+        try:
+            if hasattr(user, "provedor_id") and user.provedor_id:
+                return user.provedor_id
+
+            if hasattr(user, "provedores_admin"):
+                admin_provedor = user.provedores_admin.only("id").first()
+                if admin_provedor:
+                    return admin_provedor.id
+        except Exception:
+            return None
+        return None
 
     @database_sync_to_async
     def check_provedor_access(self, provedor_id, user):
