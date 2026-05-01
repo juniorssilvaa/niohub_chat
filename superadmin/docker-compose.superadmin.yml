@@ -3,7 +3,6 @@ version: "3.8"
 services:
   superadmin-postgres:
     image: postgres:14
-    container_name: superadmin_postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -22,7 +21,6 @@ services:
 
   superadmin-redis:
     image: redis:7-alpine
-    container_name: superadmin_redis
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
     volumes:
       - superadmin-redis:/data
@@ -32,7 +30,6 @@ services:
 
   superadmin-rabbitmq:
     image: rabbitmq:3-management
-    container_name: superadmin_rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
@@ -44,17 +41,11 @@ services:
 
   superadmin-backend:
     image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
-    container_name: superadmin_backend
-    depends_on:
-      - superadmin-postgres
-      - superadmin-redis
-      - superadmin-rabbitmq
     environment:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: "False"
       ENVIRONMENT: production
 
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@superadmin-postgres:5432/${POSTGRES_DB}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -112,16 +103,10 @@ services:
 
   superadmin-dramatiq:
     image: ghcr.io/juniorssilvaa/niohub_chat-dramatiq:latest
-    container_name: superadmin_dramatiq
-    depends_on:
-      - superadmin-postgres
-      - superadmin-redis
-      - superadmin-rabbitmq
     environment:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: "False"
       ENVIRONMENT: production
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@superadmin-postgres:5432/${POSTGRES_DB}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -144,9 +129,6 @@ services:
 
   superadmin-frontend:
     image: ghcr.io/juniorssilvaa/niohub_chat-superadmin:latest
-    container_name: superadmin_frontend
-    depends_on:
-      - superadmin-backend
     networks:
       - NioNet
     labels:

@@ -48,6 +48,9 @@ if [ -n "$DATABASE_URL" ]; then
     DB_HOST=$(echo $DATABASE_URL | sed -e 's|.*@||' -e 's|/.*||' -e 's|:.*||')
     DB_PORT=$(echo $DATABASE_URL | sed -e 's|.*:||' -e 's|/.*||')
     [[ ! "$DB_PORT" =~ ^[0-9]+$ ]] && DB_PORT=5432
+elif [ -n "$POSTGRES_HOST" ]; then
+    DB_HOST="$POSTGRES_HOST"
+    DB_PORT="${POSTGRES_PORT:-5432}"
 else
     DB_HOST="postgres"
     DB_PORT=5432
@@ -139,6 +142,9 @@ if [ -n "$DATABASE_URL" ]; then
     DB_HOST=$(echo $DATABASE_URL | sed -e 's|.*@||' -e 's|/.*||' -e 's|:.*||')
     DB_PORT=$(echo $DATABASE_URL | sed -e 's|.*:||' -e 's|/.*||')
     [[ ! "$DB_PORT" =~ ^[0-9]+$ ]] && DB_PORT=5432
+elif [ -n "$POSTGRES_HOST" ]; then
+    DB_HOST="$POSTGRES_HOST"
+    DB_PORT="${POSTGRES_PORT:-5432}"
 else
     DB_HOST="postgres"
     DB_PORT=5432
