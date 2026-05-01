@@ -180,6 +180,12 @@ jobs:
         context: .
         file: ./superadmin/Dockerfile
         push: true
+        build-args: |
+          VITE_SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          VITE_API_URL=https://app.niohub.com.br/api
+          VITE_WS_URL=wss://app.niohub.com.br/ws
+          VITE_SUPERADMIN_APP_URL=https://app.niohub.com.br
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin:latest
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin:${{ github.sha }}
