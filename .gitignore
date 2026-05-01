@@ -84,7 +84,7 @@ ehthumbs.db
 Thumbs.db
 
 # Docker
-.dockerignore
+# Keep .dockerignore versioned to avoid copying host artifacts into builds
 
 # Logs
 logs/

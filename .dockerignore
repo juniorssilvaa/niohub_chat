@@ -1,0 +1,25 @@
+.git
+.github
+**/.git
+**/.DS_Store
+**/Thumbs.db
+
+# Node artifacts from host machine (Windows) must not enter Linux images
+**/node_modules
+**/dist
+**/.vite
+**/.cache
+
+# Python artifacts
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+
+# Local env/secrets
+**/.env
+**/.env.*
+!superadmin/.env.superadmin.example
+
+# Logs
+**/*.log
