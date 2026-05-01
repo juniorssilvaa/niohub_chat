@@ -43,6 +43,13 @@ Com Docker Compose:
 docker compose --env-file superadmin/.env -f superadmin/docker-compose.superadmin.yml up -d --build
 ```
 
+Depois da primeira subida, para atualizar por imagem no Portainer/Compose:
+
+```bash
+docker compose --env-file superadmin/.env -f superadmin/docker-compose.superadmin.yml pull
+docker compose --env-file superadmin/.env -f superadmin/docker-compose.superadmin.yml up -d
+```
+
 No Portainer:
 
 1. `Stacks` -> `Add stack`
@@ -77,3 +84,9 @@ Após subir, crie o superadmin no backend se necessario:
 ```bash
 docker exec -it superadmin_backend python manage.py createsuperuser
 ```
+
+## Imagens publicadas (GitHub Container Registry)
+
+- `ghcr.io/juniorssilvaa/niohub_chat-backend:latest`
+- `ghcr.io/juniorssilvaa/niohub_chat-dramatiq:latest`
+- `ghcr.io/juniorssilvaa/niohub_chat-superadmin:latest`

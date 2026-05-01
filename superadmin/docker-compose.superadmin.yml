@@ -43,9 +43,7 @@ services:
     restart: always
 
   superadmin-backend:
-    build:
-      context: ..
-      dockerfile: Dockerfile.backend
+    image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
     container_name: superadmin_backend
     depends_on:
       - superadmin-postgres
@@ -108,9 +106,7 @@ services:
     restart: always
 
   superadmin-dramatiq:
-    build:
-      context: ..
-      dockerfile: Dockerfile.dramatiq
+    image: ghcr.io/juniorssilvaa/niohub_chat-dramatiq:latest
     container_name: superadmin_dramatiq
     depends_on:
       - superadmin-postgres
@@ -137,9 +133,7 @@ services:
     restart: always
 
   superadmin-frontend:
-    build:
-      context: ..
-      dockerfile: superadmin/Dockerfile
+    image: ghcr.io/juniorssilvaa/niohub_chat-superadmin:latest
     container_name: superadmin_frontend
     depends_on:
       - superadmin-backend
