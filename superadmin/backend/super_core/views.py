@@ -4,7 +4,8 @@ from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes as permission_classes_decorator, action
 from django.contrib.auth import authenticate
-from .models import Provedor, Canal, User, Company, AuditLog, MensagemSistema, BillingTemplate, SystemConfig, VpsServer
+from django.utils import timezone
+from .models import Provedor, Canal, User, Company, AuditLog, MensagemSistema, BillingTemplate, SystemConfig, VpsServer, SystemUpdate
 from rest_framework import serializers
 
 class UserSerializer(serializers.ModelSerializer):
@@ -71,6 +72,52 @@ class SystemConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemConfig
         fields = '__all__'
+
+class SystemUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemUpdate
+        fields = '__all__'
+
+class SystemUpdateViewSet(viewsets.ModelViewSet):
+    queryset = SystemUpdate.objects.all().order_by('-release_date')
+    serializer_class = SystemUpdateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=False, methods=['post'])
+    def release(self, request):
+        channel = request.data.get('channel')
+        version = request.data.get('version')
+        
+        if not channel or not version:
+            return Response({'error': 'Channel and version are required'}, status=400)
+            
+        providers = Provedor.objects.filter(release_channel=channel, is_active=True)
+        results = []
+        
+        from .services.portainer_service import PortainerService
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        for provider in providers:
+            if not provider.vps:
+                results.append({'id': provider.id, 'nome': provider.nome, 'status': 'no_vps'})
+                continue
+                
+            try:
+                service = PortainerService(provider.vps)
+                success = service.deploy_stack(provider)
+                if success:
+                    provider.current_version = version
+                    provider.last_update = timezone.now()
+                    provider.save()
+                    results.append({'id': provider.id, 'nome': provider.nome, 'status': 'success'})
+                else:
+                    results.append({'id': provider.id, 'nome': provider.nome, 'status': 'failed'})
+            except Exception as e:
+                logger.error(f"Erro ao atualizar provedor {provider.nome}: {e}")
+                results.append({'id': provider.id, 'nome': provider.nome, 'status': 'error', 'msg': str(e)})
+                
+        return Response({'success': True, 'results': results})
 
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]

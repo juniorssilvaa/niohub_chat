@@ -11,6 +11,7 @@ router.register(r'users', views.UserViewSet, basename='users')
 router.register(r'audit-logs', views.AuditLogViewSet, basename='audit-logs')
 router.register(r'mensagens-sistema', views.MensagemSistemaViewSet, basename='mensagens-sistema')
 router.register(r'billing-templates', views.BillingTemplateViewSet, basename='billing-templates')
+router.register(r'system-updates', views.SystemUpdateViewSet, basename='system-updates')
 
 urlpatterns = [
     path('auth/login/', views.LoginView.as_view(), name='auth_login'),

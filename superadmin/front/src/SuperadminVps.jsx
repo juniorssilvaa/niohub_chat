@@ -18,6 +18,12 @@ export default function SuperadminVps() {
     max_capacity: 3,
     is_active: true
   });
+  const [activeTab, setActiveTab] = useState('list'); // 'list' | 'registry'
+  const [registryConfig, setRegistryConfig] = useState({
+    github_username: '',
+    github_pat: ''
+  });
+  const [loadingConfig, setLoadingConfig] = useState(false);
 
   const fetchVps = async () => {
     setLoading(true);
@@ -42,9 +48,62 @@ export default function SuperadminVps() {
     }
   };
 
+  const fetchConfig = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/api/system-config/', {
+        headers: { Authorization: `Token ${token}` }
+      });
+      // A SystemConfigView retorna o payload direto + o campo 'id'
+      if (res.data) {
+        setRegistryConfig({
+          github_username: res.data.github_username || '',
+          github_pat: res.data.github_pat || ''
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao buscar config:', err);
+    }
+  };
+
   useEffect(() => {
     fetchVps();
+    fetchConfig();
   }, []);
+
+  const handleSaveConfig = async () => {
+    setLoadingConfig(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Enviamos as configurações atuais + as novas do GitHub
+      // Primeiro buscamos o que já existe para não sobrescrever outros campos (como hetzner_token)
+      const resCurrent = await axios.get('/api/system-config/', {
+        headers: { Authorization: `Token ${token}` }
+      });
+      
+      const currentPayload = resCurrent.data || {};
+      delete currentPayload.id;
+
+      const newPayload = {
+        ...currentPayload,
+        github_username: registryConfig.github_username,
+        github_pat: registryConfig.github_pat
+      };
+
+      // A SystemConfigView usa PUT para criar ou atualizar o primeiro registro
+      await axios.put('/api/system-config/', newPayload, {
+        headers: { Authorization: `Token ${token}` }
+      });
+      
+      toast.success('Configurações do Registry salvas com sucesso!');
+    } catch (err) {
+      console.error('Erro ao salvar config:', err);
+      toast.error('Erro ao salvar configurações do Registry.');
+    } finally {
+      setLoadingConfig(false);
+    }
+  };
 
   const handleOpenModal = (vps = null) => {
     if (vps) {
@@ -119,24 +178,43 @@ export default function SuperadminVps() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
             <Server className="w-8 h-8 text-primary" />
-            Servidores VPS
+            Infraestrutura
           </h1>
-          <p className="text-muted-foreground">Gerencie a infraestrutura onde os provedores são instalados</p>
+          <p className="text-muted-foreground">Gerencie servidores VPS e configurações globais de Registry</p>
         </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg font-bold hover:bg-primary/80 transition"
-        >
-          <Plus size={20} /> Cadastrar Nova VPS
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setActiveTab('list')}
+            className={`px-4 py-2 rounded-lg font-bold transition flex items-center gap-2 ${activeTab === 'list' ? 'bg-primary text-white' : 'bg-muted text-gray-400 hover:text-white'}`}
+          >
+            <Server size={18} /> Servidores
+          </button>
+          <button 
+            onClick={() => setActiveTab('registry')}
+            className={`px-4 py-2 rounded-lg font-bold transition flex items-center gap-2 ${activeTab === 'registry' ? 'bg-primary text-white' : 'bg-muted text-gray-400 hover:text-white'}`}
+          >
+            <Globe size={18} /> Configurar Registry
+          </button>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center p-12">
-          <RefreshCw className="animate-spin text-primary w-8 h-8" />
-        </div>
-      ) : (
-        <div className="space-y-8">
+      {activeTab === 'list' ? (
+        <>
+          <div className="flex justify-end mb-6">
+            <button 
+              onClick={() => handleOpenModal()}
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 transition shadow-lg"
+            >
+              <Plus size={20} /> Cadastrar Nova VPS
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center p-12">
+              <RefreshCw className="animate-spin text-primary w-8 h-8" />
+            </div>
+          ) : (
+            <div className="space-y-8">
           {/* VPS Cadastradas */}
           <section>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-white">
@@ -237,6 +315,68 @@ export default function SuperadminVps() {
               </div>
             </section>
           )}
+          </div>
+        )}
+      </>
+      ) : (
+        <div className="max-w-2xl mx-auto mt-8">
+          <div className="bg-card rounded-2xl shadow-2xl border border-border overflow-hidden">
+            <div className="bg-gradient-to-r from-primary/10 to-transparent p-8 border-b border-border">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                <Globe className="text-primary w-8 h-8" />
+                Configurações do Registry GitHub
+              </h2>
+              <p className="text-muted-foreground mt-2">
+                Estas credenciais serão usadas para configurar automaticamente o acesso aos repositórios privados em todas as VPSs cadastradas.
+              </p>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex gap-4 items-start">
+                <ShieldCheck className="text-blue-400 shrink-0 mt-1" size={24} />
+                <p className="text-sm text-blue-200">
+                  O Superadmin verificará se a VPS possui a registry <strong>ghcr.io</strong> configurada antes de cada deploy. Se não possuir, ele a criará usando os dados abaixo.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-gray-400">GitHub Username</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-4 py-3 rounded-lg bg-[#181b20] text-white border border-border focus:ring-2 focus:ring-primary/50 outline-none transition"
+                    value={registryConfig.github_username}
+                    onChange={e => setRegistryConfig({...registryConfig, github_username: e.target.value})}
+                    placeholder="Seu usuário do GitHub (ex: juniorssilvaa)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-gray-400">Personal Access Token (PAT)</label>
+                  <input 
+                    type="password" 
+                    className="w-full px-4 py-3 rounded-lg bg-[#181b20] text-white border border-border focus:ring-2 focus:ring-primary/50 outline-none transition"
+                    value={registryConfig.github_pat}
+                    onChange={e => setRegistryConfig({...registryConfig, github_pat: e.target.value})}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-2">
+                    Crie um token com a permissão <code>read:packages</code> no GitHub.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={loadingConfig}
+                  className="w-full bg-primary text-white py-4 rounded-xl font-bold hover:bg-primary/80 transition flex items-center justify-center gap-2 shadow-xl shadow-primary/20 disabled:opacity-50"
+                >
+                  {loadingConfig ? <RefreshCw className="animate-spin" size={20} /> : <Save size={20} />}
+                  Salvar Configurações do Registry
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

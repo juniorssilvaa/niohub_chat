@@ -47,7 +47,13 @@ class Company(models.Model):
     class Meta:
         ordering = ['name']
 
+
 class Provedor(models.Model):
+    RELEASE_CHANNELS = [
+        ('beta', 'Beta (Atualização Automática)'),
+        ('stable', 'Estável (Atualização Controlada)'),
+        ('manual', 'Manual'),
+    ]
     nome = models.CharField(max_length=200)
     vps = models.ForeignKey(VpsServer, on_delete=models.SET_NULL, null=True, blank=True, related_name='provedores')
 
@@ -94,12 +100,33 @@ class Provedor(models.Model):
     documentos_necessarios = models.TextField(null=True, blank=True)
     users_count = models.IntegerField(default=0)
     conversations_count = models.IntegerField(default=0)
-    integracoes_externas = models.JSONField(default=dict, blank=True)
+    integracoes_externas = models.JSONField(null=True, blank=True)
+    
+    # Canais de Atualização
+    release_channel = models.CharField(max_length=20, choices=RELEASE_CHANNELS, default='stable')
+    last_update = models.DateTimeField(null=True, blank=True)
+    current_version = models.CharField(max_length=50, default='1.0.0')
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['nome']
+
+
+class SystemUpdate(models.Model):
+    version = models.CharField(max_length=50, unique=True)
+    description = models.TextField(blank=True)
+    release_date = models.DateTimeField(auto_now_add=True)
+    channel = models.CharField(max_length=20, choices=Provedor.RELEASE_CHANNELS)
+    is_deployed = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.version} ({self.channel})"
+
+    class Meta:
+        ordering = ['version']
+
 
 class Canal(models.Model):
     nome = models.CharField(max_length=100, default='')

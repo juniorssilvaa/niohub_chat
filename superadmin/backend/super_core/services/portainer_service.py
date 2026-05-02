@@ -60,6 +60,9 @@ class PortainerService:
         """
         Cria ou atualiza a Stack do provedor no Portainer remoto.
         """
+        # Garante que a Registry do GitHub está configurada na VPS
+        self._ensure_registry()
+        
         subdomain = provedor.subdomain
         if not subdomain:
             logger.error(f"Provedor {provedor.nome} não tem subdomínio definido.")
@@ -97,7 +100,9 @@ class PortainerService:
                 
                 payload = {
                     "stackFileContent": compose_content,
-                    "env": self._get_env_vars(provedor, slug)
+                    "env": self._get_env_vars(provedor, slug),
+                    "prune": True,
+                    "pullImage": True
                 }
                 
                 response = requests.put(update_url, json=payload, headers=self.headers, timeout=60, verify=False)
@@ -358,3 +363,57 @@ class PortainerService:
         except Exception as e:
             logger.error(f"Erro na auto-descoberta de infra: {e}")
             return discovered
+
+    def _ensure_registry(self):
+        """
+        Verifica se a Registry do GHCR (GitHub) está configurada no Portainer.
+        Se não estiver, cria automaticamente.
+        """
+        try:
+            # 1. Tentar buscar credenciais dinâmicas do Banco de Dados
+            from super_core.models import SystemConfig
+            import os
+            
+            config = SystemConfig.objects.first()
+            
+            # Fallbacks (Env)
+            username = os.getenv('GITHUB_USERNAME', '')
+            password = os.getenv('GHCR_TOKEN', '')
+
+            if config and config.payload:
+                username = config.payload.get('github_username', username)
+                password = config.payload.get('github_pat', password)
+
+            # 2. Listar Registries no Portainer
+            reg_url = f"{self.api_url}/api/registries"
+            res = requests.get(reg_url, headers=self.headers, timeout=10, verify=False)
+            if res.status_code != 200:
+                logger.error(f"Erro ao listar registries: {res.text}")
+                return
+
+            registries = res.json()
+            # Procurar por ghcr.io
+            gh_reg = next((r for r in registries if r.get('URL') == 'ghcr.io'), None)
+
+            if not gh_reg:
+                logger.info(f"Configurando Registry do GitHub ({username}) automaticamente...")
+                # 3. Criar Registry
+                payload = {
+                    "Name": "GitHub GHCR",
+                    "Type": 3, # Custom Registry (conforme log do usuário)
+                    "URL": "ghcr.io",
+                    "Authentication": True,
+                    "Username": username,
+                    "Password": password
+                }
+                res_create = requests.post(reg_url, json=payload, headers=self.headers, timeout=10, verify=False)
+                if res_create.status_code in [200, 201]:
+                    logger.info("Registry do GitHub configurada com sucesso!")
+                else:
+                    logger.error(f"Falha ao criar Registry no Portainer: {res_create.text}")
+            else:
+                # Opcional: Atualizar a senha se ela mudou no banco? 
+                # Por enquanto apenas logamos que já existe.
+                logger.debug("Registry do GitHub já está configurada.")
+        except Exception as e:
+            logger.error(f"Erro ao garantir Registry no Portainer: {e}")

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Wifi, Search, Edit, Trash2, MoreVertical, Plus, Eye, Users, MessageCircle, TrendingUp, Database, Trash, FileText, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Wifi, Search, Edit, Trash2, MoreVertical, Plus, Eye, Users, MessageCircle, TrendingUp, Database, Trash, FileText, CheckCircle2, RefreshCw, Zap } from 'lucide-react';
 import axios from 'axios';
 import ReactDOM from 'react-dom';
 
@@ -134,9 +134,14 @@ export default function SuperadminProvedores() {
     subscription_billing_type: 'BOLETO',
     subscription_status: '',
     subscription_next_due_date: '',
+    release_channel: 'stable',
+    current_version: '1.0.0'
   });
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateForm, setUpdateForm] = useState({ channel: 'stable', version: '1.0.1' });
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [loadingAdd, setLoadingAdd] = useState(false);
+  const [loadingUpdate, setLoadingUpdate] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState('');
   const [provedoresState, setProvedoresState] = useState([]);
@@ -445,6 +450,8 @@ export default function SuperadminProvedores() {
       subscription_billing_type: provedor.subscription_billing_type || 'BOLETO',
       subscription_status: provedor.subscription_status || '',
       subscription_next_due_date: provedor.subscription_next_due_date || '',
+      release_channel: provedor.release_channel || 'stable',
+      current_version: provedor.current_version || '1.0.0',
     });
     setSubscriptionPayments([]); // Limpar antes de carregar
     if (provedor.asaas_subscription_id) {
@@ -1147,6 +1154,27 @@ export default function SuperadminProvedores() {
                     <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">E-mails Adicionais (separados por vírgula)</label>
                     <input type="text" name="additional_emails" className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" value={editProvedorForm.additional_emails} onChange={handleEditProvedorChange} />
                   </div>
+
+                  {/* Seção 4: Configurações de Update */}
+                  <div className="md:col-span-2 pt-4 border-t border-border">
+                    <h3 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+                      <Zap className="w-5 h-5" /> Canal de Atualização
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Canal de Release</label>
+                        <select name="release_channel" className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border" value={editProvedorForm.release_channel} onChange={handleEditProvedorChange}>
+                          <option value="beta">Beta (Atualização Automática)</option>
+                          <option value="stable">Estável (Atualização Controlada)</option>
+                          <option value="manual">Manual</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Versão Atual</label>
+                        <input type="text" className="w-full px-4 py-2 rounded bg-[#181b20] text-gray-500 border border-border cursor-not-allowed" value={editProvedorForm.current_version || '1.0.0'} disabled />
+                      </div>
+                    </div>
+                  </div>
                   
                   {/* Bloco de Assinatura */}
                   <div className="md:col-span-2 mt-4 p-4 border border-primary/20 bg-primary/5 rounded-xl">
@@ -1322,10 +1350,19 @@ export default function SuperadminProvedores() {
       {/* Tabela de provedores modernizada */}
       <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden">
         <div className="bg-gradient-to-r from-slate-900/20 to-gray-900/20 px-6 py-4 border-b border-border">
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <Users className="w-5 h-5 text-slate-400" />
-            Lista de Provedores
-          </h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Users className="w-5 h-5 text-slate-400" />
+              Lista de Provedores
+            </h3>
+            <button 
+              onClick={() => setShowUpdateModal(true)}
+              className="flex items-center gap-2 px-4 py-1.5 bg-purple-600/20 text-purple-400 border border-purple-500/30 rounded-lg text-sm font-bold hover:bg-purple-600/30 transition-all shadow-sm"
+            >
+              <Zap className="w-4 h-4" />
+              Gerenciar Atualizações
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full">
@@ -1335,7 +1372,7 @@ export default function SuperadminProvedores() {
                 <th className="px-6 py-4 text-left text-xs font-semibold text-foreground uppercase tracking-wider">PROVEDOR</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">VPS</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">SUBDOMÍNIO</th>
-                <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">CANAL</th>
+                <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">VERSÃO / CANAL</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">USUÁRIOS</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">CONVERSAS</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-foreground uppercase tracking-wider">MODO</th>
@@ -1373,7 +1410,16 @@ export default function SuperadminProvedores() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center align-middle text-foreground">
-                    {provedor.channels_count || 0}
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-[10px] font-mono font-bold text-primary">v{provedor.current_version || '1.0.0'}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                        provedor.release_channel === 'beta' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                        provedor.release_channel === 'manual' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
+                        'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      }`}>
+                        {provedor.release_channel || 'stable'}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-center align-middle text-foreground">
                     {provedor.users_count || 0}
@@ -1559,6 +1605,82 @@ export default function SuperadminProvedores() {
           </div>
         </div>
       )}
+      {/* Modal de Gestão de Atualizações */}
+      {showUpdateModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#23272f] rounded-xl shadow-2xl w-full max-w-lg relative border border-border flex flex-col">
+            <div className="p-6 border-b border-border flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Zap className="w-5 h-5 text-purple-400" />
+                Liberar Nova Versão
+              </h2>
+              <button className="text-gray-400 hover:text-white text-3xl" onClick={() => setShowUpdateModal(false)}>&times;</button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-lg">
+                <p className="text-sm text-blue-200">
+                  Ao liberar uma versão, o sistema enviará um sinal para todos os provedores do canal selecionado realizarem o <strong>Pull & Redeploy</strong> automático.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-2">Canal Alvo</label>
+                <select 
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border"
+                  value={updateForm.channel}
+                  onChange={(e) => setUpdateForm({...updateForm, channel: e.target.value})}
+                >
+                  <option value="beta">Beta (Interno / Testers)</option>
+                  <option value="stable">Stable (Todos os Clientes)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-2">Número da Versão</label>
+                <input 
+                  type="text" 
+                  className="w-full px-4 py-2 rounded bg-[#181b20] text-white border border-border font-mono"
+                  placeholder="Ex: 1.0.5"
+                  value={updateForm.version}
+                  onChange={(e) => setUpdateForm({...updateForm, version: e.target.value})}
+                />
+              </div>
+
+              <div className="pt-4">
+                <button 
+                  onClick={async () => {
+                    if(!window.confirm(`Tem certeza que deseja atualizar TODOS os provedores do canal ${updateForm.channel}?`)) return;
+                    setLoadingUpdate(true);
+                    try {
+                      const token = localStorage.getItem('token');
+                      const res = await axios.post('/api/system-updates/release/', updateForm, {
+                        headers: { Authorization: `Token ${token}` }
+                      });
+                      alert(`Update concluído! ${res.data.results.length} provedores atualizados.`);
+                      setShowUpdateModal(false);
+                      // Recarregar lista
+                      const resList = await axios.get('/api/provedores/', {
+                        headers: { Authorization: `Token ${token}` }
+                      });
+                      setProvedoresState(resList.data.results || resList.data);
+                    } catch (err) {
+                      alert('Erro ao processar atualização: ' + (err.response?.data?.error || err.message));
+                    } finally {
+                      setLoadingUpdate(false);
+                    }
+                  }}
+                  disabled={loadingUpdate}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-bold transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-5 h-5 ${loadingUpdate ? 'animate-spin' : ''}`} />
+                  {loadingUpdate ? 'Atualizando Provedores...' : 'Iniciar Atualização em Massa'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-} 
+}
