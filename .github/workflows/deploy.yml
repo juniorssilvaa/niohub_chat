@@ -83,7 +83,7 @@ jobs:
 
     - name: Node dependencies
       run: |
-        cd painel-provedor
+        cd painel-provedor/front
         pnpm install --no-frozen-lockfile
 
     - name: Run backend tests
@@ -109,7 +109,7 @@ jobs:
         VITE_WS_URL: "wss://api.niohub.com.br/ws"
         VITE_SUPERADMIN_APP_URL: ${{ secrets.VITE_SUPERADMIN_APP_URL }}
       run: |
-        cd painel-provedor
+        cd painel-provedor/front
         pnpm install --no-frozen-lockfile
         pnpm build
 
@@ -120,7 +120,7 @@ jobs:
         VITE_API_URL: "https://api.niohub.com.br/api"
         VITE_WS_URL: "wss://api.niohub.com.br/ws"
       run: |
-        cd superadmin
+        cd superadmin/front
         pnpm install --no-frozen-lockfile
         pnpm build
 
@@ -178,7 +178,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./superadmin/Dockerfile
+        file: ./superadmin/Dockerfile.frontend
         push: true
         build-args: |
           VITE_SUPABASE_URL=${{ secrets.SUPABASE_URL }}

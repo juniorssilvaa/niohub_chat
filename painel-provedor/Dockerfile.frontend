@@ -7,14 +7,14 @@ WORKDIR /app
 RUN npm install -g pnpm
 
 # Copiar arquivos principais
-COPY painel-provedor/package*.json ./
-COPY painel-provedor/pnpm-lock.yaml ./
+COPY painel-provedor/front/package*.json ./
+COPY painel-provedor/front/pnpm-lock.yaml ./
 
 # Instalar dependências
 RUN pnpm install --no-frozen-lockfile
 
 # Copiar app painel provedor
-COPY painel-provedor/ ./
+COPY painel-provedor/front/ ./
 
 # ---------- Variáveis recebidas do GitHub Actions ----------
 ARG VITE_SUPABASE_URL
