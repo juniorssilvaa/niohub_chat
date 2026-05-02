@@ -10,11 +10,18 @@ class IntegrationsConfig(AppConfig):
     
     def ready(self):
         """Importar tarefas Dramatiq quando o app estiver pronto"""
-        # Evitar iniciar serviços se estivermos rodando comandos de gerenciamento (migrate, etc)
+        # --- NOVA CHECAGEM ROBUSTA DE BANCO ---
         import sys
+        from django.db import connection
         is_manage_cmd = any(arg in sys.argv for arg in ['migrate', 'makemigrations', 'collectstatic', 'check', 'shell', 'test'])
-        if is_manage_cmd or (len(sys.argv) > 0 and sys.argv[0] == '-c'):
+        if is_manage_cmd:
             return
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1 FROM django_migrations LIMIT 1")
+        except Exception:
+            return
+        # --------------------------------------
 
         # Importar tarefas Dramatiq para garantir que os atores sejam registrados
         # Isso é necessário para que o worker do Dramatiq encontre os atores

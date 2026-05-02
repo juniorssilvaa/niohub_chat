@@ -15,12 +15,24 @@ class ConversationsConfig(AppConfig):
         except ImportError:
             pass
         
-        # Evitar iniciar serviços se estivermos rodando comandos de gerenciamento (migrate, etc)
+        # --- NOVA CHECAGEM ROBUSTA DE BANCO ---
         import sys
+        from django.db import connection
+        
+        # 1. Ignorar comandos óbvios de sistema
         is_manage_cmd = any(arg in sys.argv for arg in ['migrate', 'makemigrations', 'collectstatic', 'check', 'shell', 'test'])
-        if is_manage_cmd or (len(sys.argv) > 0 and sys.argv[0] == '-c'):
-            logger.info("[ConversationsConfig] Processo de setup detectado, pulando inicialização de background services.")
+        if is_manage_cmd:
             return
+
+        # 2. Verificar se o banco de dados está pronto e as tabelas básicas existem
+        try:
+            with connection.cursor() as cursor:
+                # Se esta query falhar, o banco não está pronto ou a tabela de migrações não existe
+                cursor.execute("SELECT 1 FROM django_migrations LIMIT 1")
+        except Exception:
+            logger.info("[ConversationsConfig] Banco de dados não inicializado ou migrações pendentes. Pulando serviços de background.")
+            return
+        # --------------------------------------
 
         # Iniciar o serviço de monitoramento de timeout nativo (back mesmo)
         try:
