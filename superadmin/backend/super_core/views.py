@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view, permission_classes as permission_classes_decorator
+from rest_framework.decorators import api_view, permission_classes as permission_classes_decorator, action
 from django.contrib.auth import authenticate
 from .models import Provedor, Canal, User, Company, AuditLog, MensagemSistema, BillingTemplate, SystemConfig
 from rest_framework import serializers
@@ -130,6 +130,46 @@ class ProvedorViewSet(viewsets.ModelViewSet):
     queryset = Provedor.objects.all()
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ProvedorSerializer
+    
+    @action(detail=False, methods=['get'], url_path='vps-pool')
+    def vps_pool(self, request):
+        try:
+            config = SystemConfig.objects.first()
+            if not config:
+                logger.warning("SystemConfig nao encontrado ao buscar VPS Pool.")
+                return Response([], status=200)
+            
+            token = config.payload.get('hetzner_api_token')
+            if not token:
+                logger.warning("Token da Hetzner (hetzner_api_token) nao encontrado no SystemConfig.")
+                return Response([], status=200)
+                
+            headers = {"Authorization": f"Bearer {token}"}
+            # Log para debug (mascarado)
+            masked_token = token[:6] + "..." + token[-4:] if token else "None"
+            logger.info(f"Buscando servidores na Hetzner com token: {masked_token}")
+            
+            response = requests.get("https://api.hetzner.cloud/v1/servers", headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            servers = response.json().get('servers', [])
+            vps_list = []
+            for s in servers:
+                # Pegar IP publico
+                ip = s.get('public_net', {}).get('ipv4', {}).get('ip', '')
+                
+                vps_list.append({
+                    "key": str(s.get('id')),
+                    "label": s.get('name'),
+                    "api_url": ip,
+                    "max_providers": 3
+                })
+            
+            logger.info(f"VPS Pool carregado: {len(vps_list)} servidores encontrados.")
+            return Response(vps_list)
+        except Exception as e:
+            logger.error(f"Erro ao buscar VPS na Hetzner: {e}")
+            return Response([], status=200)
 
     def perform_update(self, serializer):
         instance = self.get_object()

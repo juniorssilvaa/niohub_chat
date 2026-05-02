@@ -29,6 +29,7 @@ class Company(models.Model):
 
 class Provedor(models.Model):
     nome = models.CharField(max_length=200)
+    subdomain = models.CharField(max_length=100, unique=True, null=True, blank=True)
     site_oficial = models.URLField(null=True, blank=True)
     endereco = models.CharField(max_length=300, null=True, blank=True)
     email_contato = models.EmailField(null=True, blank=True)
@@ -71,6 +72,7 @@ class Provedor(models.Model):
     documentos_necessarios = models.TextField(null=True, blank=True)
     users_count = models.IntegerField(default=0)
     conversations_count = models.IntegerField(default=0)
+    integracoes_externas = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

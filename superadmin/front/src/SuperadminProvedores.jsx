@@ -3,9 +3,7 @@ import { Wifi, Search, Edit, Trash2, MoreVertical, Plus, Eye, Users, MessageCirc
 import axios from 'axios';
 import ReactDOM from 'react-dom';
 
-const FALLBACK_VPS_POOL = [
-  { key: 'legacy-main', label: 'VPS Principal (Legado)', api_url: '', max_providers: 3 },
-];
+const FALLBACK_VPS_POOL = [];
 
 const DEFAULT_VPS_CAPACITY = 3;
 const DEFAULT_PROVIDER_DOMAIN = String(import.meta.env.VITE_PROVIDER_BASE_DOMAIN || 'niohub.com.br').trim().toLowerCase();
