@@ -79,7 +79,7 @@ jobs:
     - name: Python dependencies
       run: |
         pip install --upgrade pip
-        pip install -r backend/requirements.txt
+        pip install -r painel-provedor/backend/requirements.txt
 
     - name: Node dependencies
       run: |
@@ -97,7 +97,7 @@ jobs:
         CI: true
         GITHUB_ACTIONS: true
       run: |
-        cd backend
+        cd painel-provedor/backend
         python manage.py migrate
         python manage.py test
 
@@ -152,7 +152,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile.backend
+        file: ./painel-provedor/Dockerfile.backend
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
@@ -162,7 +162,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile.frontend
+        file: ./painel-provedor/Dockerfile.frontend
         push: true
         build-args: |
           VITE_SUPABASE_URL=${{ secrets.SUPABASE_URL }}
@@ -204,7 +204,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile.dramatiq
+        file: ./painel-provedor/Dockerfile.dramatiq
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dramatiq:latest

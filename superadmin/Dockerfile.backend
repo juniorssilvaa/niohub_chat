@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy requirements
-COPY requirements.txt .
+COPY superadmin/backend/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -29,10 +29,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Go to backend directory
-WORKDIR /app/backend
+WORKDIR /app/superadmin/backend
 
 # Tornar scripts executáveis (para cron)
-RUN chmod +x backend/scripts/finalize_closing_cron.py || true
+RUN chmod +x scripts/finalize_closing_cron.py || true
 
 # ============================================
 # Create ENTRYPOINT script (GitHub Actions safe)
@@ -171,7 +171,7 @@ mkdir -p /var/log/niochat
 
 # Configurar cron
 echo "Configurando cron..."
-echo '*/2 * * * * cd /app/backend && python scripts/finalize_closing_cron.py >> /var/log/niochat/finalize_closing.log 2>&1' | crontab -
+echo '*/2 * * * * cd /app/superadmin/backend && python scripts/finalize_closing_cron.py >> /var/log/niochat/finalize_closing.log 2>&1' | crontab -
 
 echo "✅ Cron configurado. Executando a cada 2 minutos."
 echo "📋 Logs disponíveis em: /var/log/niochat/finalize_closing.log"
