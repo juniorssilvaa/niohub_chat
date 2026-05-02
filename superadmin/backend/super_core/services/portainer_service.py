@@ -3,7 +3,7 @@ import logging
 import os
 import re
 from django.conf import settings
-from ..models import SystemConfig
+from ..models import SystemConfig, User
 
 logger = logging.getLogger(__name__)
 
@@ -254,6 +254,11 @@ class PortainerService:
             {"name": "SUPERADMIN_API_URL", "value": os.getenv('SUPERADMIN_API_URL', 'https://api.niohub.com.br')},
             {"name": "SUPERADMIN_PROVEDOR_ID", "value": str(provedor.id)},
             {"name": "ADMIN_WEBHOOK_SECRET", "value": os.getenv('ADMIN_WEBHOOK_SECRET', '') or (SystemConfig.objects.first().payload.get('ADMIN_WEBHOOK_SECRET', '') if SystemConfig.objects.first() and SystemConfig.objects.first().payload else '')},
+            
+            # Primeiro Usuário Administrador
+            {"name": "INITIAL_ADMIN_USERNAME", "value": User.objects.filter(provedor=provedor).first().username if User.objects.filter(provedor=provedor).exists() else ""},
+            {"name": "INITIAL_ADMIN_EMAIL", "value": User.objects.filter(provedor=provedor).first().email if User.objects.filter(provedor=provedor).exists() else ""},
+            {"name": "INITIAL_ADMIN_PASSWORD", "value": "NioChat@2024"}, # Senha padrão temporária ou podemos tentar recuperar o hash (mas criar novo é melhor)
             
             {"name": "ALLOWED_HOSTS", "value": f"127.0.0.1,localhost,api.niohub.com.br,chat.niohub.com.br,{subdomain}"},
             {"name": "CORS_ALLOWED_ORIGINS", "value": f"https://chat.niohub.com.br,https://api.niohub.com.br,https://docs.niohub.com.br,{base_url}"},
