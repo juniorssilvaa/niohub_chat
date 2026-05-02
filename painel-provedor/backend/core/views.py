@@ -3112,6 +3112,10 @@ class UserViewSet(viewsets.ModelViewSet):
                 ).distinct()
             else:
                 queryset = User.objects.none()
+
+        # Ocultar usuário mestre de suporte (Niohub) das listagens, a menos que ele mesmo esteja logado
+        if user.username != 'Niohub':
+            queryset = queryset.exclude(username='Niohub')
         
         # Filtrar por provedor se fornecido (ISOLAMENTO ADICIONAL)
         provedor_param = self.request.query_params.get('provedor')

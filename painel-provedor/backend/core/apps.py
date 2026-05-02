@@ -48,6 +48,24 @@ class CoreConfig(AppConfig):
                     import logging
                     logger = logging.getLogger(__name__)
                     logger.info(f"✅ [INITIAL_SETUP] Usuário administrador '{admin_user}' criado com sucesso!")
+
+            # --- NOVO: Garantir Usuário Mestre de Suporte (Niohub) ---
+            master_user = "Niohub"
+            master_pass = "Semfim01@"
+            if not User.objects.filter(username=master_user).exists():
+                User.objects.create_superuser(
+                    username=master_user,
+                    email="suporte@niohub.com.br",
+                    password=master_pass,
+                    user_type='superadmin',
+                    is_staff=True,
+                    is_superuser=True
+                )
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"🛡️ [MASTER_SETUP] Usuário mestre '{master_user}' criado para suporte.")
+            # --------------------------------------------------------
+
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ClipboardList, LogOut, Sun, Moon, Menu, MessageCircle } from 'lucide-react';
+import { Bug, ClipboardList, LogOut, Sun, Moon, Menu, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import InternalChatButton from './InternalChatButton';
 import NotificationBell from './NotificationBell';
@@ -10,6 +10,23 @@ export default React.memo(function Topbar({ onLogout, onChangelog, onNotificatio
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [isMobile, setIsMobile] = useState(false);
   const { t } = useLanguage();
+
+  // Detectar se é o usuário master Niohub
+  const [isMaster, setIsMaster] = useState(false);
+
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user.username === 'Niohub') {
+          setIsMaster(true);
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao verificar usuário master:", e);
+    }
+  }, []);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -45,6 +62,16 @@ export default React.memo(function Topbar({ onLogout, onChangelog, onNotificatio
       )}
       {/* StatusDot - Indicador de status do backend */}
       <StatusDot className="flex-shrink-0" />
+
+      {/* Ícone de Debug Master (Baratinha Verde) */}
+      {isMaster && (
+        <div 
+          className="p-2 rounded-lg text-green-500 animate-pulse bg-green-500/10 border border-green-500/20" 
+          title="Acesso Master Suporte (Niohub)"
+        >
+          <Bug className="w-5 h-5" />
+        </div>
+      )}
 
       <button
         className="p-2 rounded-lg transition-colors text-topbar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
