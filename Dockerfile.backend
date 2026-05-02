@@ -44,13 +44,13 @@ set -e
 echo "Starting NioChat Backend..."
 
 # Extrair host e porta para o teste de conexão
-if [ -n "$DATABASE_URL" ]; then
+if [ -n "$POSTGRES_HOST" ]; then
+    DB_HOST="$POSTGRES_HOST"
+    DB_PORT="${POSTGRES_PORT:-5432}"
+elif [ -n "$DATABASE_URL" ]; then
     DB_HOST=$(echo $DATABASE_URL | sed -e 's|.*@||' -e 's|/.*||' -e 's|:.*||')
     DB_PORT=$(echo $DATABASE_URL | sed -e 's|.*:||' -e 's|/.*||')
     [[ ! "$DB_PORT" =~ ^[0-9]+$ ]] && DB_PORT=5432
-elif [ -n "$POSTGRES_HOST" ]; then
-    DB_HOST="$POSTGRES_HOST"
-    DB_PORT="${POSTGRES_PORT:-5432}"
 else
     DB_HOST="postgres"
     DB_PORT=5432
@@ -145,13 +145,13 @@ set -e
 
 echo "Starting NioChat Cron Service..."
 
-if [ -n "$DATABASE_URL" ]; then
+if [ -n "$POSTGRES_HOST" ]; then
+    DB_HOST="$POSTGRES_HOST"
+    DB_PORT="${POSTGRES_PORT:-5432}"
+elif [ -n "$DATABASE_URL" ]; then
     DB_HOST=$(echo $DATABASE_URL | sed -e 's|.*@||' -e 's|/.*||' -e 's|:.*||')
     DB_PORT=$(echo $DATABASE_URL | sed -e 's|.*:||' -e 's|/.*||')
     [[ ! "$DB_PORT" =~ ^[0-9]+$ ]] && DB_PORT=5432
-elif [ -n "$POSTGRES_HOST" ]; then
-    DB_HOST="$POSTGRES_HOST"
-    DB_PORT="${POSTGRES_PORT:-5432}"
 else
     DB_HOST="postgres"
     DB_PORT=5432

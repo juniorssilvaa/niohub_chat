@@ -1,0 +1,143 @@
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.conf import settings
+
+class User(AbstractUser):
+    USER_TYPES = [
+        ('superadmin', 'Super Administrador'),
+        ('admin', 'Administrador'),
+        ('agent', 'Atendente'),
+    ]
+    user_type = models.CharField(max_length=20, choices=USER_TYPES, default='agent')
+    provedor = models.ForeignKey('Provedor', on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
+    is_online = models.BooleanField(default=False)
+    last_seen = models.DateTimeField(null=True, blank=True)
+    permissions = models.JSONField(default=list, blank=True)
+    session_timeout = models.IntegerField(default=30)
+
+class Company(models.Model):
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    email = models.EmailField(null=True, blank=True)
+    phone = models.CharField(max_length=30, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+class Provedor(models.Model):
+    nome = models.CharField(max_length=200)
+    site_oficial = models.URLField(null=True, blank=True)
+    endereco = models.CharField(max_length=300, null=True, blank=True)
+    email_contato = models.EmailField(null=True, blank=True)
+    bot_mode = models.CharField(max_length=20, default='ia')
+    is_active = models.BooleanField(default=True)
+    status = models.CharField(max_length=30, default='ativo')
+    cpf_cnpj = models.CharField(max_length=30, null=True, blank=True)
+    phone = models.CharField(max_length=30, null=True, blank=True)
+    mobile_phone = models.CharField(max_length=30, null=True, blank=True)
+    address_number = models.CharField(max_length=30, null=True, blank=True)
+    complement = models.CharField(max_length=255, null=True, blank=True)
+    province = models.CharField(max_length=100, null=True, blank=True)
+    postal_code = models.CharField(max_length=20, null=True, blank=True)
+    group_name = models.CharField(max_length=100, null=True, blank=True)
+    company = models.CharField(max_length=200, null=True, blank=True)
+    municipal_inscription = models.CharField(max_length=50, null=True, blank=True)
+    state_inscription = models.CharField(max_length=50, null=True, blank=True)
+    observations = models.TextField(null=True, blank=True)
+    additional_emails = models.TextField(null=True, blank=True)
+    notification_disabled = models.BooleanField(default=False)
+    foreign_customer = models.BooleanField(default=False)
+    asaas_customer_id = models.CharField(max_length=60, null=True, blank=True)
+    asaas_subscription_id = models.CharField(max_length=60, null=True, blank=True)
+    subscription_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    subscription_cycle = models.CharField(max_length=20, default='MONTHLY', null=True, blank=True)
+    subscription_billing_type = models.CharField(max_length=30, default='BOLETO', null=True, blank=True)
+    subscription_status = models.CharField(max_length=30, default='PENDING', null=True, blank=True)
+    subscription_next_due_date = models.DateField(null=True, blank=True)
+    redes_sociais = models.JSONField(default=dict, blank=True)
+    nome_agente_ia = models.CharField(max_length=100, null=True, blank=True)
+    estilo_personalidade = models.CharField(max_length=60, null=True, blank=True)
+    modo_falar = models.CharField(max_length=100, null=True, blank=True)
+    uso_emojis = models.CharField(max_length=20, null=True, blank=True)
+    personalidade = models.TextField(null=True, blank=True)
+    taxa_adesao = models.CharField(max_length=100, null=True, blank=True)
+    inclusos_plano = models.TextField(null=True, blank=True)
+    multa_cancelamento = models.CharField(max_length=200, null=True, blank=True)
+    tipo_conexao = models.CharField(max_length=100, null=True, blank=True)
+    prazo_instalacao = models.CharField(max_length=100, null=True, blank=True)
+    documentos_necessarios = models.TextField(null=True, blank=True)
+    users_count = models.IntegerField(default=0)
+    conversations_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nome']
+
+class Canal(models.Model):
+    nome = models.CharField(max_length=100, default='')
+    tipo = models.CharField(max_length=50, default='telegram')
+    provedor = models.ForeignKey(Provedor, on_delete=models.CASCADE, related_name='canais')
+    ativo = models.BooleanField(default=True)
+    dados_extras = models.JSONField(default=dict, blank=True)
+    instance_id = models.CharField(max_length=255, null=True, blank=True)
+    api_key = models.CharField(max_length=255, null=True, blank=True)
+    api_id = models.CharField(max_length=255, null=True, blank=True)
+    api_hash = models.CharField(max_length=255, null=True, blank=True)
+    app_title = models.CharField(max_length=200, null=True, blank=True)
+    short_name = models.CharField(max_length=100, null=True, blank=True)
+    verification_code = models.CharField(max_length=20, null=True, blank=True)
+    phone_number = models.CharField(max_length=30, null=True, blank=True)
+    email = models.EmailField(null=True, blank=True)
+    smtp_host = models.CharField(max_length=255, null=True, blank=True)
+    smtp_port = models.CharField(max_length=10, null=True, blank=True)
+    url = models.URLField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nome']
+
+class AuditLog(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=60, default='view')
+    details = models.TextField(default='', blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+class MensagemSistema(models.Model):
+    assunto = models.CharField(max_length=200, default='', blank=True)
+    mensagem = models.TextField(default='', blank=True)
+    provedores = models.JSONField(default=list, blank=True)
+    tipo = models.CharField(max_length=30, default='notificacao')
+    visivel_para_agentes = models.BooleanField(default=True)
+    visualizacoes = models.JSONField(default=dict, blank=True)
+    visualizacoes_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+class BillingTemplate(models.Model):
+    template_id = models.CharField(max_length=120, unique=True)
+    name = models.CharField(max_length=120)
+    category = models.CharField(max_length=30, default='UTILITY')
+    language = models.CharField(max_length=20, default='pt_BR')
+    status = models.CharField(max_length=30, default='PENDING')
+    body_text = models.TextField(default='', blank=True)
+    components = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+class SystemConfig(models.Model):
+    payload = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
