@@ -69,14 +69,14 @@ if os.environ.get('DATABASE_URL'):
             conn_health_checks=True,
         )
     }
-elif os.environ.get('POSTGRES_DB'):
+elif os.environ.get('POSTGRES_HOST') or os.environ.get('POSTGRES_DB'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('POSTGRES_DB'),
-            'USER': os.environ.get('POSTGRES_USER'),
-            'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
-            'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+            'NAME': os.environ.get('POSTGRES_DB') or 'niohub_superadmin',
+            'USER': os.environ.get('POSTGRES_USER') or 'niohub',
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD') or 'NiohubSuperadmin@2026',
+            'HOST': os.environ.get('POSTGRES_HOST', 'superadmin-postgres'),
             'PORT': os.environ.get('POSTGRES_PORT', '5432'),
         }
     }
