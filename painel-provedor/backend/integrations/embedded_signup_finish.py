@@ -261,7 +261,20 @@ def process_embedded_signup_finish(
 
         canal.ativo = True
         canal.save()
-        
+
+        # ─── Notificar Superadmin sobre o canal conectado (background) ────────
+        # O Superadmin precisa saber o waba_id para rotear webhooks corretamente.
+        # Executado em thread daemon para não bloquear a resposta ao provedor.
+        if canal.waba_id and canal.status in ("connected", "pending"):
+            import threading
+            from integrations.superadmin_notifier import notify_superadmin_channel_connected
+            t = threading.Thread(
+                target=notify_superadmin_channel_connected,
+                args=(canal,),
+                daemon=True
+            )
+            t.start()
+
         return True, canal, None
     except Exception as e:
         logger.error(f"[EmbeddedSignup] Erro crítico no finish: {str(e)}", exc_info=True)

@@ -13,9 +13,7 @@ export default function Topbar({ onLogout, onChangelog }) {
 
   return (
     <header className="h-14 border-b border-border bg-topbar px-6 py-2 flex items-center justify-between">
-      <div>
-        <h1 className="text-lg font-semibold text-topbar-foreground">Painel Superadmin</h1>
-      </div>
+      <div />
 
       <div className="flex items-center gap-4">
         <StatusDot />

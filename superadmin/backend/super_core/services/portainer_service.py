@@ -3,6 +3,7 @@ import logging
 import os
 import re
 from django.conf import settings
+from ..models import SystemConfig
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +249,12 @@ class PortainerService:
             {"name": "VITE_API_URL", "value": base_url},
             {"name": "VITE_SUPABASE_URL", "value": supabase_url},
             {"name": "VITE_SUPABASE_ANON_KEY", "value": supabase_key},
+
+            # Integração com Superadmin (Centralização de Webhooks)
+            {"name": "SUPERADMIN_API_URL", "value": os.getenv('SUPERADMIN_API_URL', 'https://api.niohub.com.br')},
+            {"name": "SUPERADMIN_PROVEDOR_ID", "value": str(provedor.id)},
+            {"name": "ADMIN_WEBHOOK_SECRET", "value": os.getenv('ADMIN_WEBHOOK_SECRET', '') or (SystemConfig.objects.first().payload.get('ADMIN_WEBHOOK_SECRET', '') if SystemConfig.objects.first() and SystemConfig.objects.first().payload else '')},
+            
             {"name": "ALLOWED_HOSTS", "value": f"127.0.0.1,localhost,api.niohub.com.br,chat.niohub.com.br,{subdomain}"},
             {"name": "CORS_ALLOWED_ORIGINS", "value": f"https://chat.niohub.com.br,https://api.niohub.com.br,https://docs.niohub.com.br,{base_url}"},
             {"name": "CSRF_TRUSTED_ORIGINS", "value": f"https://chat.niohub.com.br,https://api.niohub.com.br,https://docs.niohub.com.br,{base_url}"},

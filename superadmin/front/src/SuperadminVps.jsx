@@ -21,7 +21,8 @@ export default function SuperadminVps() {
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'registry'
   const [registryConfig, setRegistryConfig] = useState({
     github_username: '',
-    github_pat: ''
+    github_pat: '',
+    admin_webhook_secret: ''
   });
   const [loadingConfig, setLoadingConfig] = useState(false);
 
@@ -58,7 +59,8 @@ export default function SuperadminVps() {
       if (res.data) {
         setRegistryConfig({
           github_username: res.data.github_username || '',
-          github_pat: res.data.github_pat || ''
+          github_pat: res.data.github_pat || '',
+          admin_webhook_secret: res.data.ADMIN_WEBHOOK_SECRET || ''
         });
       }
     } catch (err) {
@@ -88,7 +90,8 @@ export default function SuperadminVps() {
       const newPayload = {
         ...currentPayload,
         github_username: registryConfig.github_username,
-        github_pat: registryConfig.github_pat
+        github_pat: registryConfig.github_pat,
+        ADMIN_WEBHOOK_SECRET: registryConfig.admin_webhook_secret
       };
 
       // A SystemConfigView usa PUT para criar ou atualizar o primeiro registro
@@ -361,6 +364,20 @@ export default function SuperadminVps() {
                   />
                   <p className="text-[10px] text-gray-500 mt-2">
                     Crie um token com a permissão <code>read:packages</code> no GitHub.
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-border">
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-gray-400">Webhook Secret (Segurança de Integração)</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-4 py-3 rounded-lg bg-[#181b20] text-white border border-border focus:ring-2 focus:ring-primary/50 outline-none transition"
+                    value={registryConfig.admin_webhook_secret}
+                    onChange={e => setRegistryConfig({...registryConfig, admin_webhook_secret: e.target.value})}
+                    placeholder="Chave secreta para validar comunicações entre Provedor e Superadmin"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-2">
+                    Esta chave será enviada automaticamente para o arquivo <code>.env</code> dos provedores para validar webhooks e registros de canal.
                   </p>
                 </div>
               </div>

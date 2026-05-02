@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .webhook_dispatcher import whatsapp_dispatcher, provider_channel_register
 
 router = DefaultRouter()
 router.register(r'vps-servers', views.VpsServerViewSet, basename='vps-servers')
@@ -21,5 +22,9 @@ urlpatterns = [
     path('health/', views.health_view, name='health'),
     path('system-config/', views.SystemConfigView.as_view(), name='system-config'),
     path('system-config/<int:pk>/', views.SystemConfigView.as_view(), name='system-config-detail'),
+    # ─── Webhook Central (Meta → Superadmin → Provedor) ───────────────────────
+    path('webhook/whatsapp-cloud/', whatsapp_dispatcher, name='whatsapp_dispatcher'),
+    # ─── Registro de Canal pelo Provedor ──────────────────────────────────────
+    path('webhooks/provider/channel-register/', provider_channel_register, name='provider_channel_register'),
     path('', include(router.urls)),
 ]

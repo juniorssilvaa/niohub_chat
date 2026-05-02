@@ -8,11 +8,10 @@ const menu = [
   { key: 'canais', label: 'Canais', icon: <MessageCircle size={20} /> },
   { key: 'auditoria', label: 'Auditoria', icon: <Eye size={20} /> },
   { key: 'usuarios-sistema', label: 'Usuários do Sistema', icon: <Users size={20} /> },
-  { key: 'configuracoes', label: 'Configurações do Sistema', icon: <Settings size={20} /> },
   { key: 'integracoes', label: 'Integrações', icon: <Link2 size={20} /> },
   { key: 'vps', label: 'Servidores VPS', icon: <Server size={20} /> },
   { key: 'mensagem', label: 'Enviar Mensagem', icon: <Megaphone size={20} /> },
-  { key: 'painel-empresa', label: 'Meu Painel de Empresa', icon: <User size={20} /> },
+  { key: 'configuracoes', label: 'Configurações do Sistema', icon: <Settings size={20} /> },
 ];
 
 export default function SuperadminSidebar({ onLogout }) {
