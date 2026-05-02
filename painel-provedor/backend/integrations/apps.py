@@ -10,6 +10,12 @@ class IntegrationsConfig(AppConfig):
     
     def ready(self):
         """Importar tarefas Dramatiq quando o app estiver pronto"""
+        # Evitar iniciar serviços se estivermos rodando comandos de gerenciamento (migrate, etc)
+        import sys
+        is_manage_cmd = any(arg in sys.argv for arg in ['migrate', 'makemigrations', 'collectstatic', 'check', 'shell', 'test'])
+        if is_manage_cmd or (len(sys.argv) > 0 and sys.argv[0] == '-c'):
+            return
+
         # Importar tarefas Dramatiq para garantir que os atores sejam registrados
         # Isso é necessário para que o worker do Dramatiq encontre os atores
         try:

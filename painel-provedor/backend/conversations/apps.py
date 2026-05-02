@@ -15,6 +15,13 @@ class ConversationsConfig(AppConfig):
         except ImportError:
             pass
         
+        # Evitar iniciar serviços se estivermos rodando comandos de gerenciamento (migrate, etc)
+        import sys
+        is_manage_cmd = any(arg in sys.argv for arg in ['migrate', 'makemigrations', 'collectstatic', 'check', 'shell', 'test'])
+        if is_manage_cmd or (len(sys.argv) > 0 and sys.argv[0] == '-c'):
+            logger.info("[ConversationsConfig] Processo de setup detectado, pulando inicialização de background services.")
+            return
+
         # Iniciar o serviço de monitoramento de timeout nativo (back mesmo)
         try:
             from conversations.chatbot_timeout_service import chatbot_timeout_service
