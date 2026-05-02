@@ -147,8 +147,8 @@ jobs:
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
-        # Usar o token nativo do GitHub Actions que tem permissão de escrita
-        password: ${{ secrets.GITHUB_TOKEN }}
+        # Usando o token manual atualizado pelo usuário
+        password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build & push BACKEND
       uses: docker/build-push-action@v5
