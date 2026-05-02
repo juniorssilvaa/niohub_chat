@@ -97,7 +97,8 @@ class PortainerService:
                 # UPDATE STACK
                 logger.info(f"Atualizando stack existente: {stack_name}")
                 stack_id = existing_stack['Id']
-                update_url = f"{self.api_url}/api/stacks/{stack_id}?endpointId={self.endpoint_id}"
+                # pullImage=true na URL força o Portainer a baixar a imagem nova do Registry (GHCR)
+                update_url = f"{self.api_url}/api/stacks/{stack_id}?endpointId={self.endpoint_id}&pullImage=true"
                 
                 payload = {
                     "stackFileContent": compose_content,
@@ -106,27 +107,29 @@ class PortainerService:
                     "pullImage": True
                 }
                 
-                response = requests.put(update_url, json=payload, headers=self.headers, timeout=60, verify=False)
+                response = requests.put(update_url, json=payload, headers=self.headers, timeout=90, verify=False)
             else:
                 # CREATE STACK
                 swarm_id = self._get_swarm_id()
                 
                 if swarm_id:
                     logger.info(f"Criando nova stack (Modo Swarm): {stack_name}")
-                    create_url = f"{self.api_url}/api/stacks/create/swarm/string?endpointId={self.endpoint_id}"
+                    create_url = f"{self.api_url}/api/stacks/create/swarm/string?endpointId={self.endpoint_id}&pullImage=true"
                     payload = {
                         "name": stack_name,
                         "swarmID": swarm_id,
                         "stackFileContent": compose_content,
-                        "env": self._get_env_vars(provedor, slug)
+                        "env": self._get_env_vars(provedor, slug),
+                        "pullImage": True
                     }
                 else:
                     logger.info(f"Criando nova stack (Modo Standalone): {stack_name} (SwarmID não detectado)")
-                    create_url = f"{self.api_url}/api/stacks/create/standalone/string?endpointId={self.endpoint_id}"
+                    create_url = f"{self.api_url}/api/stacks/create/standalone/string?endpointId={self.endpoint_id}&pullImage=true"
                     payload = {
                         "name": stack_name,
                         "stackFileContent": compose_content,
-                        "env": self._get_env_vars(provedor, slug)
+                        "env": self._get_env_vars(provedor, slug),
+                        "pullImage": True
                     }
                 
                 response = requests.post(create_url, json=payload, headers=self.headers, timeout=60, verify=False)
