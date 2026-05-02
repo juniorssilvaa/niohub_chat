@@ -67,6 +67,25 @@ echo "✅ PostgreSQL disponível!"
 
 echo "Running migrations..."
 echo "Running migrations..."
+# Auto-fix para banco corrompido pela falta do __init__.py em execuções anteriores
+python -c "
+import os, django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'niochat_sa.settings')
+django.setup()
+from django.db import connection
+
+with connection.cursor() as cursor:
+    cursor.execute(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'django_migrations')\")
+    has_migrations = cursor.fetchone()[0]
+    cursor.execute(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'super_core_user')\")
+    has_users = cursor.fetchone()[0]
+
+    if has_migrations and not has_users:
+        print('[FIX] Banco corrompido detectado (migrations aplicadas sem super_core). Limpando schema public...')
+        cursor.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;')
+        print('[FIX] Schema recriado com sucesso.')
+"
+
 python manage.py migrate --noinput
 
 echo "Collecting static files..."
