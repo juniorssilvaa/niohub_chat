@@ -67,64 +67,6 @@ echo "✅ PostgreSQL disponível!"
 
 echo "Running migrations..."
 echo "Running migrations..."
-# Sincronização inteligente do histórico de migrações com a realidade física do banco
-python -c "
-import os, django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'niochat_sa.settings')
-django.setup()
-from django.db import connection
-
-def column_exists(table, column):
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = %s AND column_name = %s)', [table, column])
-        return cursor.fetchone()[0]
-
-def table_exists(table):
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)', [table])
-        return cursor.fetchone()[0]
-
-# Mapeamento: (nome_migracao, condicao_de_existencia_fisica)
-checks = [
-    ('0058_add_openai_transcription_api_key', column_exists('core_systemconfig', 'openai_transcription_api_key')),
-    ('0061_canal_ia_ativa', column_exists('core_canal', 'ia_ativa')),
-    ('0062_chatbotflow', table_exists('core_chatbotflow')),
-    ('0063_add_bot_mode_to_provedor', column_exists('core_provedor', 'bot_mode')),
-    ('0067_add_canal_to_chatbotflow', column_exists('core_chatbotflow', 'canal_id')),
-    ('0070_add_asaas_fields', column_exists('core_systemconfig', 'asaas_access_token')),
-    ('0071_provedor_asaas_details', column_exists('core_provedor', 'asaas_customer_id')),
-    ('0072_provedor_subscription_fields', column_exists('core_provedor', 'asaas_subscription_id')),
-    ('0073_provedor_subscription_next_due_date', column_exists('core_provedor', 'subscription_next_due_date')),
-]
-
-with connection.cursor() as cursor:
-    cursor.execute(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'django_migrations')\")
-    has_migrations_table = cursor.fetchone()[0]
-
-if not has_migrations_table:
-    print('[MIGRATE-FIX] django_migrations ainda não existe (banco novo). Pulando sincronização pré-migrate.')
-else:
-    with connection.cursor() as cursor:
-        # 1. Garantir migrações base que fundamentam o resto
-        for name in ['0055_1_alter_provedor_redes_sociais_default', '0055_add_more']:
-            cursor.execute(
-                'INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)',
-                ['core', name, 'core', name]
-            )
-        
-        # 2. Sincronizar migrações problemáticas baseadas na realidade física
-        for name, exists in checks:
-            if exists:
-                cursor.execute(
-                    'INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)',
-                    ['core', name, 'core', name]
-                )
-                print(f'[MIGRATE-FIX] {name} garantida no historico (existe fisicamente).')
-            else:
-                cursor.execute(\"DELETE FROM django_migrations WHERE app='core' AND name=%s\", [name])
-                print(f'[MIGRATE-FIX] {name} removida do historico (NAO existe fisicamente).')
-        connection.commit()
-"
 python manage.py migrate --noinput
 
 echo "Collecting static files..."
