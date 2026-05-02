@@ -70,7 +70,7 @@ echo "Running migrations..."
 # Sincronização inteligente do histórico de migrações com a realidade física do banco
 python -c "
 import os, django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'niochat.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'niochat_sa.settings')
 django.setup()
 from django.db import connection
 
@@ -193,4 +193,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 ENTRYPOINT ["/app/entrypoint.sh"]
 
 # Default command → Daphne WebSocket/HTTP
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8010", "niochat.asgi:application"]
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8010", "niochat_sa.asgi:application"]
