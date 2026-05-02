@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 
 router = DefaultRouter()
+router.register(r'vps-servers', views.VpsServerViewSet, basename='vps-servers')
 router.register(r'provedores', views.ProvedorViewSet, basename='provedores')
 router.register(r'canais', views.CanalViewSet, basename='canais')
 router.register(r'companies', views.CompanyViewSet, basename='companies')

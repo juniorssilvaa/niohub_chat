@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BarChart2, MessageCircle, Eye, Users, Database, Megaphone, User, LogOut, Wifi, Settings, Link2 } from 'lucide-react';
+import { BarChart2, MessageCircle, Eye, Users, Database, Megaphone, User, LogOut, Wifi, Settings, Link2, Server } from 'lucide-react';
 
 const menu = [
   { key: 'dashboard', label: 'Dashboard', icon: <BarChart2 size={20} /> },
@@ -10,6 +10,7 @@ const menu = [
   { key: 'usuarios-sistema', label: 'Usuários do Sistema', icon: <Users size={20} /> },
   { key: 'configuracoes', label: 'Configurações do Sistema', icon: <Settings size={20} /> },
   { key: 'integracoes', label: 'Integrações', icon: <Link2 size={20} /> },
+  { key: 'vps', label: 'Servidores VPS', icon: <Server size={20} /> },
   { key: 'mensagem', label: 'Enviar Mensagem', icon: <Megaphone size={20} /> },
   { key: 'painel-empresa', label: 'Meu Painel de Empresa', icon: <User size={20} /> },
 ];

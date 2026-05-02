@@ -327,8 +327,17 @@ export default function SuperadminProvedores() {
         vps_api_url: currentSelectedVps.api_url || '',
         subdomain: normalizedSubdomain,
       };
+      
+      payload.vps = currentSelectedVps.key; // Vincula o ID da VPS
+      payload.subdomain = normalizedSubdomain; // Vincula o subdomínio direto
+      
       delete payload.vps_key;
-      delete payload.subdomain;
+      // delete payload.subdomain; // Removido para manter no payload principal
+
+      // Limpar campos de data vazios para evitar erro de validação do Django
+      if (!payload.subscription_next_due_date) delete payload.subscription_next_due_date;
+      if (!payload.asaas_subscription_id) delete payload.asaas_subscription_id;
+      if (!payload.asaas_customer_id) delete payload.asaas_customer_id;
 
       console.log('[DEBUG SuperadminProvedores] Criando novo provedor:', payload);
 
@@ -385,6 +394,8 @@ export default function SuperadminProvedores() {
         tipo_conexao: '',
         prazo_instalacao: '',
         documentos_necessarios: '',
+        vps_key: normalizedVpsPool[0]?.key || '',
+        subdomain: '',
         vps_key: normalizedVpsPool[0]?.key || '',
         subdomain: '',
       });
@@ -467,7 +478,18 @@ export default function SuperadminProvedores() {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.patch(`/api/provedores/${editProvedorForm.id}/`, editProvedorForm, {
+      
+      const payload = { ...editProvedorForm };
+      
+      // Buscar o objeto original do provedor para preservar outras integracoes
+      const originalProvedor = provedoresState.find(p => p.id === payload.id);
+      const ext = originalProvedor?.integracoes_externas || {};
+      
+      payload.integracoes_externas = {
+        ...ext,
+      };
+      
+      await axios.patch(`/api/provedores/${editProvedorForm.id}/`, payload, {
         headers: { Authorization: `Token ${token}` }
       });
 
@@ -646,6 +668,19 @@ export default function SuperadminProvedores() {
       await fetchStats();
     } catch (err) {
       alert('Erro ao excluir provedor!');
+    }
+  };
+
+  const handleDeploy = async (provedorId) => {
+    if (!confirm('Deseja iniciar o deploy automático para este provedor?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`/api/provedores/${provedorId}/deploy/`, {}, {
+        headers: { Authorization: `Token ${token}` }
+      });
+      alert('Deploy iniciado! O status será atualizado em breve.');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao iniciar deploy.');
     }
   };
 
@@ -1408,6 +1443,12 @@ export default function SuperadminProvedores() {
           </button>
           <button className="flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-muted text-sm" onClick={e => { e.stopPropagation(); handleEditProvedor(filteredProvedores.find(p => p.id === menuId)); setMenuId(null); }}>
             <Edit className="w-4 h-4" /> Editar
+          </button>
+          <button 
+            className="flex items-center gap-2 w-full px-3 py-1.5 text-left bg-primary/20 hover:bg-primary/30 text-primary-foreground text-sm font-bold" 
+            onClick={e => { e.stopPropagation(); handleDeploy(menuId); setMenuId(null); }}
+          >
+            <Plus className="w-4 h-4" /> Iniciar Deploy
           </button>
           <div className="border-t border-border my-1"></div>
           <button className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-orange-600 hover:bg-muted text-sm" onClick={e => { e.stopPropagation(); handleOpenLimpezaModal(filteredProvedores.find(p => p.id === menuId)); setMenuId(null); }}>

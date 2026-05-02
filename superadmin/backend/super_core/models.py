@@ -2,6 +2,26 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 
+class VpsServer(models.Model):
+    name = models.CharField(max_length=100)
+    api_url = models.URLField(help_text="Ex: https://vps1.niohub.com.br:9443")
+    portainer_api_key = models.CharField(max_length=255)
+    endpoint_id = models.IntegerField(default=1)
+    max_capacity = models.IntegerField(default=3)
+    redis_host = models.CharField(max_length=255, default='localhost')
+    redis_password = models.CharField(max_length=255, blank=True)
+    rabbitmq_url = models.CharField(max_length=255, default='amqp://guest:guest@localhost:5672/')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Servidor VPS"
+        verbose_name_plural = "Servidores VPS"
+
 class User(AbstractUser):
     USER_TYPES = [
         ('superadmin', 'Super Administrador'),
@@ -29,6 +49,8 @@ class Company(models.Model):
 
 class Provedor(models.Model):
     nome = models.CharField(max_length=200)
+    vps = models.ForeignKey(VpsServer, on_delete=models.SET_NULL, null=True, blank=True, related_name='provedores')
+
     subdomain = models.CharField(max_length=100, unique=True, null=True, blank=True)
     site_oficial = models.URLField(null=True, blank=True)
     endereco = models.CharField(max_length=300, null=True, blank=True)

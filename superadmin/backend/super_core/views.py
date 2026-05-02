@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes as permission_classes_decorator, action
 from django.contrib.auth import authenticate
-from .models import Provedor, Canal, User, Company, AuditLog, MensagemSistema, BillingTemplate, SystemConfig
+from .models import Provedor, Canal, User, Company, AuditLog, MensagemSistema, BillingTemplate, SystemConfig, VpsServer
 from rest_framework import serializers
 
 class UserSerializer(serializers.ModelSerializer):
@@ -12,9 +12,20 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         exclude = ['password']
 
+class VpsServerSerializer(serializers.ModelSerializer):
+    providers_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = VpsServer
+        fields = '__all__'
+        
+    def get_providers_count(self, obj):
+        return obj.provedores.count()
+
 class ProvedorSerializer(serializers.ModelSerializer):
     users_count = serializers.SerializerMethodField()
     conversations_count = serializers.SerializerMethodField()
+    vps_name = serializers.ReadOnlyField(source='vps.name')
 
     class Meta:
         model = Provedor
@@ -147,25 +158,39 @@ class ProvedorViewSet(viewsets.ModelViewSet):
             headers = {"Authorization": f"Bearer {token}"}
             # Log para debug (mascarado)
             masked_token = token[:6] + "..." + token[-4:] if token else "None"
-            logger.info(f"Buscando servidores na Hetzner com token: {masked_token}")
+            logger.info(f"Buscando servidores na Hetzner...")
             
-            response = requests.get("https://api.hetzner.cloud/v1/servers", headers=headers, timeout=10)
-            response.raise_for_status()
-            
-            servers = response.json().get('servers', [])
+            # 1. Pegar VPS cadastradas no nosso banco
+            registered_vps = VpsServer.objects.filter(is_active=True)
             vps_list = []
-            for s in servers:
-                # Pegar IP publico
-                ip = s.get('public_net', {}).get('ipv4', {}).get('ip', '')
-                
+            for v in registered_vps:
                 vps_list.append({
-                    "key": str(s.get('id')),
-                    "label": s.get('name'),
-                    "api_url": ip,
-                    "max_providers": 3
+                    "key": str(v.id),
+                    "label": f"{v.name}",
+                    "api_url": v.api_url,
+                    "max_providers": v.max_capacity,
+                    "is_registered": True
                 })
+
+            # 2. Pegar da Hetzner (para sugestão)
+            response = requests.get("https://api.hetzner.cloud/v1/servers", headers=headers, timeout=10)
+            if response.status_code == 200:
+                servers = response.json().get('servers', [])
+                # Pegar IPs das VPS cadastradas para não duplicar
+                registered_ips = [v.api_url.split('//')[-1].split(':')[0] for v in registered_vps]
+                
+                for s in servers:
+                    ip = s.get('public_net', {}).get('ipv4', {}).get('ip', '')
+                    if ip not in registered_ips:
+                        vps_list.append({
+                            "key": f"hetzner-{s.get('id')}",
+                            "label": f"{s.get('name')} (Hetzner - Não Cadastrada)",
+                            "api_url": ip,
+                            "max_providers": 3,
+                            "is_registered": False
+                        })
             
-            logger.info(f"VPS Pool carregado: {len(vps_list)} servidores encontrados.")
+            logger.info(f"VPS Pool carregado: {len(vps_list)} servidores (Cadastrados + Hetzner).")
             return Response(vps_list)
         except Exception as e:
             logger.error(f"Erro ao buscar VPS na Hetzner: {e}")
@@ -185,6 +210,48 @@ class ProvedorViewSet(viewsets.ModelViewSet):
             thread = threading.Thread(target=notify_provider_panel, args=(updated_instance.id, new_active, new_status))
             thread.daemon = True
             thread.start()
+
+    def perform_create(self, serializer):
+        vps_id = self.request.data.get('vps')
+        if vps_id and str(vps_id).startswith('hetzner-'):
+            raise serializers.ValidationError({"vps": "Esta VPS da Hetzner ainda não foi cadastrada no sistema. Por favor, cadastre-a primeiro na aba de Servidores."})
+        serializer.save()
+
+    @action(detail=True, methods=['post'], url_path='deploy')
+    def deploy(self, request, pk=None):
+        instance = self.get_object()
+        if not instance.vps:
+            return Response({"error": "Nenhuma VPS vinculada a este provedor."}, status=400)
+        
+        def run_deploy():
+            try:
+                from .services.portainer_service import PortainerService
+                instance.status = 'deploying'
+                instance.save()
+                
+                service = PortainerService(instance.vps)
+                success = service.deploy_provider_stack(instance)
+                
+                if success:
+                    instance.status = 'ativo'
+                else:
+                    instance.status = 'erro_deploy'
+                instance.save()
+            except Exception as e:
+                logger.error(f"Erro no deploy thread: {e}")
+                instance.status = 'erro_deploy'
+                instance.save()
+
+        thread = threading.Thread(target=run_deploy)
+        thread.daemon = True
+        thread.start()
+        
+        return Response({"message": "Deploy iniciado com sucesso!"})
+
+class VpsServerViewSet(viewsets.ModelViewSet):
+    queryset = VpsServer.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = VpsServerSerializer
 
 class CanalViewSet(viewsets.ModelViewSet):
     queryset = Canal.objects.all()
