@@ -336,6 +336,12 @@ export default function SuperadminProvedores() {
       payload.vps = currentSelectedVps.key; // Vincula o ID da VPS
       payload.subdomain = normalizedSubdomain; // Vincula o subdomínio direto
       
+      // Se a VPS for numérica (ID do banco), remove o prefixo para garantir que o backend receba o ID correto
+      const vpsId = parseInt(currentSelectedVps.key);
+      if (!isNaN(vpsId)) {
+        payload.vps = vpsId;
+      }
+      
       delete payload.vps_key;
       // delete payload.subdomain; // Removido para manter no payload principal
 
