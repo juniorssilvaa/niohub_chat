@@ -32,7 +32,7 @@ services:
   # 🧠 BACKEND DJANGO (API + WS)
   # ===============================
   niochat-backend:
-    image: ghcr.io/juniorssilvaa/niochat-backend:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
     container_name: niochat_backend
     depends_on:
       - postgres
@@ -100,7 +100,7 @@ services:
   # ⚙️ DRAMATIQ WORKER (WhatsApp + CSAT + Finalização)
   # ===============================
   niochat-dramatiq:
-    image: ghcr.io/juniorssilvaa/niochat-backend:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
     container_name: niochat_dramatiq
     depends_on:
       - postgres
@@ -135,7 +135,7 @@ services:
   # 📱 TELEGRAM WORKER
   # ===============================
   niochat-telegram:
-    image: ghcr.io/juniorssilvaa/niochat-backend:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
     container_name: niochat_telegram
     depends_on:
       - postgres
@@ -165,7 +165,7 @@ services:
   # 🌐 FRONTEND
   # ===============================
   niochat-frontend:
-    image: ghcr.io/juniorssilvaa/niochat-frontend:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-frontend:latest
     container_name: niochat_frontend
     networks:
       - nioNet
