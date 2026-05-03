@@ -7,18 +7,24 @@ function stripTrailingSlash(value = '') {
 }
 
 export function getApiBaseUrl() {
-  const hostname = window.location.hostname;
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 
-  // PRIORIDADE 1: Multi-tenant detection
-  // Se estiver em um subdomínio (e-tech, chat, etc), SEMPRE usar URL relativa
-  if (hostname.endsWith('niohub.com.br') && !hostname.startsWith('api')) {
+  // PRIORIDADE 1: Multi-tenant detection (Produção niohub.com.br)
+  if (hostname.endsWith('niohub.com.br')) {
+    // Se for subdomínio da API, usa URL relativa
+    if (hostname.startsWith('api')) {
+      return '';
+    }
+    // Se for staging local
     if (hostname.startsWith('chat-local')) {
       return 'https://api-local.niohub.com.br';
     }
-    return ''; // URL relativa para todos os provedores
+    // Para qualquer outro subdomínio (e-tech, chat, etc)
+    // O Traefik roteia /api/ para o backend correto
+    return '';
   }
 
-  // PRIORIDADE 2: Variável de ambiente (apenas para outros domínios ou localhost)
+  // PRIORIDADE 2: Variável de ambiente (Especialmente para builds customizados ou outros domínios)
   const envApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
   if (envApiUrl) {
     let cleaned = stripTrailingSlash(envApiUrl);
@@ -28,34 +34,11 @@ export function getApiBaseUrl() {
     return cleaned;
   }
   
-  // PRIORIDADE 2: Modo de desenvolvimento - SEMPRE usar proxy (vazio) ou localhost
+  // PRIORIDADE 3: Modo de desenvolvimento (localhost)
   if (import.meta.env.DEV) {
-    // Se VITE_USE_LOCAL_BACKEND estiver definido, sempre usar URL relativa (proxy)
-    const forceLocalBackend = import.meta.env.VITE_USE_LOCAL_BACKEND === 'true';
-    if (forceLocalBackend) {
-      return '';
-    }
-    // Em desenvolvimento, usar proxy do Vite (URL relativa)
-    return '';
+    return ''; // Usa proxy do Vite
   }
 
-  // PRIORIDADE 3: Detecção por hostname (apenas em produção/staging)
-  const hostname = window.location.hostname;
-  
-  // Em produção (chat.niohub.com.br ou qualquer subdomínio que não seja api/front)
-  if (hostname.endsWith('niohub.com.br')) {
-    if (hostname.startsWith('api')) {
-      return ''; // Já está na API
-    }
-    if (hostname.startsWith('chat-local')) {
-      return 'https://api-local.niohub.com.br';
-    }
-    // Para qualquer subdomínio (chat, e-tech, provedor-x, etc.)
-    // O Traefik roteia /api/ para o backend correto do provedor
-    return '';
-  }
-
-  // FALLBACK SEGURO: Em desenvolvimento, usar proxy (nunca produção)
   return '';
 }
 
