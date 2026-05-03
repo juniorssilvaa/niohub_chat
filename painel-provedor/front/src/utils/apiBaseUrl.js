@@ -7,14 +7,23 @@ function stripTrailingSlash(value = '') {
 }
 
 export function getApiBaseUrl() {
-  // PRIORIDADE 1: Variável de ambiente VITE_API_URL (padrão) ou VITE_API_BASE_URL (legado)
+  const hostname = window.location.hostname;
+
+  // PRIORIDADE 1: Multi-tenant detection
+  // Se estiver em um subdomínio (e-tech, chat, etc), SEMPRE usar URL relativa
+  if (hostname.endsWith('niohub.com.br') && !hostname.startsWith('api')) {
+    if (hostname.startsWith('chat-local')) {
+      return 'https://api-local.niohub.com.br';
+    }
+    return ''; // URL relativa para todos os provedores
+  }
+
+  // PRIORIDADE 2: Variável de ambiente (apenas para outros domínios ou localhost)
   const envApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
   if (envApiUrl) {
-    // Remover trailing slash E também remover /api se estiver no final
-    // Isso evita duplicação quando as rotas já começam com /api/
     let cleaned = stripTrailingSlash(envApiUrl);
     if (cleaned.endsWith('/api')) {
-      cleaned = cleaned.slice(0, -4); // Remove '/api' do final
+      cleaned = cleaned.slice(0, -4);
     }
     return cleaned;
   }
