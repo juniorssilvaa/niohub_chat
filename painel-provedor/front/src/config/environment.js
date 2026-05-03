@@ -3,7 +3,9 @@
 // IMPORTANTE: Em desenvolvimento, SEMPRE usar localhost, nunca produção
 
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const isProduction = hostname === 'chat.niohub.com.br' || hostname === 'app.niohub.com.br';
+// Multi-tenant: qualquer subdomínio *.niohub.com.br é produção
+const isNiohubDomain = hostname.endsWith('niohub.com.br');
+const isProduction = isNiohubDomain && !hostname.startsWith('chat-local') && !hostname.startsWith('front');
 const isStaging = hostname === 'front.niohub.com.br';
 const isStagingLocal = hostname === 'chat-local.niohub.com.br';
 const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
@@ -23,8 +25,9 @@ const getApiUrl = () => {
   }
   
   // PRIORIDADE 3: Detecção por hostname (apenas em produção/staging)
+  // Multi-tenant: cada provedor tem sua própria API no mesmo subdomínio via Traefik
   if (isProduction || isStaging) {
-    return 'https://api.niohub.com.br';
+    return ''; // URL relativa - Traefik roteia /api/ para o backend correto
   }
   
   // Em staging local via Cloudflare Tunnel
@@ -50,8 +53,9 @@ const getWsUrl = () => {
   }
   
   // PRIORIDADE 3: Detecção por hostname (apenas em produção/staging)
+  // Multi-tenant: WebSocket no mesmo subdomínio
   if (isProduction || isStaging) {
-    return 'wss://api.niohub.com.br';
+    return `wss://${hostname}`;
   }
   
   // Em staging local via Cloudflare Tunnel
@@ -77,8 +81,9 @@ const getMediaUrl = () => {
   }
   
   // PRIORIDADE 3: Detecção por hostname (apenas em produção/staging)
+  // Multi-tenant: mídia servida pelo mesmo subdomínio
   if (isProduction || isStaging) {
-    return 'https://api.niohub.com.br';
+    return ''; // URL relativa
   }
   
   // Em staging local via Cloudflare Tunnel
@@ -92,8 +97,9 @@ const getMediaUrl = () => {
 
 export const config = {
   // URLs baseadas em prioridade: env > DEV > hostname
+  // Multi-tenant: usa o hostname atual como base
   baseUrl: isProduction 
-    ? 'https://chat.niohub.com.br'   // PRODUÇÃO
+    ? `https://${hostname}`            // PRODUÇÃO (qualquer subdomínio)
     : isStagingLocal
     ? 'https://chat-local.niohub.com.br'  // STAGING LOCAL (Cloudflare Tunnel)
     : isStaging

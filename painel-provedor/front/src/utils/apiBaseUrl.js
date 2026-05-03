@@ -41,11 +41,9 @@ export function getApiBaseUrl() {
     if (hostname.startsWith('chat-local')) {
       return 'https://api-local.niohub.com.br';
     }
-    if (hostname.startsWith('chat')) {
-      return ''; // Usar proxy em chat.niohub.com.br
-    }
-    // Para chat.niohub.com.br ou qualquer outro (ex: cliente.niohub.com.br)
-    return 'https://api.niohub.com.br';
+    // Para qualquer subdomínio (chat, e-tech, provedor-x, etc.)
+    // O Traefik roteia /api/ para o backend correto do provedor
+    return '';
   }
 
   // FALLBACK SEGURO: Em desenvolvimento, usar proxy (nunca produção)
