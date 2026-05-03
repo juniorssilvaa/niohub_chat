@@ -9,20 +9,8 @@
  * @returns {string} Domínio base para WebSocket (sem protocolo)
  */
 export const getWebSocketHost = () => {
-  // PRIORIDADE 1: Variável de ambiente VITE_WS_URL (mais confiável)
-  const envWsUrl = import.meta.env.VITE_WS_URL;
-  if (envWsUrl) {
-    // Extrair host da URL (remover protocolo e path)
-    try {
-      const url = new URL(envWsUrl.startsWith('ws') ? envWsUrl : `ws://${envWsUrl}`);
-      return url.host;
-    } catch {
-      // Se não for uma URL válida, tratar como host:port
-      return envWsUrl.replace(/^wss?:\/\//, '').split('/')[0];
-    }
-  }
-  
-  // PRIORIDADE 2: Detecção por hostname (runtime, funciona em qualquer build)
+  // 1) Browser + niohub.com.br: mesmo host do painel (ignora VITE_WS_URL do CI, que costuma ser api.niohub.com.br).
+  //    O build do Actions grava VITE_WS_URL no bundle; em stacks por subdomínio (e-tech, chat, …) o WS tem de ser no mesmo Host do Traefik.
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
     const host = window.location.host;
@@ -31,9 +19,9 @@ export const getWebSocketHost = () => {
       if (hostname.startsWith('api-local') || hostname.startsWith('chat-local')) {
         return 'api-local.niohub.com.br';
       }
-      // Painel multi-tenant (ex.: e-tech.niohub.com.br): mesmo host da página;
-      // Traefik roteia PathPrefix /ws/ para o backend da stack (igual a /api/).
-      return host;
+      if (!hostname.startsWith('api.')) {
+        return host;
+      }
     }
 
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -41,7 +29,17 @@ export const getWebSocketHost = () => {
     }
   }
 
-  // PRIORIDADE 3: Modo de desenvolvimento (import.meta.env.DEV) - apenas se hostname não foi detectado
+  // 2) VITE_WS_URL (build): só quando não aplicámos regra de mesmo host acima (ex.: front servido em api.*).
+  const envWsUrl = import.meta.env.VITE_WS_URL;
+  if (envWsUrl) {
+    try {
+      const url = new URL(envWsUrl.startsWith('ws') ? envWsUrl : `ws://${envWsUrl}`);
+      return url.host;
+    } catch {
+      return envWsUrl.replace(/^wss?:\/\//, '').split('/')[0];
+    }
+  }
+
   if (import.meta.env.DEV) {
     return 'localhost:8010';
   }
