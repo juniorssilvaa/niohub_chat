@@ -15,7 +15,7 @@ services:
     volumes:
       - niochat-postgres:/var/lib/postgresql/data
     networks:
-      NioNet:
+      nethub:
         aliases:
           - niochat_postgres
     ports:
@@ -33,11 +33,11 @@ services:
   # 🧠 BACKEND DJANGO (API + WS)
   # ===============================
   niochat-backend:
-    image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-backend:${PROVIDER_IMAGE_TAG:-stable}
     depends_on:
       - postgres
     networks:
-      - NioNet
+      - nethub
     volumes:
       - niochat-media:/app/backend/media
       - niochat-static:/app/backend/staticfiles
@@ -91,11 +91,11 @@ services:
   # ⚙️ DRAMATIQ WORKER
   # ===============================
   niochat-dramatiq:
-    image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-dramatiq:${PROVIDER_IMAGE_TAG:-stable}
     depends_on:
       - postgres
     networks:
-      - NioNet
+      - nethub
     environment:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG}
@@ -121,11 +121,11 @@ services:
   # 📱 TELEGRAM WORKER
   # ===============================
   niochat-telegram:
-    image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-backend:${PROVIDER_IMAGE_TAG:-stable}
     depends_on:
       - postgres
     networks:
-      - NioNet
+      - nethub
     environment:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG}
@@ -146,9 +146,9 @@ services:
   # 🌐 FRONTEND
   # ===============================
   niochat-frontend:
-    image: ghcr.io/juniorssilvaa/niohub_chat-frontend:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-frontend:${PROVIDER_IMAGE_TAG:-stable}
     networks:
-      - NioNet
+      - nethub
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.niochat-frontend.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.niohub.com.br`)"
@@ -160,7 +160,7 @@ services:
         condition: on-failure
 
 networks:
-  NioNet:
+  nethub:
     external: true
 
 volumes:

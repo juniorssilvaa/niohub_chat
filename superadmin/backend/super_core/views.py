@@ -9,9 +9,41 @@ from .models import Provedor, Canal, User, Company, AuditLog, MensagemSistema, B
 from rest_framework import serializers
 
 class UserSerializer(serializers.ModelSerializer):
+    provedor_nome = serializers.SerializerMethodField()
+    write_provedor_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+
     class Meta:
         model = User
         exclude = ['password']
+
+    def get_provedor_nome(self, obj):
+        return obj.provedor.nome if obj.provedor else None
+
+    def update(self, instance, validated_data):
+        # Tratar write_provedor_id -> salvar no campo provedor
+        provedor_id = validated_data.pop('write_provedor_id', -1)  # -1 = não enviado
+        if provedor_id != -1:  # foi explicitamente enviado (pode ser None para desassociar)
+            if provedor_id:
+                from .models import Provedor
+                try:
+                    instance.provedor = Provedor.objects.get(id=provedor_id)
+                except Provedor.DoesNotExist:
+                    pass
+            else:
+                instance.provedor = None
+        return super().update(instance, validated_data)
+
+    def create(self, validated_data):
+        provedor_id = validated_data.pop('write_provedor_id', None)
+        instance = super().create(validated_data)
+        if provedor_id:
+            from .models import Provedor
+            try:
+                instance.provedor = Provedor.objects.get(id=provedor_id)
+                instance.save(update_fields=['provedor'])
+            except Provedor.DoesNotExist:
+                pass
+        return instance
 
 class VpsServerSerializer(serializers.ModelSerializer):
     providers_count = serializers.SerializerMethodField()
@@ -105,7 +137,7 @@ class SystemUpdateViewSet(viewsets.ModelViewSet):
                 
             try:
                 service = PortainerService(provider.vps)
-                success = service.deploy_stack(provider)
+                success = service.deploy_provider_stack(provider)
                 if success:
                     provider.current_version = version
                     provider.last_update = timezone.now()
@@ -311,7 +343,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
 
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
+    queryset = User.objects.all().select_related('provedor')
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = UserSerializer
 

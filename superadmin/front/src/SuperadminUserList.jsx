@@ -177,7 +177,7 @@ export default function SuperadminUserList() {
   const handleEditUser = (user) => {
     setSelectedUser({
       ...user,
-      write_provedor_id: user.provedor_id || ''
+      write_provedor_id: user.provedor ? String(user.provedor) : ''
     });
     setShowEditModal(true);
     setShowMenuId(null);
@@ -270,14 +270,13 @@ export default function SuperadminUserList() {
                       )}
                     </td>
                     <td className="px-4 py-2">
-                      {(user.provedores_admin || []).length === 0 && (
+                      {user.provedor_nome ? (
+                        <span className="inline-flex items-center gap-1 bg-blue-900/80 text-blue-100 rounded px-2 py-1 text-xs font-semibold">
+                          <Building className="w-3 h-3" /> {user.provedor_nome}
+                        </span>
+                      ) : (
                         <span className="text-gray-400 text-xs">Sem provedor</span>
                       )}
-                      {(user.provedores_admin || []).map((p, i) => (
-                        <span key={i} className="inline-flex items-center gap-1 bg-blue-900/80 text-blue-100 rounded px-2 py-1 mr-1 text-xs font-semibold">
-                          <Building className="w-3 h-3" /> {p.nome}
-                        </span>
-                      ))}
                     </td>
                     <td className="px-4 py-2 text-center">
                       {user.is_active ? (

@@ -18,16 +18,15 @@ class PortainerService:
             "Content-Type": "application/json"
         }
 
-    def _prepare_compose(self, subdomain):
+    def _prepare_compose(self, subdomain, provedor=None):
         """
-        Lê o arquivo docker-compose.yml da raiz e prepara para o deploy do cliente.
+        Lê o docker-compose do painel do provedor e prepara para o deploy do cliente.
         """
         try:
-            # O arquivo docker-compose.yml está na raiz do projeto (E:\niohub\)
-            # O BASE_DIR do Django é E:\niohub\superadmin\backend\
+            # Template: niohub/painel-provedor/docker-compose.yml (BASE_DIR = superadmin/backend/)
             base_dir = str(settings.BASE_DIR)
             root_dir = os.path.dirname(os.path.dirname(base_dir))
-            compose_path = os.path.join(root_dir, 'docker-compose.yml')
+            compose_path = os.path.join(root_dir, 'painel-provedor', 'docker-compose.yml')
             
             logger.info(f"Lendo template de: {compose_path}")
             
@@ -37,20 +36,28 @@ class PortainerService:
             # 1. Remover container_name para evitar conflitos se houver + de 1 provedor na mesma VPS
             # O Portainer vai usar o nome da Stack como prefixo automaticamente.
             content = re.sub(r'^\s*container_name:.*$', '', content, flags=re.MULTILINE)
+            # No Swarm, aliases em redes externas podem causar erros de deploy/rejeição.
+            content = re.sub(r'^\s*aliases:.*$', '', content, flags=re.MULTILINE)
+            content = re.sub(r'^\s*-\s*niochat_postgres.*$', '', content, flags=re.MULTILINE)
+            # Em multi-tenant, não podemos expor a porta 5432 no host para cada stack (conflito).
+            # Removemos a seção de portas do postgres.
+            content = re.sub(r'^\s*ports:.*?\n\s*-\s*"5432:5432".*?\n', '\n', content, flags=re.DOTALL | re.MULTILINE)
 
             # 2. Substituir domínios fixos pelo subdomínio do cliente
             # Alvo: Host(`api.niohub.com.br`) || Host(`chat.niohub.com.br`)
             content = content.replace('api.niohub.com.br', subdomain)
             content = content.replace('chat.niohub.com.br', subdomain)
             
-            # 3. Ajustar rede para o nome mencionado pelo usuário (Nionet)
-            # A rede no servidor do usuário está nomeada exatamente como 'Nionet' (case sensitive)
-            content = content.replace('nioNet:', 'Nionet:')
-            content = content.replace('- nioNet', '- Nionet')
-            content = content.replace('NioNet:', 'Nionet:')
-            content = content.replace('- NioNet', '- Nionet')
-            content = content.replace('nionet:', 'Nionet:')
-            content = content.replace('- nionet', '- Nionet')
+            # 3. Normalizar referências à rede interna (nethub)
+            content = re.sub(r'(?i)NioNet', 'nethub', content)
+            content = content.replace('nioNet:', 'nethub:')
+            content = content.replace('Nionet:', 'nethub:')
+
+            # 4. Tag de imagem do painel (stable vs beta-prov) — evita depender de interpolação no Swarm
+            provider_tag = (
+                'beta-prov' if provedor and getattr(provedor, 'release_channel', None) == 'beta' else 'stable'
+            )
+            content = content.replace('${PROVIDER_IMAGE_TAG:-stable}', provider_tag)
 
             return content
         except Exception as e:
@@ -63,6 +70,8 @@ class PortainerService:
         """
         # Garante que a Registry do GitHub está configurada na VPS
         self._ensure_registry()
+        # Garante que a rede overlay nethub existe no swarm antes do deploy
+        self._ensure_network('nethub')
         
         subdomain = provedor.subdomain
         if not subdomain:
@@ -73,7 +82,7 @@ class PortainerService:
         stack_name = f"niohub-{slug}"
         
         try:
-            compose_content = self._prepare_compose(subdomain)
+            compose_content = self._prepare_compose(subdomain, provedor)
             
             # Verificar se a stack já existe
             list_url = f"{self.api_url}/api/stacks"
@@ -139,11 +148,86 @@ class PortainerService:
                 return True
             else:
                 logger.error(f"Erro no Portainer ({response.status_code}): {response.text}")
+                # Log do payload para debug em caso de erro (omitindo segredos sensíveis)
+                logger.debug(f"Payload enviado: {json.dumps({k:v for k,v in payload.items() if k != 'stackFileContent'})}")
                 return False
 
         except Exception as e:
-            logger.error(f"Falha crítica no deploy do Portainer: {e}")
+            logger.error(f"Falha crítica no deploy do Portainer: {e}", exc_info=True)
             return False
+
+    def _ensure_network(self, network_name='nethub'):
+        """
+        Garante que a rede overlay Swarm-scoped existe na VPS antes do deploy.
+        Se não existir, cria automaticamente via Docker Engine (proxy Portainer).
+        A rede precisa ser 'overlay' e 'attachable' para funcionar com Swarm stacks.
+        """
+        try:
+            # 1. Listar redes via Docker Engine proxy do Portainer
+            nets_url = f"{self.api_url}/api/endpoints/{self.endpoint_id}/docker/networks"
+            res = requests.get(nets_url, headers=self.headers, timeout=10, verify=False)
+            if res.status_code != 200:
+                logger.warning(f"Não foi possível listar redes Docker ({res.status_code}). Tentando continuar...")
+                return
+
+            networks = res.json()
+            # A resposta pode ser lista ou dict (Portainer < vs >= 2.20)
+            if isinstance(networks, dict):
+                networks = list(networks.values())
+
+            # Verificar se já existe (por nome)
+            existing = next(
+                (n for n in networks if n.get('Name') == network_name),
+                None
+            )
+
+            if existing:
+                scope = existing.get('Scope', '')
+                driver = existing.get('Driver', '')
+                attachable = existing.get('Attachable', False)
+                if driver == 'overlay':
+                    logger.info(f"Rede '{network_name}' já existe e é overlay. OK.")
+                    return
+                else:
+                    logger.warning(f"Rede '{network_name}' existe mas não é overlay ({driver}). Removendo para recriar...")
+                    delete_url = f"{self.api_url}/api/endpoints/{self.endpoint_id}/docker/networks/{existing['Id']}"
+                    res_del = requests.delete(delete_url, headers=self.headers, timeout=10, verify=False)
+                    if res_del.status_code in [200, 204]:
+                        import time
+                        logger.info("Aguardando 3 segundos para propagação da remoção da rede...")
+                        time.sleep(3)
+                    else:
+                        logger.error(f"Falha ao remover rede antiga ({res_del.status_code}): {res_del.text}")
+                        return
+
+            # 2. Criar a rede overlay swarm-scoped
+            logger.info(f"Criando rede overlay Swarm '{network_name}'...")
+            create_url = f"{self.api_url}/api/endpoints/{self.endpoint_id}/docker/networks/create"
+            payload = {
+                "Name": network_name,
+                "Driver": "overlay",
+                "CheckDuplicate": True,
+                "Internal": False,
+                "Attachable": True,
+                "IPAM": {
+                    "Config": [{"Subnet": "172.28.0.0/16", "Gateway": "172.28.0.1"}]
+                }
+            }
+            res_create = requests.post(create_url, json=payload, headers=self.headers, timeout=15, verify=False)
+            if res_create.status_code in [200, 201]:
+                net_id = res_create.json().get('Id', '?')
+                logger.info(f"Rede '{network_name}' criada com sucesso! ID={net_id}")
+            else:
+                # Se falhar com IPAM, tenta sem IPAM fixo
+                payload.pop('IPAM')
+                res_create = requests.post(create_url, json=payload, headers=self.headers, timeout=15, verify=False)
+                if res_create.status_code in [200, 201]:
+                    logger.info(f"Rede '{network_name}' criada com sucesso (IPAM automático)!")
+                else:
+                    logger.error(f"Falha ao criar rede '{network_name}' ({res_create.status_code}): {res_create.text}")
+        except Exception as e:
+            logger.error(f"Erro ao garantir rede '{network_name}': {e}")
+
 
     def _get_env_vars(self, provedor, slug):
         """
@@ -184,7 +268,7 @@ class PortainerService:
         
         subdomain = provedor.subdomain or ""
         base_url = f"https://{subdomain}"
-        
+
         # Montar a REDIS_URL
         if redis_pass:
             redis_url = f"redis://:{redis_pass}@{redis_host}:6379/0"
@@ -209,7 +293,7 @@ class PortainerService:
             {"name": "POSTGRES_DB", "value": db_name},
             {"name": "POSTGRES_USER", "value": db_user},
             {"name": "POSTGRES_PASSWORD", "value": db_pass},
-            {"name": "DATABASE_URL", "value": f"postgresql://{db_user}:{db_pass}@niochat_postgres:5432/{db_name}"},
+            {"name": "DATABASE_URL", "value": f"postgresql://{db_user}:{db_pass}@postgres:5432/{db_name}"},
             
             # Redis
             {"name": "REDIS_HOST", "value": redis_host},
@@ -259,9 +343,10 @@ class PortainerService:
             {"name": "ADMIN_WEBHOOK_SECRET", "value": os.getenv('ADMIN_WEBHOOK_SECRET', '') or (SystemConfig.objects.first().payload.get('ADMIN_WEBHOOK_SECRET', '') if SystemConfig.objects.first() and SystemConfig.objects.first().payload else '')},
             
             # Primeiro Usuário Administrador
-            {"name": "INITIAL_ADMIN_USERNAME", "value": User.objects.filter(provedor=provedor).first().username if User.objects.filter(provedor=provedor).exists() else ""},
-            {"name": "INITIAL_ADMIN_EMAIL", "value": User.objects.filter(provedor=provedor).first().email if User.objects.filter(provedor=provedor).exists() else ""},
-            {"name": "INITIAL_ADMIN_PASSWORD", "value": "NioChat@2024"}, # Senha padrão temporária ou podemos tentar recuperar o hash (mas criar novo é melhor)
+            # Tenta buscar o User vinculado; se não houver, usa dados do próprio Provedor como fallback
+            {"name": "INITIAL_ADMIN_USERNAME", "value": self._resolve_initial_admin_username(provedor, slug)},
+            {"name": "INITIAL_ADMIN_EMAIL", "value": self._resolve_initial_admin_email(provedor, slug)},
+            {"name": "INITIAL_ADMIN_PASSWORD", "value": "NioChat@2024"}, # Senha padrão temporária
             
             {"name": "ALLOWED_HOSTS", "value": f"127.0.0.1,localhost,api.niohub.com.br,chat.niohub.com.br,{subdomain}"},
             {"name": "CORS_ALLOWED_ORIGINS", "value": f"https://chat.niohub.com.br,https://api.niohub.com.br,https://docs.niohub.com.br,{base_url}"},
@@ -276,6 +361,35 @@ class PortainerService:
         ]
         
         return env_vars
+
+    def _resolve_initial_admin_username(self, provedor, slug):
+        """
+        Retorna o username do usuário admin inicial do provedor.
+        Prioridade:
+          1. User vinculado ao provedor no banco do superadmin
+          2. Slug do subdomínio (ex: 'provedor1') — sempre preenchido
+        """
+        linked_user = User.objects.filter(provedor=provedor).first()
+        if linked_user and linked_user.username:
+            return linked_user.username
+        # Fallback: usa o slug do subdomínio como username
+        return slug
+
+    def _resolve_initial_admin_email(self, provedor, slug):
+        """
+        Retorna o email do usuário admin inicial do provedor.
+        Prioridade:
+          1. Email do User vinculado ao provedor
+          2. email_contato do Provedor
+          3. email gerado a partir do slug
+        """
+        linked_user = User.objects.filter(provedor=provedor).first()
+        if linked_user and linked_user.email:
+            return linked_user.email
+        if provedor.email_contato:
+            return provedor.email_contato
+        # Fallback final: gera email padrão
+        return f"{slug}@niohub.com.br"
 
     def _get_swarm_id(self):
         """

@@ -46,7 +46,7 @@ services:
         condition: on-failure
 
   superadmin-backend:
-    image: ghcr.io/juniorssilvaa/niohub_chat-superadmin-backend:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-superadmin-backend:admin
     environment:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: "False"
@@ -99,7 +99,7 @@ services:
         condition: on-failure
 
   superadmin-dramatiq:
-    image: ghcr.io/juniorssilvaa/niohub_chat-dramatiq:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-dramatiq:stable
     environment:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: "False"
@@ -127,7 +127,7 @@ services:
         condition: on-failure
 
   superadmin-frontend:
-    image: ghcr.io/juniorssilvaa/niohub_chat-superadmin:latest
+    image: ghcr.io/juniorssilvaa/niohub_chat-superadmin:admin
     networks:
       - NioNet
     labels:

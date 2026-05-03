@@ -156,6 +156,8 @@ jobs:
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:stable
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:beta-prov
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ github.sha }}
 
     - name: Build & push FRONTEND
@@ -172,6 +174,8 @@ jobs:
           VITE_SUPERADMIN_APP_URL=${{ secrets.VITE_SUPERADMIN_APP_URL }}
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:stable
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:beta-prov
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ github.sha }}
 
     - name: Build & push SUPERADMIN FRONTEND
@@ -188,6 +192,7 @@ jobs:
           VITE_SUPERADMIN_APP_URL=https://app.niohub.com.br
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin:admin
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin:${{ github.sha }}
 
     - name: Build & push SUPERADMIN BACKEND
@@ -198,6 +203,7 @@ jobs:
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin-backend:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin-backend:admin
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin-backend:${{ github.sha }}
 
     - name: Build & push DRAMATIQ
@@ -208,6 +214,8 @@ jobs:
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dramatiq:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dramatiq:stable
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dramatiq:beta-prov
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dramatiq:${{ github.sha }}
 
     - name: Build & push DOCS
