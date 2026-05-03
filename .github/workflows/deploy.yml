@@ -231,6 +231,30 @@ jobs:
 
     - run: docker image prune -f
 
+    - name: Resumo — tags GHCR publicadas neste run
+      if: github.ref == 'refs/heads/main'
+      run: |
+        REG="${{ env.REGISTRY }}"
+        IMG="${{ env.IMAGE_NAME }}"
+        SHA="${{ github.sha }}"
+        {
+          echo "## Tags Docker publicadas no GHCR"
+          echo ""
+          echo "Estas tags **não** aparecem na lista da esquerda do Actions (essa lista é só o workflow + branch). Elas ficam no **GitHub Container Registry** junto de cada pacote."
+          echo ""
+          echo "### Painel do provedor (mesmo digest em \`latest\`, \`stable\` e \`beta-prov\` nesta branch)"
+          echo "- \`${REG}/${IMG}-backend:latest\`, \`:stable\`, \`:beta-prov\`, \`:${SHA}\`"
+          echo "- \`${REG}/${IMG}-frontend:latest\`, \`:stable\`, \`:beta-prov\`, \`:${SHA}\`"
+          echo "- \`${REG}/${IMG}-dramatiq:latest\`, \`:stable\`, \`:beta-prov\`, \`:${SHA}\`"
+          echo ""
+          echo "### Superadmin"
+          echo "- \`${REG}/${IMG}-superadmin:latest\`, \`:admin\`, \`:${SHA}\`"
+          echo "- \`${REG}/${IMG}-superadmin-backend:latest\`, \`:admin\`, \`:${SHA}\`"
+          echo ""
+          echo "### Quem escolhe stable vs beta-prov"
+          echo "O **superadmin** ao fazer deploy/redeploy da stack do provedor substitui no compose a tag conforme \`release_channel\` do provedor (\`stable\` / \`manual\` → imagens \`:stable\`; \`beta\` → \`:beta-prov\`). A **Liberar versão** só dispara redeploy nos provedores do canal escolhido."
+        } >> "$GITHUB_STEP_SUMMARY"
+
 
   deploy:
     needs: build-and-push
