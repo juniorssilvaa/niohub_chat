@@ -61,11 +61,6 @@ class PortainerService:
             )
             content = content.replace('${PROVIDER_IMAGE_TAG:-stable}', provider_tag)
 
-            if not stack_name:
-                stack_name = f"niohub-{subdomain.split('.')[0]}"
-            content = content.replace('__TRAEFIK_ROUTER_PREFIX__', stack_name)
-            content = content.replace('__PROVIDER_HOST__', subdomain)
-
             return content
         except Exception as e:
             logger.error(f"Erro ao preparar docker-compose: {e}")
@@ -90,12 +85,6 @@ class PortainerService:
         
         try:
             compose_content = self._prepare_compose(subdomain, provedor, stack_name)
-            if '__TRAEFIK_ROUTER_PREFIX__' in compose_content or '__PROVIDER_HOST__' in compose_content:
-                logger.error(
-                    'Compose ainda contém placeholders Traefik; abortando deploy '
-                    '(código superadmin desatualizado ou template inválido).'
-                )
-                return False
 
             # Verificar se a stack já existe
             list_url = f"{self.api_url}/api/stacks"
@@ -326,6 +315,23 @@ class PortainerService:
             {"name": "ENVIRONMENT", "value": "production"},
             {"name": "DEBUG", "value": "False"},
             {"name": "SUBDOMAIN", "value": subdomain},
+            {
+                "name": "TRAEFIK_ROUTER_PREFIX",
+                "value": f"niohub-{slug}",
+            },
+            {"name": "TRAEFIK_RULE_FE", "value": f"Host(`{subdomain}`)"},
+            {
+                "name": "TRAEFIK_RULE_API",
+                "value": f"Host(`{subdomain}`) && PathPrefix(`/api/`)",
+            },
+            {
+                "name": "TRAEFIK_RULE_WS",
+                "value": f"Host(`{subdomain}`) && PathPrefix(`/ws/`)",
+            },
+            {
+                "name": "TRAEFIK_RULE_HOOKS",
+                "value": f"Host(`{subdomain}`) && PathPrefix(`/webhooks/`)",
+            },
             {"name": "SECRET_KEY", "value": secret_key},
             
             # Banco de Dados

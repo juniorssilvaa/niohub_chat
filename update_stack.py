@@ -54,17 +54,29 @@ def prepare_compose(raw: str) -> str:
         flags=re.DOTALL | re.MULTILINE,
     )
     content = content.replace("${PROVIDER_IMAGE_TAG:-stable}", PROVIDER_IMAGE_TAG)
-    host = PROVIDER_HOST
-    if not host:
-        slug = (
-            STACK_NAME.replace("niohub-", "", 1)
-            if STACK_NAME.startswith("niohub-")
-            else STACK_NAME
-        )
-        host = f"{slug}.niohub.com.br"
-    content = content.replace("__TRAEFIK_ROUTER_PREFIX__", STACK_NAME)
-    content = content.replace("__PROVIDER_HOST__", host)
     return content
+
+
+def merge_traefik_stack_env(env_vars: list) -> list:
+    """Garante variáveis usadas na interpolação do compose (Traefik)."""
+    slug = (
+        STACK_NAME.replace("niohub-", "", 1)
+        if STACK_NAME.startswith("niohub-")
+        else STACK_NAME
+    )
+    host = PROVIDER_HOST or f"{slug}.niohub.com.br"
+    prefix = STACK_NAME
+    traefik = {
+        "TRAEFIK_ROUTER_PREFIX": prefix,
+        "TRAEFIK_RULE_FE": f"Host(`{host}`)",
+        "TRAEFIK_RULE_API": f"Host(`{host}`) && PathPrefix(`/api/`)",
+        "TRAEFIK_RULE_WS": f"Host(`{host}`) && PathPrefix(`/ws/`)",
+        "TRAEFIK_RULE_HOOKS": f"Host(`{host}`) && PathPrefix(`/webhooks/`)",
+    }
+    out = [e for e in env_vars if isinstance(e, dict) and e.get("name") not in traefik]
+    for k, v in traefik.items():
+        out.append({"name": k, "value": v})
+    return out
 
 
 def ensure_ghcr_registry(portainer_url: str, headers: dict) -> None:
@@ -144,12 +156,6 @@ def main() -> int:
     with open(COMPOSE_PATH, encoding="utf-8") as f:
         raw = f.read()
     new_compose = prepare_compose(raw)
-    if "__TRAEFIK_ROUTER_PREFIX__" in new_compose or "__PROVIDER_HOST__" in new_compose:
-        print(
-            "ERRO: compose ainda tem placeholders Traefik (__TRAEFIK_* / __PROVIDER_HOST__).\n"
-            "       Confirme STACK_NAME e (opcional) PROVIDER_HOST no ambiente."
-        )
-        return 1
     print(f"   Compose preparado ({len(new_compose)} caracteres), tag imagem: {PROVIDER_IMAGE_TAG}")
 
     print("\n4. Imagens:")
@@ -157,8 +163,10 @@ def main() -> int:
         if "image:" in line and "ghcr.io" in line:
             print(f"   {line.strip()}")
 
-    env_vars = target.get("Env") or []
-    print(f"\n5. Mantendo {len(env_vars)} variáveis de ambiente da stack no Portainer.")
+    env_vars = merge_traefik_stack_env(target.get("Env") or [])
+    print(
+        f"\n5. Variáveis de ambiente da stack ({len(env_vars)}), incl. Traefik para interpolação."
+    )
 
     print("\n5b. Registry GHCR (opcional, evita pull anónimo falhar)...")
     ensure_ghcr_registry(PORTAINER_URL, headers)

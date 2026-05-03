@@ -19,6 +19,8 @@ import os
 import threading
 import time
 
+from django.db import close_old_connections
+
 logger = logging.getLogger(__name__)
 
 _started = False
@@ -41,6 +43,7 @@ def _sleep_until_next_minute() -> None:
 def _periodic_loop() -> None:
     time.sleep(25)
     while True:
+        close_old_connections()
         try:
             from conversations.closing_service import closing_service
 
