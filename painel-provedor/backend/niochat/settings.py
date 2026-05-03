@@ -69,6 +69,10 @@ ALLOWED_HOSTS = list(config(
     cast=Csv()
 ))
 
+# Multi-tenant: aceitar qualquer subdomínio de niohub.com.br
+if '.niohub.com.br' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.niohub.com.br')
+
 # Feature flag para resolução de tenant por subdomínio.
 # Safe by default: mantém o comportamento legado até ativar via .env.
 SUBDOMAIN_TENANT_ENABLED = config('SUBDOMAIN_TENANT_ENABLED', default=False, cast=bool)
