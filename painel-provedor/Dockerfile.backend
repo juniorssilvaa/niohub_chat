@@ -66,64 +66,82 @@ done
 echo "✅ PostgreSQL disponível!"
 
 echo "Running migrations..."
-echo "Running migrations..."
 # Sincronização inteligente do histórico de migrações com a realidade física do banco
+# IMPORTANTE: Usa psycopg2 puro para NÃO disparar django.setup() e os ready() dos apps
+# que tentam acessar tabelas que ainda não existem em bancos novos.
 python -c "
-import os, django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'niochat.settings')
-django.setup()
-from django.db import connection
+import os, re
 
-def column_exists(table, column):
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = %s AND column_name = %s)', [table, column])
-        return cursor.fetchone()[0]
+# Extrair credenciais da DATABASE_URL
+db_url = os.environ.get('DATABASE_URL', '')
+if not db_url:
+    print('[MIGRATE-FIX] DATABASE_URL nao definida. Pulando sincronizacao.')
+    exit(0)
 
-def table_exists(table):
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)', [table])
-        return cursor.fetchone()[0]
+import psycopg2
 
-# Mapeamento: (nome_migracao, condicao_de_existencia_fisica)
-checks = [
-    ('0058_add_openai_transcription_api_key', column_exists('core_systemconfig', 'openai_transcription_api_key')),
-    ('0061_canal_ia_ativa', column_exists('core_canal', 'ia_ativa')),
-    ('0062_chatbotflow', table_exists('core_chatbotflow')),
-    ('0063_add_bot_mode_to_provedor', column_exists('core_provedor', 'bot_mode')),
-    ('0067_add_canal_to_chatbotflow', column_exists('core_chatbotflow', 'canal_id')),
-    ('0070_add_asaas_fields', column_exists('core_systemconfig', 'asaas_access_token')),
-    ('0071_provedor_asaas_details', column_exists('core_provedor', 'asaas_customer_id')),
-    ('0072_provedor_subscription_fields', column_exists('core_provedor', 'asaas_subscription_id')),
-    ('0073_provedor_subscription_next_due_date', column_exists('core_provedor', 'subscription_next_due_date')),
-]
+try:
+    conn = psycopg2.connect(db_url)
+    conn.autocommit = True
+    cur = conn.cursor()
 
-with connection.cursor() as cursor:
-    cursor.execute(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'django_migrations')\")
-    has_migrations_table = cursor.fetchone()[0]
+    # 1. Verificar se django_migrations existe (banco novo = nao existe)
+    cur.execute(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'django_migrations')\")
+    has_migrations_table = cur.fetchone()[0]
 
-if not has_migrations_table:
-    print('[MIGRATE-FIX] django_migrations ainda não existe (banco novo). Pulando sincronização pré-migrate.')
-else:
-    with connection.cursor() as cursor:
-        # 1. Garantir migrações base que fundamentam o resto
-        for name in ['0055_1_alter_provedor_redes_sociais_default', '0055_add_more']:
-            cursor.execute(
+    if not has_migrations_table:
+        print('[MIGRATE-FIX] django_migrations nao existe (banco novo). Pulando sincronizacao pre-migrate.')
+        cur.close()
+        conn.close()
+        exit(0)
+
+    # Funcoes auxiliares
+    def column_exists(table, column):
+        cur.execute('SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = %s AND column_name = %s)', (table, column))
+        return cur.fetchone()[0]
+
+    def table_exists(table):
+        cur.execute('SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)', (table,))
+        return cur.fetchone()[0]
+
+    # Mapeamento: (nome_migracao, condicao_de_existencia_fisica)
+    checks = [
+        ('0058_add_openai_transcription_api_key', column_exists('core_systemconfig', 'openai_transcription_api_key')),
+        ('0061_canal_ia_ativa', column_exists('core_canal', 'ia_ativa')),
+        ('0062_chatbotflow', table_exists('core_chatbotflow')),
+        ('0063_add_bot_mode_to_provedor', column_exists('core_provedor', 'bot_mode')),
+        ('0067_add_canal_to_chatbotflow', column_exists('core_chatbotflow', 'canal_id')),
+        ('0070_add_asaas_fields', column_exists('core_systemconfig', 'asaas_access_token')),
+        ('0071_provedor_asaas_details', column_exists('core_provedor', 'asaas_customer_id')),
+        ('0072_provedor_subscription_fields', column_exists('core_provedor', 'asaas_subscription_id')),
+        ('0073_provedor_subscription_next_due_date', column_exists('core_provedor', 'subscription_next_due_date')),
+    ]
+
+    # 1. Garantir migracoes base
+    for name in ['0055_1_alter_provedor_redes_sociais_default', '0055_add_more']:
+        cur.execute(
+            'INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)',
+            ('core', name, 'core', name)
+        )
+
+    # 2. Sincronizar migracoes problematicas
+    for name, exists in checks:
+        if exists:
+            cur.execute(
                 'INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)',
-                ['core', name, 'core', name]
+                ('core', name, 'core', name)
             )
-        
-        # 2. Sincronizar migrações problemáticas baseadas na realidade física
-        for name, exists in checks:
-            if exists:
-                cursor.execute(
-                    'INSERT INTO django_migrations (app, name, applied) SELECT %s, %s, NOW() WHERE NOT EXISTS (SELECT 1 FROM django_migrations WHERE app=%s AND name=%s)',
-                    ['core', name, 'core', name]
-                )
-                print(f'[MIGRATE-FIX] {name} garantida no historico (existe fisicamente).')
-            else:
-                cursor.execute(\"DELETE FROM django_migrations WHERE app='core' AND name=%s\", [name])
-                print(f'[MIGRATE-FIX] {name} removida do historico (NAO existe fisicamente).')
-        connection.commit()
+            print(f'[MIGRATE-FIX] {name} garantida no historico (existe fisicamente).')
+        else:
+            cur.execute('DELETE FROM django_migrations WHERE app=%s AND name=%s', ('core', name))
+            print(f'[MIGRATE-FIX] {name} removida do historico (NAO existe fisicamente).')
+
+    cur.close()
+    conn.close()
+    print('[MIGRATE-FIX] Sincronizacao concluida com sucesso.')
+except Exception as e:
+    print(f'[MIGRATE-FIX] Erro (nao-fatal): {e}')
+    print('[MIGRATE-FIX] Continuando com migrate normal...')
 "
 python manage.py migrate --noinput
 

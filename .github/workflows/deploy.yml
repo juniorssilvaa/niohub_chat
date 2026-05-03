@@ -8,7 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # O nome da imagem DEVE ser minúsculo para o GHCR
   IMAGE_NAME: juniorssilvaa/niohub_chat
 
 jobs:
@@ -147,8 +146,7 @@ jobs:
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
-        # Usando o token manual atualizado pelo usuário
-        password: ${{ secrets.GHCR_TOKEN }}
+        password: ${{ secrets.GHCR_TOKEN || github.token }}
 
     - name: Build & push BACKEND
       uses: docker/build-push-action@v5
@@ -157,8 +155,8 @@ jobs:
         file: ./painel-provedor/Dockerfile.backend
         push: true
         tags: |
-          ghcr.io/juniorssilvaa/niohub_chat-backend:latest
-          ghcr.io/juniorssilvaa/niohub_chat-backend:${{ github.sha }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ github.sha }}
 
     - name: Build & push FRONTEND
       uses: docker/build-push-action@v5
@@ -173,8 +171,8 @@ jobs:
           VITE_WS_URL=wss://api.niohub.com.br/ws
           VITE_SUPERADMIN_APP_URL=${{ secrets.VITE_SUPERADMIN_APP_URL }}
         tags: |
-          ghcr.io/juniorssilvaa/niohub_chat-frontend:latest
-          ghcr.io/juniorssilvaa/niohub_chat-frontend:${{ github.sha }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ github.sha }}
 
     - name: Build & push SUPERADMIN FRONTEND
       uses: docker/build-push-action@v5
@@ -189,8 +187,8 @@ jobs:
           VITE_WS_URL=wss://app.niohub.com.br/ws
           VITE_SUPERADMIN_APP_URL=https://app.niohub.com.br
         tags: |
-          ghcr.io/juniorssilvaa/niohub_chat-superadmin:latest
-          ghcr.io/juniorssilvaa/niohub_chat-superadmin:${{ github.sha }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin:${{ github.sha }}
 
     - name: Build & push SUPERADMIN BACKEND
       uses: docker/build-push-action@v5
@@ -199,8 +197,8 @@ jobs:
         file: ./superadmin/Dockerfile.backend
         push: true
         tags: |
-          ghcr.io/juniorssilvaa/niohub_chat-superadmin-backend:latest
-          ghcr.io/juniorssilvaa/niohub_chat-superadmin-backend:${{ github.sha }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin-backend:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-superadmin-backend:${{ github.sha }}
 
     - name: Build & push DRAMATIQ
       uses: docker/build-push-action@v5
@@ -209,8 +207,8 @@ jobs:
         file: ./painel-provedor/Dockerfile.dramatiq
         push: true
         tags: |
-          ghcr.io/juniorssilvaa/niohub_chat-dramatiq:latest
-          ghcr.io/juniorssilvaa/niohub_chat-dramatiq:${{ github.sha }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dramatiq:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dramatiq:${{ github.sha }}
 
     - name: Build & push DOCS
       uses: docker/build-push-action@v5
@@ -220,8 +218,8 @@ jobs:
         push: true
         platforms: linux/amd64
         tags: |
-          ghcr.io/juniorssilvaa/niohub_chat-docs:latest
-          ghcr.io/juniorssilvaa/niohub_chat-docs:${{ github.sha }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-docs:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-docs:${{ github.sha }}
 
     - run: docker image prune -f
 
