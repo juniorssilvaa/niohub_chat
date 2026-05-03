@@ -1,7 +1,8 @@
-import requests
+import json
 import logging
 import os
 import re
+import requests
 from django.conf import settings
 from ..models import SystemConfig, User
 
@@ -108,10 +109,10 @@ class PortainerService:
                 stack_id = existing_stack['Id']
                 # pullImage=true na URL força o Portainer a baixar a imagem nova do Registry (GHCR)
                 update_url = f"{self.api_url}/api/stacks/{stack_id}?endpointId={self.endpoint_id}&pullImage=true"
-                
+                existing_env = existing_stack.get('Env')
                 payload = {
                     "stackFileContent": compose_content,
-                    "env": self._get_env_vars(provedor, slug),
+                    "env": self._get_env_vars(provedor, slug, existing_env=existing_env),
                     "prune": True,
                     "pullImage": True
                 }
@@ -128,7 +129,7 @@ class PortainerService:
                         "name": stack_name,
                         "swarmID": swarm_id,
                         "stackFileContent": compose_content,
-                        "env": self._get_env_vars(provedor, slug),
+                        "env": self._get_env_vars(provedor, slug, existing_env=None),
                         "pullImage": True
                     }
                 else:
@@ -137,7 +138,7 @@ class PortainerService:
                     payload = {
                         "name": stack_name,
                         "stackFileContent": compose_content,
-                        "env": self._get_env_vars(provedor, slug),
+                        "env": self._get_env_vars(provedor, slug, existing_env=None),
                         "pullImage": True
                     }
                 
@@ -229,17 +230,43 @@ class PortainerService:
             logger.error(f"Erro ao garantir rede '{network_name}': {e}")
 
 
-    def _get_env_vars(self, provedor, slug):
+    def _get_env_vars(self, provedor, slug, existing_env=None):
         """
         Gera a lista de variáveis de ambiente para a stack.
+
+        Em *update* de stack existente, repõe POSTGRES_PASSWORD / DATABASE_URL / SECRET_KEY
+        a partir do env já guardado no Portainer. O volume do Postgres só aceita a senha
+        definida na primeira subida; gerar senha nova em cada deploy quebra o login.
         """
         import os
         import secrets
-        
+        from urllib.parse import quote_plus
+
+        existing = {}
+        if existing_env:
+            for item in existing_env:
+                if isinstance(item, dict) and item.get('name'):
+                    existing[item['name']] = item.get('value') or ''
+
         db_name = f"niochat_{slug}"
         db_user = "niochat_user"
-        # Gerar uma senha aleatória para o banco do provedor
-        db_pass = secrets.token_urlsafe(16)
+        epass = existing.get('POSTGRES_PASSWORD')
+        edb = existing.get('POSTGRES_DB')
+        if epass and edb == db_name:
+            db_pass = epass
+            if existing.get('POSTGRES_USER'):
+                db_user = existing['POSTGRES_USER']
+            logger.info(
+                'Reutilizando credenciais Postgres da stack no Portainer (volume já inicializado).'
+            )
+        else:
+            db_pass = secrets.token_urlsafe(16)
+
+        secret_key = existing.get('SECRET_KEY') or secrets.token_urlsafe(32)
+        database_url = (
+            f'postgresql://{quote_plus(db_user)}:{quote_plus(db_pass)}'
+            f'@postgres:5432/{db_name}'
+        )
         
         # Dados de infraestrutura vêm agora do VpsServer (compartilhado)
         # Se estiverem vazios, tenta descobrir via API do Portainer
@@ -287,13 +314,13 @@ class PortainerService:
             {"name": "ENVIRONMENT", "value": "production"},
             {"name": "DEBUG", "value": "False"},
             {"name": "SUBDOMAIN", "value": subdomain},
-            {"name": "SECRET_KEY", "value": secrets.token_urlsafe(32)},
+            {"name": "SECRET_KEY", "value": secret_key},
             
             # Banco de Dados
             {"name": "POSTGRES_DB", "value": db_name},
             {"name": "POSTGRES_USER", "value": db_user},
             {"name": "POSTGRES_PASSWORD", "value": db_pass},
-            {"name": "DATABASE_URL", "value": f"postgresql://{db_user}:{db_pass}@postgres:5432/{db_name}"},
+            {"name": "DATABASE_URL", "value": database_url},
             
             # Redis
             {"name": "REDIS_HOST", "value": redis_host},
