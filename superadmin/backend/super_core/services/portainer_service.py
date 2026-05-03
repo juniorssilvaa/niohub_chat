@@ -90,7 +90,13 @@ class PortainerService:
         
         try:
             compose_content = self._prepare_compose(subdomain, provedor, stack_name)
-            
+            if '__TRAEFIK_ROUTER_PREFIX__' in compose_content or '__PROVIDER_HOST__' in compose_content:
+                logger.error(
+                    'Compose ainda contém placeholders Traefik; abortando deploy '
+                    '(código superadmin desatualizado ou template inválido).'
+                )
+                return False
+
             # Verificar se a stack já existe
             list_url = f"{self.api_url}/api/stacks"
             res = requests.get(list_url, headers=self.headers, timeout=10, verify=False)

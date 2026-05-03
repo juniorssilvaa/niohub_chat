@@ -144,6 +144,12 @@ def main() -> int:
     with open(COMPOSE_PATH, encoding="utf-8") as f:
         raw = f.read()
     new_compose = prepare_compose(raw)
+    if "__TRAEFIK_ROUTER_PREFIX__" in new_compose or "__PROVIDER_HOST__" in new_compose:
+        print(
+            "ERRO: compose ainda tem placeholders Traefik (__TRAEFIK_* / __PROVIDER_HOST__).\n"
+            "       Confirme STACK_NAME e (opcional) PROVIDER_HOST no ambiente."
+        )
+        return 1
     print(f"   Compose preparado ({len(new_compose)} caracteres), tag imagem: {PROVIDER_IMAGE_TAG}")
 
     print("\n4. Imagens:")
