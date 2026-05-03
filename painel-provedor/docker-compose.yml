@@ -162,7 +162,7 @@ services:
         - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-fe.tls.certresolver=letsencryptresolver"
         - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-fe.priority=1"
         - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-fe.service=__TRAEFIK_ROUTER_PREFIX__-fe-svc"
-        - "traefik.http.services.__TRAEFIK_ROUTER_PREFIX__-fe-svc.loadbalancer.server.port=80"
+        - "traefik.http.services.__TRAEFIK_ROUTER_PREFIX__-fe-svc.loadbalancer.server.port=8012"
 
 networks:
   nethub:
