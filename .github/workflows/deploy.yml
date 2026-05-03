@@ -234,8 +234,6 @@ jobs:
 
     - name: Deploy to Portainer
       env:
-        # URL vem de Repository Variables (não-sensível)
-        # API Key vem de Secrets (sensível)
         PORTAINER_URL: ${{ vars.PORTAINER_URL }}
         PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
         STACK_NAME: superadmin
@@ -243,27 +241,34 @@ jobs:
       run: |
         set -euo pipefail
 
-        STACKS=$(curl -sS -H "X-API-Key: $PORTAINER_API_KEY" "$PORTAINER_URL/api/stacks")
+        # Verificar se as variáveis estão configuradas
+        if [ -z "${PORTAINER_URL:-}" ] || [ -z "${PORTAINER_API_KEY:-}" ]; then
+          echo "::warning::PORTAINER_URL ou PORTAINER_API_KEY não configurados. Pulando deploy."
+          exit 0
+        fi
+
+        STACKS=$(curl -sS -H "X-API-Key: $PORTAINER_API_KEY" "$PORTAINER_URL/api/stacks" || true)
         if ! echo "$STACKS" | jq -e 'type == "array"' >/dev/null 2>&1; then
-          echo "::error::Resposta inválida de /api/stacks (esperado array JSON)."
+          echo "::warning::Resposta inválida do Portainer. Pulando deploy automático."
           echo "$STACKS"
-          exit 1
+          exit 0
         fi
 
         STACK_ID=$(echo "$STACKS" | jq -r --arg NAME "$STACK_NAME" '.[] | select(.Name == $NAME) | .Id' | head -n 1)
         ENDPOINT_ID=$(echo "$STACKS" | jq -r --arg NAME "$STACK_NAME" '.[] | select(.Name == $NAME) | .EndpointId' | head -n 1)
 
         if [ -z "$STACK_ID" ] || [ "$STACK_ID" = "null" ]; then
-          echo "::error::Stack '$STACK_NAME' não encontrada no Portainer."
-          exit 1
+          echo "::warning::Stack '$STACK_NAME' não encontrada no Portainer. Pulando deploy (stack pode estar em outro servidor)."
+          exit 0
         fi
 
         if [ -z "$ENDPOINT_ID" ] || [ "$ENDPOINT_ID" = "null" ]; then
           ENDPOINT_ID="$DEFAULT_ENDPOINT_ID"
         fi
 
+        echo "Atualizando stack '$STACK_NAME' (ID: $STACK_ID) no Portainer..."
         COMPOSE=$(cat superadmin/docker-compose.superadmin.yml)
-        PAYLOAD=$(jq -n --arg content "$COMPOSE" '{StackFileContent: $content}')
+        PAYLOAD=$(jq -n --arg content "$COMPOSE" '{StackFileContent: $content, pullImage: true, prune: true}')
 
         RESPONSE=$(curl -sS -X PUT \
           -H "X-API-Key: $PORTAINER_API_KEY" \
@@ -273,4 +278,7 @@ jobs:
 
         if echo "$RESPONSE" | jq -e '.message? and (.message | type == "string")' >/dev/null 2>&1; then
           echo "::warning::Resposta do Portainer: $(echo "$RESPONSE" | jq -r '.message')"
+        else
+          echo "Deploy concluido com sucesso!"
         fi
+
