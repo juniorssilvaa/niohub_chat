@@ -7,9 +7,9 @@ import json
 import warnings
 warnings.filterwarnings('ignore')
 
-PORTAINER_URL = "https://vps1.niohub.com.br"
-API_KEY = "ptr_ZC/n1xnGuIMSwa3u1l9e9wFxhGAwnGx/Q8/1Qvsuca8="
-STACK_NAME = "niohub-e-tech"
+PORTAINER_URL = "https://portainer.niohub.com.br"
+API_KEY = "ptr_FAQKnE5641BvHtPJ55n9h3Ue4ME1wW2ebABlBhjGCIU="
+STACK_NAME = "superadmin"
 
 headers = {
     "X-API-Key": API_KEY,
@@ -34,37 +34,22 @@ stack_id = target['Id']
 endpoint_id = target['EndpointId']
 print(f"\n2. Stack encontrada: ID={stack_id}, EndpointId={endpoint_id}")
 
-# 3. Buscar o compose atual da stack
-print("3. Buscando compose atual...")
-res_file = requests.get(f"{PORTAINER_URL}/api/stacks/{stack_id}/file", headers=headers, verify=False)
-compose_data = res_file.json()
-compose_content = compose_data.get('StackFileContent', '')
+# 3. Ler o arquivo local docker-compose.yml
+print("3. Lendo arquivo local superadmin/docker-compose.superadmin.yml...")
+with open('superadmin/docker-compose.superadmin.yml', 'r', encoding='utf-8') as f:
+    new_compose = f.read()
 
-print(f"   Compose tem {len(compose_content)} caracteres")
+print(f"   Compose local lido com sucesso ({len(new_compose)} caracteres)")
 
-# Mostrar imagens atuais
-for line in compose_content.split('\n'):
-    if 'image:' in line:
-        print(f"   ATUAL: {line.strip()}")
-
-# 4. Substituir nomes das imagens
-new_compose = compose_content.replace(
-    'ghcr.io/juniorssilvaa/niochat-backend:', 
-    'ghcr.io/juniorssilvaa/niohub_chat-backend:'
-)
-new_compose = new_compose.replace(
-    'ghcr.io/juniorssilvaa/niochat-frontend:', 
-    'ghcr.io/juniorssilvaa/niohub_chat-frontend:'
-)
-
-print("\n4. Imagens corrigidas:")
+# 4. Mostrar imagens que serao enviadas
+print("\n4. Imagens que serao enviadas:")
 for line in new_compose.split('\n'):
     if 'image:' in line:
-        print(f"   NOVO: {line.strip()}")
+        print(f"   IMAGE: {line.strip()}")
 
 # 5. Buscar env vars atuais
 print("\n5. Buscando env vars atuais...")
-env_vars = target.get('Env', [])
+env_vars = target.get('Env', []) or []
 print(f"   {len(env_vars)} variaveis de ambiente encontradas")
 
 # 6. Atualizar a stack
@@ -81,7 +66,7 @@ payload = {
 res_update = requests.put(update_url, json=payload, headers=headers, verify=False, timeout=120)
 
 if res_update.status_code == 200:
-    print("   ✅ Stack atualizada com SUCESSO!")
+    print("   [OK] Stack atualizada com SUCESSO!")
     print("   O Portainer vai baixar as novas imagens e reiniciar os servicos.")
 else:
-    print(f"   ❌ Erro ({res_update.status_code}): {res_update.text[:500]}")
+    print(f"   [ERRO] ({res_update.status_code}): {res_update.text[:500]}")

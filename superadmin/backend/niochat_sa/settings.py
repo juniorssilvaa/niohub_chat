@@ -5,9 +5,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY') or 'duNOiviCMS^9k^Nweqg@D%yg9&NT#p5QvR)2@ouHwrin8+HCeVjE1L^e0qesNoFL%AuI$l#ilpX!5*Wa'
 
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+
+# Configurações para Proxy Reverso (Traefik/HTTPS)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://app.niohub.com.br',
+    'https://*.niohub.com.br',
+]
 
 INSTALLED_APPS = [
     'daphne',

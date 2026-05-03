@@ -7,7 +7,6 @@ services:
   # ===============================
   postgres:
     image: postgres:14
-    container_name: niochat_postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -16,7 +15,7 @@ services:
     volumes:
       - niochat-postgres:/var/lib/postgresql/data
     networks:
-      nioNet:
+      NioNet:
         aliases:
           - niochat_postgres
     ports:
@@ -26,18 +25,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    restart: always
+    deploy:
+      restart_policy:
+        condition: on-failure
 
   # ===============================
   # 🧠 BACKEND DJANGO (API + WS)
   # ===============================
   niochat-backend:
     image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
-    container_name: niochat_backend
     depends_on:
       - postgres
     networks:
-      - nioNet
+      - NioNet
     volumes:
       - niochat-media:/app/backend/media
       - niochat-static:/app/backend/staticfiles
@@ -45,9 +45,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG}
       ENVIRONMENT: production
-
       DATABASE_URL: ${DATABASE_URL}
-
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -55,59 +53,50 @@ services:
       REDIS_AI_DB: 1
       REDIS_CONVERSATION_DB: 2
       REDIS_CACHE_DB: 3
-
       DRAMATIQ_BROKER_URL: ${DRAMATIQ_BROKER_URL}
-
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       EVOLUTION_URL: ${EVOLUTION_URL}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
-
       FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET}
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
       WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN}
       WHATSAPP_SYSTEM_USER_TOKEN: ${WHATSAPP_SYSTEM_USER_TOKEN}
-
       BACKEND_URL: ${BACKEND_URL}
       FRONTEND_URL: ${FRONTEND_URL}
-
     labels:
       - "traefik.enable=true"
-
-      - "traefik.http.routers.niochat-backend.rule=(Host(`api.niohub.com.br`) || Host(`chat.niohub.com.br`)) && PathPrefix(`/api/`)"
+      - "traefik.http.routers.niochat-backend.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.niohub.com.br`) && PathPrefix(`/api/`)"
       - "traefik.http.routers.niochat-backend.entrypoints=websecure"
       - "traefik.http.routers.niochat-backend.tls.certresolver=letsencryptresolver"
       - "traefik.http.routers.niochat-backend.priority=20"
       - "traefik.http.services.niochat-backend.loadbalancer.server.port=8010"
-
-      - "traefik.http.routers.niochat-backend-ws.rule=(Host(`api.niohub.com.br`) || Host(`chat.niohub.com.br`)) && PathPrefix(`/ws/`)"
+      - "traefik.http.routers.niochat-backend-ws.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.niohub.com.br`) && PathPrefix(`/ws/`)"
       - "traefik.http.routers.niochat-backend-ws.entrypoints=websecure"
       - "traefik.http.routers.niochat-backend-ws.tls.certresolver=letsencryptresolver"
-      - "traefik.http.routers.niochat-backend-ws.priority=20"
+      - "traefik.http.routers.niochat-backend-ws.priority=30"
       - "traefik.http.routers.niochat-backend-ws.service=niochat-backend"
-
-      - "traefik.http.routers.niochat-backend-webhooks.rule=(Host(`api.niohub.com.br`) || Host(`chat.niohub.com.br`)) && PathPrefix(`/webhooks/`)"
+      - "traefik.http.routers.niochat-backend-webhooks.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.niohub.com.br`) && PathPrefix(`/webhooks/`)"
       - "traefik.http.routers.niochat-backend-webhooks.entrypoints=websecure"
       - "traefik.http.routers.niochat-backend-webhooks.tls.certresolver=letsencryptresolver"
       - "traefik.http.routers.niochat-backend-webhooks.priority=20"
       - "traefik.http.routers.niochat-backend-webhooks.service=niochat-backend"
-
-    restart: always
+    deploy:
+      restart_policy:
+        condition: on-failure
 
   # ===============================
-  # ⚙️ DRAMATIQ WORKER (WhatsApp + CSAT + Finalização)
+  # ⚙️ DRAMATIQ WORKER
   # ===============================
   niochat-dramatiq:
     image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
-    container_name: niochat_dramatiq
     depends_on:
       - postgres
     networks:
-      - nioNet
+      - NioNet
     environment:
-      # Variáveis Críticas de Sistema
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG}
       ENVIRONMENT: production
@@ -116,70 +105,62 @@ services:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      
-      # Habilitar agendador de encerramento automático interno (Substitui o Cron)
       RUN_HEARTBEAT: "true"
-      
-      # Integrações
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       EVOLUTION_URL: ${EVOLUTION_URL}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
       BACKEND_URL: ${BACKEND_URL}
-      
     command: ["python", "-m", "dramatiq", "conversations.dramatiq_tasks", "integrations.dramatiq_tasks"]
-    restart: always
+    deploy:
+      restart_policy:
+        condition: on-failure
 
   # ===============================
   # 📱 TELEGRAM WORKER
   # ===============================
   niochat-telegram:
     image: ghcr.io/juniorssilvaa/niohub_chat-backend:latest
-    container_name: niochat_telegram
     depends_on:
       - postgres
     networks:
-      - nioNet
+      - NioNet
     environment:
-      # Variáveis Críticas de Sistema
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      
-      # Credenciais Telegram
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
-      
-      # IA e Backend
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       BACKEND_URL: ${BACKEND_URL}
-      
     command: ["python", "manage.py", "telegram_worker", "start"]
-    restart: always
+    deploy:
+      restart_policy:
+        condition: on-failure
 
   # ===============================
   # 🌐 FRONTEND
   # ===============================
   niochat-frontend:
     image: ghcr.io/juniorssilvaa/niohub_chat-frontend:latest
-    container_name: niochat_frontend
     networks:
-      - nioNet
+      - NioNet
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.niochat-frontend.rule=Host(`chat.niohub.com.br`)"
+      - "traefik.http.routers.niochat-frontend.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.niohub.com.br`)"
       - "traefik.http.routers.niochat-frontend.entrypoints=websecure"
       - "traefik.http.routers.niochat-frontend.tls.certresolver=letsencryptresolver"
       - "traefik.http.routers.niochat-frontend.priority=1"
-    restart: always
-
+    deploy:
+      restart_policy:
+        condition: on-failure
 
 networks:
-  nioNet:
+  NioNet:
     external: true
 
 volumes:
