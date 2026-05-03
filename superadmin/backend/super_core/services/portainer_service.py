@@ -19,9 +19,10 @@ class PortainerService:
             "Content-Type": "application/json"
         }
 
-    def _prepare_compose(self, subdomain, provedor=None):
+    def _prepare_compose(self, subdomain, provedor=None, stack_name=None):
         """
         Lê o docker-compose do painel do provedor e prepara para o deploy do cliente.
+        Substitui __TRAEFIK_ROUTER_PREFIX__ e __PROVIDER_HOST__ (Swarm + Traefik).
         """
         try:
             # Template: niohub/painel-provedor/docker-compose.yml (BASE_DIR = superadmin/backend/)
@@ -60,6 +61,11 @@ class PortainerService:
             )
             content = content.replace('${PROVIDER_IMAGE_TAG:-stable}', provider_tag)
 
+            if not stack_name:
+                stack_name = f"niohub-{subdomain.split('.')[0]}"
+            content = content.replace('__TRAEFIK_ROUTER_PREFIX__', stack_name)
+            content = content.replace('__PROVIDER_HOST__', subdomain)
+
             return content
         except Exception as e:
             logger.error(f"Erro ao preparar docker-compose: {e}")
@@ -83,7 +89,7 @@ class PortainerService:
         stack_name = f"niohub-{slug}"
         
         try:
-            compose_content = self._prepare_compose(subdomain, provedor)
+            compose_content = self._prepare_compose(subdomain, provedor, stack_name)
             
             # Verificar se a stack já existe
             list_url = f"{self.api_url}/api/stacks"

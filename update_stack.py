@@ -7,7 +7,8 @@ Uso (PowerShell):
 
 Variáveis opcionais:
   PORTAINER_URL     (default: https://portainer-vps1.niohub.com.br)
-  STACK_NAME        (default: niohub-teste)
+  STACK_NAME        (default: niohub-teste; usado como prefixo Traefik)
+  PROVIDER_HOST     (ex.: teste.niohub.com.br); se vazio, deduz de STACK_NAME + .niohub.com.br
   PROVIDER_IMAGE_TAG (default: stable; use beta-prov para canal beta)
   GITHUB_USERNAME   (ex.: juniorssilvaa) — juntamente com GHCR_TOKEN regista o GHCR no Portainer
   GHCR_TOKEN        PAT com read:packages (ou o mesmo do CI); sem isto, pacotes privados no GHCR
@@ -31,6 +32,7 @@ PORTAINER_URL = os.environ.get(
 ).rstrip("/")
 API_KEY = os.environ.get("PORTAINER_API_KEY", "")
 STACK_NAME = os.environ.get("STACK_NAME", "niohub-teste")
+PROVIDER_HOST = os.environ.get("PROVIDER_HOST", "").strip()
 PROVIDER_IMAGE_TAG = os.environ.get("PROVIDER_IMAGE_TAG", "stable")
 COMPOSE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -52,6 +54,16 @@ def prepare_compose(raw: str) -> str:
         flags=re.DOTALL | re.MULTILINE,
     )
     content = content.replace("${PROVIDER_IMAGE_TAG:-stable}", PROVIDER_IMAGE_TAG)
+    host = PROVIDER_HOST
+    if not host:
+        slug = (
+            STACK_NAME.replace("niohub-", "", 1)
+            if STACK_NAME.startswith("niohub-")
+            else STACK_NAME
+        )
+        host = f"{slug}.niohub.com.br"
+    content = content.replace("__TRAEFIK_ROUTER_PREFIX__", STACK_NAME)
+    content = content.replace("__PROVIDER_HOST__", host)
     return content
 
 

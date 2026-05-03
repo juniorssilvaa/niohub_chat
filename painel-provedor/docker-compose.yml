@@ -66,26 +66,28 @@ services:
       WHATSAPP_SYSTEM_USER_TOKEN: ${WHATSAPP_SYSTEM_USER_TOKEN}
       BACKEND_URL: ${BACKEND_URL}
       FRONTEND_URL: ${FRONTEND_URL}
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.niochat-backend.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.niohub.com.br`) && PathPrefix(`/api/`)"
-      - "traefik.http.routers.niochat-backend.entrypoints=websecure"
-      - "traefik.http.routers.niochat-backend.tls.certresolver=letsencryptresolver"
-      - "traefik.http.routers.niochat-backend.priority=20"
-      - "traefik.http.services.niochat-backend.loadbalancer.server.port=8010"
-      - "traefik.http.routers.niochat-backend-ws.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.niohub.com.br`) && PathPrefix(`/ws/`)"
-      - "traefik.http.routers.niochat-backend-ws.entrypoints=websecure"
-      - "traefik.http.routers.niochat-backend-ws.tls.certresolver=letsencryptresolver"
-      - "traefik.http.routers.niochat-backend-ws.priority=30"
-      - "traefik.http.routers.niochat-backend-ws.service=niochat-backend"
-      - "traefik.http.routers.niochat-backend-webhooks.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.niohub.com.br`) && PathPrefix(`/webhooks/`)"
-      - "traefik.http.routers.niochat-backend-webhooks.entrypoints=websecure"
-      - "traefik.http.routers.niochat-backend-webhooks.tls.certresolver=letsencryptresolver"
-      - "traefik.http.routers.niochat-backend-webhooks.priority=20"
-      - "traefik.http.routers.niochat-backend-webhooks.service=niochat-backend"
     deploy:
       restart_policy:
         condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=nethub"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-api.rule=Host(`__PROVIDER_HOST__`) && PathPrefix(`/api/`)"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-api.entrypoints=websecure"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-api.tls.certresolver=letsencryptresolver"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-api.priority=20"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-api.service=__TRAEFIK_ROUTER_PREFIX__-api-svc"
+        - "traefik.http.services.__TRAEFIK_ROUTER_PREFIX__-api-svc.loadbalancer.server.port=8010"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-ws.rule=Host(`__PROVIDER_HOST__`) && PathPrefix(`/ws/`)"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-ws.entrypoints=websecure"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-ws.tls.certresolver=letsencryptresolver"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-ws.priority=30"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-ws.service=__TRAEFIK_ROUTER_PREFIX__-api-svc"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-hooks.rule=Host(`__PROVIDER_HOST__`) && PathPrefix(`/webhooks/`)"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-hooks.entrypoints=websecure"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-hooks.tls.certresolver=letsencryptresolver"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-hooks.priority=20"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-hooks.service=__TRAEFIK_ROUTER_PREFIX__-api-svc"
 
   # ===============================
   # ⚙️ DRAMATIQ WORKER
@@ -149,15 +151,18 @@ services:
     image: ghcr.io/juniorssilvaa/niohub_chat-frontend:${PROVIDER_IMAGE_TAG:-stable}
     networks:
       - nethub
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.niochat-frontend.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.niohub.com.br`)"
-      - "traefik.http.routers.niochat-frontend.entrypoints=websecure"
-      - "traefik.http.routers.niochat-frontend.tls.certresolver=letsencryptresolver"
-      - "traefik.http.routers.niochat-frontend.priority=1"
     deploy:
       restart_policy:
         condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=nethub"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-fe.rule=Host(`__PROVIDER_HOST__`)"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-fe.entrypoints=websecure"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-fe.tls.certresolver=letsencryptresolver"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-fe.priority=1"
+        - "traefik.http.routers.__TRAEFIK_ROUTER_PREFIX__-fe.service=__TRAEFIK_ROUTER_PREFIX__-fe-svc"
+        - "traefik.http.services.__TRAEFIK_ROUTER_PREFIX__-fe-svc.loadbalancer.server.port=80"
 
 networks:
   nethub:
