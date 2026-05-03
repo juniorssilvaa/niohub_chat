@@ -1,22 +1,15 @@
 """
-Atualiza uma stack de provedor no Portainer com o compose local (painel-provedor).
+Uso local: envia o compose de painel-provedor para uma stack já existente no Portainer.
 
-Uso (PowerShell):
+O env da stack no Portainer mantém-se (SUBDOMAIN, TRAEFIK_*, Postgres, etc.) — costuma
+vir do primeiro deploy pelo superadmin na nuvem. Este script só troca o YAML e a tag
+de imagem (PROVIDER_IMAGE_TAG).
+
   $env:PORTAINER_API_KEY = "ptr_..."
+  $env:STACK_NAME = "niohub-e-tech"   # nome da stack no Portainer
   python update_stack.py
 
-Variáveis opcionais:
-  PORTAINER_URL     (default: https://portainer-vps1.niohub.com.br)
-  STACK_NAME        (default: niohub-teste; usado como prefixo Traefik)
-  PROVIDER_HOST     (ex.: teste.niohub.com.br); se vazio, deduz de STACK_NAME + .niohub.com.br
-  PROVIDER_IMAGE_TAG (default: stable; use beta-prov para canal beta)
-  GITHUB_USERNAME   (ex.: juniorssilvaa) — juntamente com GHCR_TOKEN regista o GHCR no Portainer
-  GHCR_TOKEN        PAT com read:packages (ou o mesmo do CI); sem isto, pacotes privados no GHCR
-                      dão "No such image" no Swarm até haver login no nó ou registry no Portainer.
-
-Se continuar "No such image" com tag stable:
-  - Torne o pacote público em GitHub → Packages → niohub_chat-backend → Package settings, ou
-  - Em CADA nó Swarm: docker login ghcr.io -u USER --password-stdin < GHCR_TOKEN
+Opcional: PORTAINER_URL, PROVIDER_IMAGE_TAG (default stable / beta-prov).
 """
 import os
 import re
@@ -32,7 +25,6 @@ PORTAINER_URL = os.environ.get(
 ).rstrip("/")
 API_KEY = os.environ.get("PORTAINER_API_KEY", "")
 STACK_NAME = os.environ.get("STACK_NAME", "niohub-teste")
-PROVIDER_HOST = os.environ.get("PROVIDER_HOST", "").strip()
 PROVIDER_IMAGE_TAG = os.environ.get("PROVIDER_IMAGE_TAG", "stable")
 COMPOSE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -42,7 +34,7 @@ COMPOSE_PATH = os.path.join(
 
 
 def prepare_compose(raw: str) -> str:
-    """Alinha com o deploy Swarm multi-tenant (sem porta 5432 no host, sem aliases)."""
+    """Ajustes mínimos para Swarm multi-tenant (sem porta 5432 no host, sem aliases)."""
     content = raw
     content = re.sub(r"^\s*container_name:.*$", "", content, flags=re.MULTILINE)
     content = re.sub(r"^\s*aliases:.*$", "", content, flags=re.MULTILINE)
@@ -57,70 +49,9 @@ def prepare_compose(raw: str) -> str:
     return content
 
 
-def merge_traefik_stack_env(env_vars: list) -> list:
-    """Garante variáveis usadas na interpolação do compose (Traefik)."""
-    slug = (
-        STACK_NAME.replace("niohub-", "", 1)
-        if STACK_NAME.startswith("niohub-")
-        else STACK_NAME
-    )
-    host = PROVIDER_HOST or f"{slug}.niohub.com.br"
-    prefix = STACK_NAME
-    traefik = {
-        "TRAEFIK_ROUTER_PREFIX": prefix,
-        "TRAEFIK_RULE_FE": f"Host(`{host}`)",
-        "TRAEFIK_RULE_API": f"Host(`{host}`) && PathPrefix(`/api/`)",
-        "TRAEFIK_RULE_WS": f"Host(`{host}`) && PathPrefix(`/ws/`)",
-        "TRAEFIK_RULE_HOOKS": f"Host(`{host}`) && PathPrefix(`/webhooks/`)",
-    }
-    out = [e for e in env_vars if isinstance(e, dict) and e.get("name") not in traefik]
-    for k, v in traefik.items():
-        out.append({"name": k, "value": v})
-    return out
-
-
-def ensure_ghcr_registry(portainer_url: str, headers: dict) -> None:
-    """Regista ghcr.io no Portainer se GITHUB_USERNAME + GHCR_TOKEN existirem."""
-    gh_user = os.environ.get("GITHUB_USERNAME", "").strip()
-    gh_token = os.environ.get("GHCR_TOKEN", "").strip()
-    if not gh_token or not gh_user:
-        print(
-            "\n   Aviso: sem GITHUB_USERNAME+GHCR_TOKEN não registo o GHCR no Portainer.\n"
-            "   Pacotes privados no GitHub → pulls no Swarm podem falhar com 'No such image'."
-        )
-        return
-
-    reg_url = f"{portainer_url}/api/registries"
-    res = requests.get(reg_url, headers=headers, verify=False, timeout=15)
-    if res.status_code != 200:
-        print(f"   Aviso: não listei registries ({res.status_code}): {res.text[:200]}")
-        return
-
-    registries = res.json()
-    if any(r.get("URL") == "ghcr.io" for r in registries):
-        print("   Registry ghcr.io já existe no Portainer.")
-        return
-
-    payload = {
-        "Name": "GitHub GHCR",
-        "Type": 3,
-        "URL": "ghcr.io",
-        "Authentication": True,
-        "Username": gh_user,
-        "Password": gh_token,
-    }
-    res_c = requests.post(reg_url, json=payload, headers=headers, verify=False, timeout=15)
-    if res_c.status_code in (200, 201):
-        print("   Registry ghcr.io criado no Portainer com sucesso.")
-    else:
-        print(f"   Aviso: falha ao criar registry ghcr.io ({res_c.status_code}): {res_c.text[:300]}")
-
-
 def main() -> int:
     if not API_KEY:
-        print(
-            "ERRO: defina PORTAINER_API_KEY no ambiente (não commite o token no repositório)."
-        )
+        print("ERRO: defina PORTAINER_API_KEY no ambiente.")
         return 1
 
     headers = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
@@ -156,20 +87,15 @@ def main() -> int:
     with open(COMPOSE_PATH, encoding="utf-8") as f:
         raw = f.read()
     new_compose = prepare_compose(raw)
-    print(f"   Compose preparado ({len(new_compose)} caracteres), tag imagem: {PROVIDER_IMAGE_TAG}")
+    print(f"   Compose ({len(new_compose)} chars), tag imagem: {PROVIDER_IMAGE_TAG}")
 
     print("\n4. Imagens:")
     for line in new_compose.split("\n"):
         if "image:" in line and "ghcr.io" in line:
             print(f"   {line.strip()}")
 
-    env_vars = merge_traefik_stack_env(target.get("Env") or [])
-    print(
-        f"\n5. Variáveis de ambiente da stack ({len(env_vars)}), incl. Traefik para interpolação."
-    )
-
-    print("\n5b. Registry GHCR (opcional, evita pull anónimo falhar)...")
-    ensure_ghcr_registry(PORTAINER_URL, headers)
+    env_vars = target.get("Env") or []
+    print(f"\n5. Mantendo env da stack no Portainer ({len(env_vars)} vars).")
 
     print("\n6. Atualizando stack (pull + prune)...")
     update_url = (

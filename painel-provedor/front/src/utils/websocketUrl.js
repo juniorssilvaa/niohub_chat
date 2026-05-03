@@ -25,33 +25,27 @@ export const getWebSocketHost = () => {
   // PRIORIDADE 2: Detecção por hostname (runtime, funciona em qualquer build)
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
-    
-    // Se estiver em qualquer subdomínio niohub.com.br
+    const host = window.location.host;
+
     if (hostname.endsWith('niohub.com.br')) {
       if (hostname.startsWith('api-local') || hostname.startsWith('chat-local')) {
         return 'api-local.niohub.com.br';
       }
-      // Padrão: api.niohub.com.br
-      return 'api.niohub.com.br';
+      // Painel multi-tenant (ex.: e-tech.niohub.com.br): mesmo host da página;
+      // Traefik roteia PathPrefix /ws/ para o backend da stack (igual a /api/).
+      return host;
     }
 
-    // Compatibilidade temporária com niohub.com.br
-    if (hostname.endsWith('niohub.com.br')) {
-      return 'api.niohub.com.br';
-    }
-    
-    // Se estiver em desenvolvimento local, usar localhost
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'localhost:8010';
     }
   }
-  
+
   // PRIORIDADE 3: Modo de desenvolvimento (import.meta.env.DEV) - apenas se hostname não foi detectado
   if (import.meta.env.DEV) {
     return 'localhost:8010';
   }
-  
-  // FALLBACK SEGURO: Em caso de dúvida, usar api.niohub.com.br
+
   return 'api.niohub.com.br';
 };
 
