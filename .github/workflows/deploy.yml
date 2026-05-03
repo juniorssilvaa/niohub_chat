@@ -234,7 +234,9 @@ jobs:
 
     - name: Deploy to Portainer
       env:
-        PORTAINER_URL: https://portainer.niohub.com.br
+        # URL vem de Repository Variables (não-sensível)
+        # API Key vem de Secrets (sensível)
+        PORTAINER_URL: ${{ vars.PORTAINER_URL }}
         PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
         STACK_NAME: superadmin
         DEFAULT_ENDPOINT_ID: "1"
