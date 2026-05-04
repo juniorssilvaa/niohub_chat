@@ -98,10 +98,7 @@ export default function MetaConnectInner() {
     }
   }
 
-  function launchWhatsAppSignup() {
-    if (hasLaunched.current || !tokenRef.current || !tenantOk) return;
-    hasLaunched.current = true;
-
+  function buildMetaOAuthUrl() {
     const BACKEND_URL = tenantOrigin.replace(/\/+$/, '');
     const redirectUri = encodeURIComponent(`${BACKEND_URL}/api/auth/facebook/callback/`);
     const extras = encodeURIComponent(
@@ -111,7 +108,29 @@ export default function MetaConnectInner() {
       })
     );
     const stateStr = `provider_${providerId}${window.location.protocol !== 'https:' ? '_local' : ''}`;
-    const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${META_APP_ID}&config_id=${META_CONFIG_ID}&response_type=code&redirect_uri=${redirectUri}&state=${stateStr}&extras=${extras}`;
+    return `https://www.facebook.com/v21.0/dialog/oauth?client_id=${META_APP_ID}&config_id=${META_CONFIG_ID}&response_type=code&redirect_uri=${redirectUri}&state=${stateStr}&extras=${extras}`;
+  }
+
+  function openMetaOAuthPopupWindow() {
+    const oauthUrl = buildMetaOAuthUrl();
+    const width = 600;
+    const height = 700;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+    window.open(
+      oauthUrl,
+      'MetaSignup',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,status=yes`
+    );
+  }
+
+  /**
+   * Brave Shields / bloqueadores costumam bloquear pedidos a facebook.com (ERR_BLOCKED_BY_CLIENT).
+   * Abrir só a URL de OAuth (sem depender do JS SDK) após clique do utilizador costuma funcionar.
+   */
+  function launchWhatsAppSignup() {
+    if (hasLaunched.current || !tokenRef.current || !tenantOk) return;
+    hasLaunched.current = true;
 
     if (window.location.protocol === 'https:' && window.FB) {
       window.FB.login(
@@ -133,16 +152,13 @@ export default function MetaConnectInner() {
         }
       );
     } else {
-      const width = 600;
-      const height = 700;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-      window.open(
-        oauthUrl,
-        'MetaSignup',
-        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,status=yes`
-      );
+      openMetaOAuthPopupWindow();
     }
+  }
+
+  function openOAuthFromUserClick() {
+    if (!tokenRef.current || !tenantOk) return;
+    openMetaOAuthPopupWindow();
   }
 
   useEffect(() => {
@@ -189,6 +205,18 @@ export default function MetaConnectInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tryFinalize estável por closure do mount
   }, [searchParams, tenantOrigin, tenantOriginNorm, tenantOk]);
 
+  /** SDK não arrancou (Brave Shields / uBlock bloqueiam facebook.com → ERR_BLOCKED_BY_CLIENT). */
+  useEffect(() => {
+    if (!tenantOk || step !== 'waiting' || !tokenRef.current) return undefined;
+    if (window.FB && typeof window.FB.init === 'function') return undefined;
+
+    const t = window.setTimeout(() => {
+      if (sdkLoaded.current || hasLaunched.current) return;
+      setStep('browser_block');
+    }, 18000);
+    return () => window.clearTimeout(t);
+  }, [step, tenantOk]);
+
   useEffect(() => {
     if (!tenantOk || step !== 'waiting' || !tokenRef.current || sdkLoaded.current || hasLaunched.current)
       return;
@@ -226,7 +254,12 @@ export default function MetaConnectInner() {
       if (d.getElementById(id)) return;
       const js = d.createElement(s);
       js.id = id;
+      js.async = true;
       js.src = 'https://connect.facebook.net/pt_BR/sdk.js';
+      js.onerror = () => {
+        if (sdkLoaded.current) return;
+        setStep('browser_block');
+      };
       fjs.parentNode.insertBefore(js, fjs);
     })(document, 'script', 'facebook-jssdk');
   }, [step, tenantOk]);
@@ -261,6 +294,69 @@ export default function MetaConnectInner() {
           <>
             <Loader2 size={40} className="animate-spin" style={{ marginBottom: 12 }} />
             <p style={{ fontSize: 14 }}>Conclua os passos na janela da Meta.</p>
+            <p style={{ fontSize: 12, opacity: 0.75, marginTop: 16, lineHeight: 1.5 }}>
+              Se nada abrir: no Brave, desative o Escudo para este site; bloqueadores também bloqueiam{' '}
+              <code style={{ fontSize: 11 }}>facebook.com</code>.
+            </p>
+            <button
+              type="button"
+              onClick={openOAuthFromUserClick}
+              style={{
+                marginTop: 12,
+                fontSize: 13,
+                color: '#93c5fd',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Abrir login da Meta numa nova janela
+            </button>
+          </>
+        )}
+        {step === 'browser_block' && (
+          <>
+            <AlertCircle size={44} style={{ color: '#fbbf24', marginBottom: 12 }} />
+            <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>O navegador bloqueou a Meta</p>
+            <p style={{ fontSize: 13, opacity: 0.9, lineHeight: 1.55, marginBottom: 16 }}>
+              Erros como <code style={{ fontSize: 11 }}>net::ERR_BLOCKED_BY_CLIENT</code> vêm do Brave (Escudo),
+              extensões ou bloqueadores que impedem scripts e pedidos a <code style={{ fontSize: 11 }}>facebook.com</code>.
+              Desative o Escudo para <strong>connect.niohub.com.br</strong> e volte a carregar; ou abra o login direto.
+            </p>
+            <button
+              type="button"
+              onClick={openOAuthFromUserClick}
+              style={{
+                backgroundColor: '#1877f2',
+                color: 'white',
+                border: 'none',
+                padding: '12px 20px',
+                borderRadius: 8,
+                fontWeight: 600,
+                cursor: 'pointer',
+                width: '100%',
+                marginBottom: 10,
+              }}
+            >
+              Abrir login da Meta (nova janela)
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              style={{
+                background: 'transparent',
+                color: 'var(--foreground, #f8fafc)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                padding: '10px 16px',
+                borderRadius: 8,
+                cursor: 'pointer',
+                width: '100%',
+                fontSize: 13,
+              }}
+            >
+              Recarregar esta página
+            </button>
           </>
         )}
         {step === 'processing' && (

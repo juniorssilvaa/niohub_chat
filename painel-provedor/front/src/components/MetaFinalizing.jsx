@@ -134,6 +134,11 @@ function MetaFinalizingWithConnectIframe() {
               <strong>{connectOrigin.replace(/^https?:\/\//, '')}</strong>. Complete o cadastro incorporado; esta
               página atualiza sozinha ao terminar.
             </p>
+            <p style={{ color: 'var(--muted-foreground)', fontSize: 12, lineHeight: 1.5, marginBottom: '12px' }}>
+              Brave / bloqueadores: se a consola mostrar <code style={{ fontSize: 11 }}>ERR_BLOCKED_BY_CLIENT</code> em
+              pedidos a facebook.com, desative o Escudo (ou exceções) para este domínio e para{' '}
+              {connectOrigin.replace(/^https?:\/\//, '')}.
+            </p>
             <button
               type="button"
               onClick={() => setIframeKey((k) => k + 1)}
