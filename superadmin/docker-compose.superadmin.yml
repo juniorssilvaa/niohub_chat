@@ -142,6 +142,24 @@ services:
       restart_policy:
         condition: on-failure
 
+  # Painel provedor (bundle com /app/meta/connect-inner). Imagem stable com VITE_META_CONNECT_ORIGIN na CI.
+  niohub-meta-connect-frontend:
+    image: ghcr.io/juniorssilvaa/niohub_chat-frontend:stable
+    networks:
+      - NioNet
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=NioNet"
+      - "traefik.http.routers.niohub-connect-fe.rule=Host(`connect.niohub.com.br`)"
+      - "traefik.http.routers.niohub-connect-fe.entrypoints=websecure"
+      - "traefik.http.routers.niohub-connect-fe.tls.certresolver=letsencryptresolver"
+      - "traefik.http.routers.niohub-connect-fe.priority=1"
+      - "traefik.http.routers.niohub-connect-fe.service=niohub-connect-fe-svc"
+      - "traefik.http.services.niohub-connect-fe-svc.loadbalancer.server.port=8012"
+    deploy:
+      restart_policy:
+        condition: on-failure
+
 networks:
   NioNet:
     external: true
