@@ -75,6 +75,7 @@ export default function MetaConnectInner() {
       const response = await sendFinishToBackend(wabaId, providerId, {
         payload: fullPayloadData,
         channelId,
+        authToken: token,
       });
       if (response.success) {
         setResultData(response.canal);

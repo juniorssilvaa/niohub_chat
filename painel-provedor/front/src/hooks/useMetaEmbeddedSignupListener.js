@@ -129,10 +129,13 @@ function useMetaEmbeddedSignupListener({
   // Função helper para enviar dados do evento para o backend
   const sendFinishToBackend = async (wabaId, customProviderId = null, eventData = null) => {
     try {
-      // Priorizar auth_token que é o padrão salvo no Login, mas aceitar token também para compatibilidade
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      // Iframe em connect.* não partilha localStorage com o tenant — usar token explícito (postMessage).
+      const token =
+        (eventData && typeof eventData.authToken === 'string' && eventData.authToken.trim()) ||
+        localStorage.getItem('auth_token') ||
+        localStorage.getItem('token');
       if (!token) {
-        throw new Error('Token não encontrado no localStorage');
+        throw new Error('Token de autenticação em falta. Faça login no painel e repita a integração Meta.');
       }
 
       // Determinar provider_id
