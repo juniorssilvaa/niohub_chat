@@ -7,6 +7,7 @@ export function getMetaConnectOrigin() {
   return raw || null;
 }
 
+/** true = abrir fluxo Meta em connect… (popup), não SDK no host do tenant */
 export function shouldUseMetaConnectIframe() {
   const connect = getMetaConnectOrigin();
   if (!connect || typeof window === 'undefined') return false;

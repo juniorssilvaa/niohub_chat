@@ -13,21 +13,22 @@ const META_CONNECT_MSG = {
   ERROR: 'META_CONNECT_ERROR',
 };
 
-/** Painel no domínio do tenant: iframe aponta para connect.niohub.com.br (SDK Meta). */
-function MetaFinalizingWithIframe() {
+/** Painel no tenant: abre janela popup em connect… (SDK Meta — mesmo UX que FB.login numa janela). */
+function MetaFinalizingWithConnectPopup() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const iframeRef = useRef(null);
+  const popupRef = useRef(null);
   const providerId = searchParams.get('provider_id') || '1';
   const channelId = searchParams.get('channel_id') || '';
 
   const [step, setStep] = useState('waiting');
   const [error, setError] = useState(null);
   const [resultData, setResultData] = useState(null);
+  const [popupBlocked, setPopupBlocked] = useState(false);
 
   const connectOrigin = getMetaConnectOrigin();
 
-  const iframeSrc = React.useMemo(() => {
+  const connectInnerUrl = React.useMemo(() => {
     if (!connectOrigin) return '';
     const u = new URL('/app/meta/connect-inner', connectOrigin);
     u.searchParams.set('tenant_origin', window.location.origin);
@@ -36,6 +37,41 @@ function MetaFinalizingWithIframe() {
     return u.toString();
   }, [channelId, connectOrigin, providerId]);
 
+  const openConnectPopup = React.useCallback(() => {
+    if (!connectInnerUrl) return;
+    const w = 720;
+    const h = 820;
+    const left = Math.max(0, (window.screen.width - w) / 2);
+    const top = Math.max(0, (window.screen.height - h) / 2);
+    const feat = `width=${w},height=${h},left=${left},top=${top},scrollbars=yes,resizable=yes`;
+    const win = window.open(connectInnerUrl, 'NioMetaConnect', feat);
+    if (!win || win.closed) {
+      setPopupBlocked(true);
+      return;
+    }
+    setPopupBlocked(false);
+    popupRef.current = win;
+    try {
+      win.focus();
+    } catch (_) {
+      /* ignore */
+    }
+  }, [connectInnerUrl]);
+
+  useEffect(() => {
+    if (!connectInnerUrl || !connectOrigin) return undefined;
+    const t = setTimeout(() => openConnectPopup(), 400);
+    return () => {
+      clearTimeout(t);
+      try {
+        popupRef.current?.close();
+      } catch (_) {
+        /* ignore */
+      }
+      popupRef.current = null;
+    };
+  }, [connectInnerUrl, connectOrigin, openConnectPopup]);
+
   useEffect(() => {
     if (!connectOrigin) return undefined;
 
@@ -43,16 +79,25 @@ function MetaFinalizingWithIframe() {
       if (e.origin !== connectOrigin) return;
       if (e.data?.type === META_CONNECT_MSG.READY) {
         const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-        const w = iframeRef.current?.contentWindow;
-        if (w && token) {
-          w.postMessage({ type: META_CONNECT_MSG.AUTH, token }, connectOrigin);
+        if (e.source && token) {
+          e.source.postMessage({ type: META_CONNECT_MSG.AUTH, token }, connectOrigin);
         }
       }
       if (e.data?.type === META_CONNECT_MSG.SUCCESS) {
+        try {
+          popupRef.current?.close();
+        } catch (_) {
+          /* ignore */
+        }
         setResultData(e.data.canal);
         setStep('success');
       }
       if (e.data?.type === META_CONNECT_MSG.ERROR) {
+        try {
+          popupRef.current?.close();
+        } catch (_) {
+          /* ignore */
+        }
         setError(e.data.message || 'Erro no fluxo Meta');
         setStep('error');
       }
@@ -62,7 +107,7 @@ function MetaFinalizingWithIframe() {
     return () => window.removeEventListener('message', onMsg);
   }, [connectOrigin]);
 
-  if (!connectOrigin || !iframeSrc) {
+  if (!connectOrigin || !connectInnerUrl) {
     return (
       <div style={{ padding: 24 }}>
         <AlertCircle className="inline" /> VITE_META_CONNECT_ORIGIN não configurado.
@@ -85,28 +130,73 @@ function MetaFinalizingWithIframe() {
       }}
     >
       {step === 'waiting' && (
-        <p style={{ marginBottom: 12, color: 'var(--muted-foreground)' }}>A abrir fluxo seguro da Meta…</p>
+        <div
+          style={{
+            backgroundColor: 'var(--card)',
+            padding: '40px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
+            maxWidth: '550px',
+            width: '100%',
+            textAlign: 'center',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
+            <Loader2 size={60} className="animate-spin" style={{ color: 'var(--primary)' }} />
+          </div>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>Aguardando finalização...</h2>
+          <p style={{ color: 'var(--muted-foreground)', lineHeight: '1.6', marginBottom: '24px' }}>
+            Uma janela foi aberta para o fluxo seguro da Meta em {connectOrigin.replace(/^https?:\/\//, '')}. Conclua os
+            passos nessa janela; esta página atualiza sozinha ao terminar.
+          </p>
+          {popupBlocked && (
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ color: 'var(--muted-foreground)', fontSize: 14, marginBottom: 12 }}>
+                O browser pode ter bloqueado a janela. Clique abaixo para abrir.
+              </p>
+              <button
+                type="button"
+                onClick={openConnectPopup}
+                style={{
+                  backgroundColor: '#1877f2',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                }}
+              >
+                Abrir janela da Meta
+              </button>
+            </div>
+          )}
+          <div
+            style={{
+              fontSize: '12px',
+              color: 'var(--muted-foreground)',
+              borderTop: '1px solid var(--border)',
+              paddingTop: '16px',
+            }}
+          >
+            Janela não abriu?{' '}
+            <button
+              type="button"
+              onClick={openConnectPopup}
+              style={{
+                color: 'var(--primary)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Clique aqui para tentar novamente
+            </button>
+          </div>
+        </div>
       )}
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 560,
-          height: 'min(80vh, 640px)',
-          borderRadius: 12,
-          overflow: 'hidden',
-          border: '1px solid var(--border)',
-          backgroundColor: 'var(--card)',
-          display: step === 'waiting' ? 'block' : 'none',
-        }}
-      >
-        <iframe
-          ref={iframeRef}
-          title="Meta WhatsApp"
-          src={iframeSrc}
-          style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 400 }}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
-        />
-      </div>
 
       {step === 'success' && (
         <div style={{ marginTop: 24, maxWidth: 560, width: '100%', textAlign: 'center' }}>
@@ -147,6 +237,11 @@ function MetaFinalizingWithIframe() {
           </button>
         </div>
       )}
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+      `}</style>
     </div>
   );
 }
@@ -472,5 +567,5 @@ function MetaFinalizingInline() {
 }
 
 export default function MetaFinalizing() {
-  return shouldUseMetaConnectIframe() ? <MetaFinalizingWithIframe /> : <MetaFinalizingInline />;
+  return shouldUseMetaConnectIframe() ? <MetaFinalizingWithConnectPopup /> : <MetaFinalizingInline />;
 }

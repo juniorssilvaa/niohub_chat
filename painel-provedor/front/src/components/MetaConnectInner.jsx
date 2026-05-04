@@ -12,8 +12,12 @@ const MSG = {
   ERROR: 'META_CONNECT_ERROR',
 };
 
+function tenantBridge() {
+  return window.opener || window.parent;
+}
+
 /**
- * Página pública em https://connect.../app/meta/connect-inner (iframe).
+ * Pública em https://connect.../app/meta/connect-inner (popup ou iframe).
  */
 export default function MetaConnectInner() {
   const [searchParams] = useSearchParams();
@@ -68,8 +72,9 @@ export default function MetaConnectInner() {
       if (response.success) {
         setResultData(response.canal);
         setStep('success');
-        if (window.parent && tenantOk) {
-          window.parent.postMessage({ type: MSG.SUCCESS, canal: response.canal }, tenantOrigin);
+        const br = tenantBridge();
+        if (br && tenantOk) {
+          br.postMessage({ type: MSG.SUCCESS, canal: response.canal }, tenantOrigin);
         }
       } else {
         throw new Error(response.error || 'Erro ao processar integração');
@@ -79,8 +84,9 @@ export default function MetaConnectInner() {
       setError(msg);
       setStep('error');
       processingRef.current = false;
-      if (window.parent && tenantOk) {
-        window.parent.postMessage({ type: MSG.ERROR, message: msg }, tenantOrigin);
+      const brErr = tenantBridge();
+      if (brErr && tenantOk) {
+        brErr.postMessage({ type: MSG.ERROR, message: msg }, tenantOrigin);
       }
     }
   }
@@ -148,9 +154,10 @@ export default function MetaConnectInner() {
     };
     window.addEventListener('message', onMsg);
 
-    if (window.parent) {
+    const br = tenantBridge();
+    if (br) {
       setTimeout(() => {
-        window.parent.postMessage({ type: MSG.READY }, tenantOrigin);
+        br.postMessage({ type: MSG.READY }, tenantOrigin);
       }, 0);
     }
 
