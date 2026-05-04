@@ -14,8 +14,8 @@ const META_CONNECT_MSG = {
 };
 
 /**
- * SDK Meta em iframe (origem connect). A página principal continua em e-tech — o FB.login abre o diálogo
- * da Meta a partir do topo e evita o bloqueio de “popup dentro de popup”.
+ * SDK Meta em iframe oculto (origem connect). Evita popup-in-popup; o diálogo da Meta abre à parte.
+ * O iframe não é exibido — só mantém o bridge de token e o FB.login.
  */
 function MetaFinalizingWithConnectIframe() {
   const [searchParams] = useSearchParams();
@@ -99,6 +99,7 @@ function MetaFinalizingWithConnectIframe() {
   return (
     <div
       style={{
+        position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -118,11 +119,10 @@ function MetaFinalizingWithConnectIframe() {
               padding: '28px',
               borderRadius: '12px',
               boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
-              maxWidth: '720px',
+              maxWidth: '560px',
               width: '100%',
               textAlign: 'center',
               border: '1px solid var(--border)',
-              marginBottom: 16,
             }}
           >
             <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
@@ -130,9 +130,9 @@ function MetaFinalizingWithConnectIframe() {
             </div>
             <h2 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '12px' }}>Aguardando finalização...</h2>
             <p style={{ color: 'var(--muted-foreground)', lineHeight: '1.6', marginBottom: '12px' }}>
-              A área abaixo carrega o fluxo seguro da Meta em{' '}
-              <strong>{connectOrigin.replace(/^https?:\/\//, '')}</strong>. Complete o cadastro incorporado; esta
-              página atualiza sozinha ao terminar.
+              O fluxo seguro corre em segundo plano em{' '}
+              <strong>{connectOrigin.replace(/^https?:\/\//, '')}</strong>. Quando a janela da Meta abrir, conclua o
+              cadastro incorporado lá — esta página atualiza sozinha ao terminar.
             </p>
             <p style={{ color: 'var(--muted-foreground)', fontSize: 12, lineHeight: 1.5, marginBottom: '12px' }}>
               Brave / bloqueadores: se a consola mostrar <code style={{ fontSize: 11 }}>ERR_BLOCKED_BY_CLIENT</code> em
@@ -151,27 +151,31 @@ function MetaFinalizingWithConnectIframe() {
                 fontSize: 13,
               }}
             >
-              Recarregar área da Meta
+              Recarregar fluxo Meta
             </button>
           </div>
+          {/* iframe invisível: mesmo comportamento (SDK + postMessage), sem caixa branca na UI */}
           <div
+            aria-hidden="true"
             style={{
-              width: '100%',
-              maxWidth: 720,
-              height: 'min(72vh, 720px)',
-              borderRadius: 12,
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              margin: -1,
+              padding: 0,
+              border: 0,
               overflow: 'hidden',
-              border: '1px solid var(--border)',
-              backgroundColor: 'var(--card)',
+              clipPath: 'inset(50%)',
+              whiteSpace: 'nowrap',
             }}
           >
             <iframe
               key={iframeKey}
               ref={iframeRef}
-              title="Meta WhatsApp"
+              title="Meta connect (background)"
               src={connectInnerUrl}
               onLoad={scheduleAuthToIframe}
-              style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 420 }}
+              style={{ width: 1, height: 1, border: 'none', display: 'block', opacity: 0 }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
             />
           </div>
