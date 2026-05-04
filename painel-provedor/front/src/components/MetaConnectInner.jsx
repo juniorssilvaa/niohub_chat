@@ -22,6 +22,13 @@ function tenantBridge() {
 export default function MetaConnectInner() {
   const [searchParams] = useSearchParams();
   const tenantOrigin = (searchParams.get('tenant_origin') || '').trim().replace(/\/+$/, '');
+  const tenantOriginNorm = React.useMemo(() => {
+    try {
+      return new URL(tenantOrigin).origin;
+    } catch {
+      return tenantOrigin;
+    }
+  }, [tenantOrigin]);
   const providerId = searchParams.get('provider_id') || '1';
   const channelId = searchParams.get('channel_id');
   const tenantOk = Boolean(tenantOrigin && isAllowedTenantOriginForMeta(tenantOrigin));
@@ -74,7 +81,7 @@ export default function MetaConnectInner() {
         setStep('success');
         const br = tenantBridge();
         if (br && tenantOk) {
-          br.postMessage({ type: MSG.SUCCESS, canal: response.canal }, tenantOrigin);
+          br.postMessage({ type: MSG.SUCCESS, canal: response.canal }, tenantOriginNorm);
         }
       } else {
         throw new Error(response.error || 'Erro ao processar integração');
@@ -86,7 +93,7 @@ export default function MetaConnectInner() {
       processingRef.current = false;
       const brErr = tenantBridge();
       if (brErr && tenantOk) {
-        brErr.postMessage({ type: MSG.ERROR, message: msg }, tenantOrigin);
+        brErr.postMessage({ type: MSG.ERROR, message: msg }, tenantOriginNorm);
       }
     }
   }
@@ -146,7 +153,7 @@ export default function MetaConnectInner() {
     }
 
     const onMsg = (event) => {
-      if (event.origin !== tenantOrigin) return;
+      if (event.origin !== tenantOriginNorm) return;
       if (event.data?.type === MSG.AUTH && event.data.token) {
         tokenRef.current = event.data.token;
         setStep('waiting');
@@ -157,7 +164,7 @@ export default function MetaConnectInner() {
     const br = tenantBridge();
     if (br) {
       setTimeout(() => {
-        br.postMessage({ type: MSG.READY }, tenantOrigin);
+        br.postMessage({ type: MSG.READY }, tenantOriginNorm);
       }, 0);
     }
 
@@ -180,13 +187,25 @@ export default function MetaConnectInner() {
       window.removeEventListener('message', handleOAuthPopup);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tryFinalize estável por closure do mount
-  }, [searchParams, tenantOrigin, tenantOk]);
+  }, [searchParams, tenantOrigin, tenantOriginNorm, tenantOk]);
 
   useEffect(() => {
     if (!tenantOk || step !== 'waiting' || !tokenRef.current || sdkLoaded.current || hasLaunched.current)
       return;
 
     if (window.location.protocol !== 'https:' && window.location.hostname === 'localhost') {
+      launchWhatsAppSignup();
+      return;
+    }
+
+    if (window.FB && typeof window.FB.init === 'function') {
+      window.FB.init({
+        appId: META_APP_ID,
+        cookie: true,
+        xfbml: true,
+        version: 'v21.0',
+      });
+      sdkLoaded.current = true;
       launchWhatsAppSignup();
       return;
     }

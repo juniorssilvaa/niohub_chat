@@ -38,7 +38,7 @@ function MetaFinalizingWithConnectPopup() {
   }, [channelId, connectOrigin, providerId]);
 
   const openConnectPopup = React.useCallback(() => {
-    if (!connectInnerUrl) return;
+    if (!connectInnerUrl || !connectOrigin) return;
     const w = 720;
     const h = 820;
     const left = Math.max(0, (window.screen.width - w) / 2);
@@ -56,7 +56,27 @@ function MetaFinalizingWithConnectPopup() {
     } catch (_) {
       /* ignore */
     }
-  }, [connectInnerUrl]);
+
+    const targetOrigin = new URL(connectOrigin).origin;
+    const sendAuth = () => {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      if (!token || !popupRef.current || popupRef.current.closed) return;
+      try {
+        popupRef.current.postMessage({ type: META_CONNECT_MSG.AUTH, token }, targetOrigin);
+      } catch (_) {
+        /* ignore */
+      }
+    };
+
+    win.addEventListener('load', () => {
+      sendAuth();
+      setTimeout(sendAuth, 200);
+      setTimeout(sendAuth, 900);
+    });
+    setTimeout(sendAuth, 500);
+    setTimeout(sendAuth, 1600);
+    setTimeout(sendAuth, 3200);
+  }, [connectInnerUrl, connectOrigin]);
 
   useEffect(() => {
     if (!connectInnerUrl || !connectOrigin) return undefined;
@@ -75,12 +95,14 @@ function MetaFinalizingWithConnectPopup() {
   useEffect(() => {
     if (!connectOrigin) return undefined;
 
+    const connectOriginNorm = new URL(connectOrigin).origin;
+
     const onMsg = (e) => {
-      if (e.origin !== connectOrigin) return;
+      if (e.origin !== connectOriginNorm) return;
       if (e.data?.type === META_CONNECT_MSG.READY) {
         const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
         if (e.source && token) {
-          e.source.postMessage({ type: META_CONNECT_MSG.AUTH, token }, connectOrigin);
+          e.source.postMessage({ type: META_CONNECT_MSG.AUTH, token }, connectOriginNorm);
         }
       }
       if (e.data?.type === META_CONNECT_MSG.SUCCESS) {
