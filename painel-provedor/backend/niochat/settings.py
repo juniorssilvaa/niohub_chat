@@ -264,6 +264,7 @@ REQUIRED_CORS_ORIGINS = [
     'https://app.niohub.com.br',
     'https://chat.niohub.com.br',
     'https://api.niohub.com.br',
+    'https://connect.niohub.com.br',
     'https://docs.niohub.com.br',
     'https://api-local.niohub.com.br',
     'https://chat-local.niohub.com.br',

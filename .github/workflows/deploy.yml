@@ -108,6 +108,7 @@ jobs:
         VITE_API_URL: "https://api.niohub.com.br/api"
         VITE_WS_URL: "wss://api.niohub.com.br/ws"
         VITE_SUPERADMIN_APP_URL: ${{ secrets.VITE_SUPERADMIN_APP_URL }}
+        VITE_META_CONNECT_ORIGIN: ""
       run: |
         cd painel-provedor/front
         pnpm install --no-frozen-lockfile
@@ -172,6 +173,7 @@ jobs:
           VITE_API_URL=https://api.niohub.com.br/api
           VITE_WS_URL=wss://api.niohub.com.br/ws
           VITE_SUPERADMIN_APP_URL=${{ secrets.VITE_SUPERADMIN_APP_URL }}
+          VITE_META_CONNECT_ORIGIN=https://connect.niohub.com.br
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:stable

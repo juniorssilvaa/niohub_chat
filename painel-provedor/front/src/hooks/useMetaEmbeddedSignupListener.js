@@ -25,11 +25,13 @@ import axios from 'axios';
  *   debug: true
  * });
  */
-function useMetaEmbeddedSignupListener({ 
-  onFinish, 
-  onError, 
+function useMetaEmbeddedSignupListener({
+  onFinish,
+  onError,
   providerId = null,
-  debug = false 
+  debug = false,
+  /** Ex.: https://e-tech.niohub.com.br — pedidos à API do tenant (iframe connect). */
+  apiOrigin = null,
 } = {}) {
   const handlerRef = useRef(null);
   const mountedRef = useRef(true);
@@ -175,15 +177,16 @@ function useMetaEmbeddedSignupListener({
         }
       }
 
-      const response = await axios.post(
-        '/api/canais/whatsapp_embedded_signup_finish/',
-        payload,
-        {
-          headers: {
-            Authorization: `Token ${token}`
-          }
-        }
-      );
+      const base = apiOrigin ? String(apiOrigin).replace(/\/+$/, '') : '';
+      const finishUrl = base
+        ? `${base}/api/canais/whatsapp_embedded_signup_finish/`
+        : '/api/canais/whatsapp_embedded_signup_finish/';
+
+      const response = await axios.post(finishUrl, payload, {
+        headers: {
+          Authorization: `Token ${token}`,
+        },
+      });
 
       return response.data;
     } catch (error) {

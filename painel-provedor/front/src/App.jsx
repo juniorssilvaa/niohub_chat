@@ -16,6 +16,7 @@ import './App.css';
 
 const ProvedorAppWrapper = lazy(() => import('./painel-provedor/ProvedorAppWrapper'));
 const MetaFinalizing = lazy(() => import('./components/MetaFinalizing'));
+const MetaConnectInner = lazy(() => import('./components/MetaConnectInner'));
 const OAuthCallback = lazy(() => import('./components/OAuthCallback'));
 const Changelog = lazy(() => import('./components/Changelog'));
 const UserStatusManager = lazy(() => import('./components/UserStatusManager'));
@@ -133,9 +134,12 @@ export default function App() {
 
   if (!user) {
     return (
-      <Routes>
-        <Route path="/*" element={<Login />} />
-      </Routes>
+      <Suspense fallback={<LoadingBar />}>
+        <Routes>
+          <Route path="/app/meta/connect-inner" element={<MetaConnectInner />} />
+          <Route path="/*" element={<Login />} />
+        </Routes>
+      </Suspense>
     );
   }
 
